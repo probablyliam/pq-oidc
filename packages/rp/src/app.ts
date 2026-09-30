@@ -228,12 +228,25 @@ function sendPage(res: ServerResponse, status: number, render: (nonce: string) =
   res.end(render(nonce));
 }
 
-/** Sends back-channel requests for `publicBase` to `internalBase` instead (see RpAppOptions.internalIssuer). */
+/**
+ * Split-horizon access to the provider (see RpAppOptions.internalIssuer):
+ *  - requests for `publicBase` are sent to `internalBase` instead;
+ *  - the provider builds endpoint URLs from the Host it was called on, so its
+ *    discovery document names the internal address. We map those URLs back to
+ *    the public address, because the browser must be redirected to the public
+ *    /auth endpoint. Back-channel calls to them are rewritten again on the way out.
+ */
 function rewritingFetch(publicBase: string, internalBase: string | undefined): typeof fetch {
   if (!internalBase || internalBase === publicBase) return fetch;
-  return (input, init) => {
+  return async (input, init) => {
     const url = input instanceof Request ? input.url : String(input);
     const target = url.startsWith(publicBase) ? internalBase + url.slice(publicBase.length) : url;
-    return fetch(target, init);
+    const response = await fetch(target, init);
+    if (!new URL(target).pathname.endsWith('/.well-known/openid-configuration') || !response.ok) return response;
+    const body = (await response.text()).replaceAll(internalBase, publicBase);
+    const headers = new Headers(response.headers);
+    headers.delete('content-length'); // the body changed length and is already decoded
+    headers.delete('content-encoding');
+    return new Response(body, { status: response.status, statusText: response.statusText, headers });
   };
 }

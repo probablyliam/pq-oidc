@@ -113,3 +113,19 @@ describe('end to end: PQ-Ready App still accepts ES256', () => {
     expect(page.body).toContain('<b>ES256</b>');
   });
 });
+
+describe('end to end: apps reach the provider on an internal address (Docker, Kubernetes)', () => {
+  let stack: Stack;
+  beforeAll(async () => {
+    stack = await startStack({ splitHorizon: true });
+  });
+  afterAll(() => stack.close());
+
+  it('still sends the browser to the public provider URL and signs in', async () => {
+    const browser = new TestBrowser();
+    const loginPage = await browser.navigate(`${stack.pqUrl}/login`);
+    expect(new URL(loginPage.url).origin).toBe(stack.issuer);
+    const home = await browser.submitLogin(loginPage, 'alice', 'quantum-safe');
+    expect(home.body).toContain('Hi, Alice');
+  });
+});

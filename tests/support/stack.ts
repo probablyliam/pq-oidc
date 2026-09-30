@@ -17,6 +17,11 @@ export interface StackOptions {
   legacyAlg?: ProviderSigningAlg;
   pqAlg?: ProviderSigningAlg;
   jwks?: PrivateJwks;
+  /**
+   * Make the apps reach the provider on a different address than browsers do,
+   * like containers in Docker or Kubernetes (here: localhost vs 127.0.0.1).
+   */
+  splitHorizon?: boolean;
 }
 
 async function listen(): Promise<{ server: Server; url: string }> {
@@ -58,13 +63,15 @@ export async function startStack(options: StackOptions = {}): Promise<Stack> {
   });
   provider.server.on('request', providerApp.handler);
 
+  const internalIssuer = options.splitHorizon ? provider.url.replace('127.0.0.1', 'localhost') : undefined;
   legacy.server.on(
     'request',
-    createRpApp({ preset: PRESETS.legacy, clientSecret: 'legacy-secret', baseUrl: legacy.url, issuer: provider.url }).handler,
+    createRpApp({ preset: PRESETS.legacy, clientSecret: 'legacy-secret', baseUrl: legacy.url, issuer: provider.url, internalIssuer })
+      .handler,
   );
   pq.server.on(
     'request',
-    createRpApp({ preset: PRESETS.pq, clientSecret: 'pq-secret', baseUrl: pq.url, issuer: provider.url }).handler,
+    createRpApp({ preset: PRESETS.pq, clientSecret: 'pq-secret', baseUrl: pq.url, issuer: provider.url, internalIssuer }).handler,
   );
 
   return {

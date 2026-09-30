@@ -170,7 +170,7 @@ docs/                threat model, findings, decision records
 ## Development
 
 ```bash
-npm test            # 67 tests: unit, interop, end-to-end, protocol security
+npm test            # 68 tests: unit, interop, end-to-end, protocol security
 npm run lint
 npm run typecheck
 npm run smoke       # sign in to both apps against a running deployment
