@@ -1,0 +1,8 @@
+apiVersion: v2
+name: pq-oidc
+description: Crypto-agile OpenID Connect provider (ES256 + ML-DSA-65 ID tokens) with two demo apps.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/probablyliam/pq-oidc
+keywords: [oidc, oauth2, post-quantum, ml-dsa, rfc9964]

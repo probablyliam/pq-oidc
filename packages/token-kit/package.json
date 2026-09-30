@@ -1,0 +1,20 @@
+{
+  "name": "@pq-oidc/token-kit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared helpers to measure, decode and verify JWTs signed with classical or post-quantum algorithms.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./algorithms": "./src/algorithms.ts",
+    "./base64url": "./src/base64url.ts",
+    "./measure": "./src/measure.ts",
+    "./html": "./src/html.ts",
+    "./limits": "./src/limits.ts",
+    "./projection": "./src/projection.ts",
+    "./readiness": "./src/readiness.ts"
+  },
+  "dependencies": {
+    "jose": "6.2.12"
+  }
+}

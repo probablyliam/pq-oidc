@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+*.log
+.env
+.env.*
+!.env.example
+# Never commit private keys
+*.pem
+jwks.private.json
+.DS_Store

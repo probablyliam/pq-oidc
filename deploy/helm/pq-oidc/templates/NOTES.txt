@@ -1,0 +1,16 @@
+pq-oidc is running.
+
+Reach it from your machine with port-forwards (the defaults assume localhost):
+
+  kubectl port-forward svc/{{ include "pq-oidc.providerName" . }} {{ .Values.provider.port }}:{{ .Values.provider.port }} &
+{{- range $name, $app := .Values.apps }}{{ if $app.enabled }}
+  kubectl port-forward svc/{{ $.Release.Name }}-{{ $app.clientId }} {{ $app.port }}:{{ $app.port }} &
+{{- end }}{{ end }}
+
+Then open:
+{{- range $name, $app := .Values.apps }}{{ if $app.enabled }}
+  {{ $app.baseUrl }}   ({{ $app.clientId }}, ID tokens signed with {{ $app.idTokenAlg }})
+{{- end }}{{ end }}
+
+Migrate an app by changing its algorithm, for example:
+  helm upgrade {{ .Release.Name }} deploy/helm/pq-oidc --reuse-values --set apps.legacy.idTokenAlg=ML-DSA-65

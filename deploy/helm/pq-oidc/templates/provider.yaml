@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "pq-oidc.providerName" . }}
+  labels:
+    {{- include "pq-oidc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: provider
+spec:
+  replicas: {{ .Values.provider.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: provider
+  template:
+    metadata:
+      labels:
+        {{- include "pq-oidc.labels" . | nindent 8 }}
+        app.kubernetes.io/component: provider
+      annotations:
+        # Restart the provider when an app's algorithm changes (the migration switch).
+        checksum/apps: {{ toJson .Values.apps | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: provider
+          image: {{ include "pq-oidc.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["node", "packages/provider/src/server.ts"]
+          ports:
+            - name: http
+              containerPort: {{ .Values.provider.port }}
+          env:
+            - name: PORT
+              value: {{ .Values.provider.port | quote }}
+            - name: ISSUER
+              value: {{ .Values.issuer | quote }}
+            - name: TRUST_PROXY
+              value: {{ .Values.provider.trustProxy | quote }}
+            - name: COOKIE_KEYS
+              valueFrom:
+                secretKeyRef: { name: {{ include "pq-oidc.secretName" . }}, key: cookie-keys }
+            {{- range $name, $app := .Values.apps }}
+            {{- $prefix := upper $name }}
+            - name: {{ $prefix }}_REDIRECT_URI
+              value: {{ printf "%s/callback" $app.baseUrl | quote }}
+            - name: {{ $prefix }}_ID_TOKEN_ALG
+              value: {{ $app.idTokenAlg | quote }}
+            - name: {{ $prefix }}_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef: { name: {{ include "pq-oidc.secretName" $ }}, key: {{ $name }}-client-secret }
+            {{- end }}
+            {{- if .Values.provider.signingKeysSecret }}
+            - name: SIGNING_KEYS_JSON
+              valueFrom:
+                secretKeyRef: { name: {{ .Values.provider.signingKeysSecret }}, key: signing-keys.json }
+            {{- end }}
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 15
+          resources:
+            {{- toYaml .Values.provider.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "pq-oidc.providerName" . }}
+  labels:
+    {{- include "pq-oidc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: provider
+spec:
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: provider
+  ports:
+    - name: http
+      port: {{ .Values.provider.port }}
+      targetPort: http

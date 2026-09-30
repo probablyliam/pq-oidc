@@ -1,0 +1,55 @@
+# Build locally with `docker build -t pq-oidc:local .` (and `kind load docker-image pq-oidc:local` for kind).
+image:
+  repository: pq-oidc
+  tag: local
+  pullPolicy: IfNotPresent
+
+# The URL browsers use to reach the provider. It becomes the "iss" claim in every token.
+# The default suits `kubectl port-forward`; set it to your ingress URL otherwise.
+issuer: http://localhost:3000
+
+provider:
+  port: 3000
+  # Keep at 1 unless you add a shared storage adapter: sessions and codes live in memory.
+  replicas: 1
+  trustProxy: false
+  # Name of a Secret holding a private JWKS under the key "signing-keys.json"
+  # (one ES256 and one ML-DSA-65 key). If empty, keys are generated at startup.
+  signingKeysSecret: ""
+  resources:
+    requests: { cpu: 50m, memory: 96Mi }
+    limits: { memory: 256Mi }
+
+apps:
+  legacy:
+    enabled: true
+    clientId: legacy-app
+    preset: legacy
+    port: 3001
+    baseUrl: http://localhost:3001
+    # The migration switch: which algorithm the provider signs this app's ID tokens with.
+    idTokenAlg: ES256
+  pq:
+    enabled: true
+    clientId: pq-app
+    preset: pq
+    port: 3002
+    baseUrl: http://localhost:3002
+    idTokenAlg: ML-DSA-65
+
+appResources:
+  requests: { cpu: 25m, memory: 64Mi }
+  limits: { memory: 192Mi }
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: [ALL]

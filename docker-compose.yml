@@ -1,0 +1,66 @@
+# docker compose up --build
+#   Legacy App    http://localhost:3001  (ES256 ID tokens)
+#   PQ-Ready App  http://localhost:3002  (ML-DSA-65 ID tokens)
+#   Provider      http://localhost:3000
+#
+# Browsers reach the provider at localhost:3000, but inside a container
+# "localhost" is the container itself. So the apps use INTERNAL_ISSUER
+# (http://provider:3000) for server-to-server calls, while tokens still
+# carry the public issuer URL.
+
+x-demo-secrets: &demo-secrets
+  # Demo values only. Real deployments inject secrets (see the Helm chart).
+  LEGACY_CLIENT_SECRET: legacy-app-demo-secret
+  PQ_CLIENT_SECRET: pq-app-demo-secret
+
+services:
+  provider:
+    build: .
+    image: pq-oidc:local
+    environment:
+      <<: *demo-secrets
+      ISSUER: http://localhost:3000
+      LEGACY_REDIRECT_URI: http://localhost:3001/callback
+      PQ_REDIRECT_URI: http://localhost:3002/callback
+      # Try the premature migration: set this to ML-DSA-65 and sign in to Legacy App.
+      LEGACY_ID_TOKEN_ALG: ${LEGACY_ID_TOKEN_ALG:-ES256}
+    ports: ['3000:3000']
+    read_only: true
+    security_opt: ['no-new-privileges:true']
+    cap_drop: [ALL]
+
+  legacy-app:
+    image: pq-oidc:local
+    command: ['node', 'packages/rp/src/server.ts']
+    environment:
+      RP_PRESET: legacy
+      PORT: '3001'
+      BASE_URL: http://localhost:3001
+      ISSUER: http://localhost:3000
+      INTERNAL_ISSUER: http://provider:3000
+      CLIENT_SECRET: legacy-app-demo-secret
+      OTHER_APP_URL: http://localhost:3002/
+    ports: ['3001:3001']
+    depends_on:
+      provider: { condition: service_healthy }
+    read_only: true
+    security_opt: ['no-new-privileges:true']
+    cap_drop: [ALL]
+
+  pq-app:
+    image: pq-oidc:local
+    command: ['node', 'packages/rp/src/server.ts']
+    environment:
+      RP_PRESET: pq
+      PORT: '3002'
+      BASE_URL: http://localhost:3002
+      ISSUER: http://localhost:3000
+      INTERNAL_ISSUER: http://provider:3000
+      CLIENT_SECRET: pq-app-demo-secret
+      OTHER_APP_URL: http://localhost:3001/
+    ports: ['3002:3002']
+    depends_on:
+      provider: { condition: service_healthy }
+    read_only: true
+    security_opt: ['no-new-privileges:true']
+    cap_drop: [ALL]

@@ -1,0 +1,21 @@
+{
+  "name": "@pq-oidc/provider",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OpenID Connect provider that signs ID tokens with ES256 or ML-DSA-65 per client.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "start": "node src/server.ts"
+  },
+  "dependencies": {
+    "@pq-oidc/token-kit": "0.1.0",
+    "jose": "6.2.12",
+    "oidc-provider": "9.12.2"
+  },
+  "devDependencies": {
+    "@types/oidc-provider": "9.12.1"
+  }
+}

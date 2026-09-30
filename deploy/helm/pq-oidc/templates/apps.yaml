@@ -1,0 +1,77 @@
+{{- range $name, $app := .Values.apps }}
+{{- if $app.enabled }}
+{{- $fullName := printf "%s-%s" $.Release.Name $app.clientId }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullName }}
+  labels:
+    {{- include "pq-oidc.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $app.clientId }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ $.Release.Name }}
+      app.kubernetes.io/component: {{ $app.clientId }}
+  template:
+    metadata:
+      labels:
+        {{- include "pq-oidc.labels" $ | nindent 8 }}
+        app.kubernetes.io/component: {{ $app.clientId }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        {{- toYaml $.Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: app
+          image: {{ include "pq-oidc.image" $ }}
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          command: ["node", "packages/rp/src/server.ts"]
+          ports:
+            - name: http
+              containerPort: {{ $app.port }}
+          env:
+            - name: RP_PRESET
+              value: {{ $app.preset | quote }}
+            - name: PORT
+              value: {{ $app.port | quote }}
+            - name: BASE_URL
+              value: {{ $app.baseUrl | quote }}
+            - name: ISSUER
+              value: {{ $.Values.issuer | quote }}
+            # Server-to-server calls go through the cluster Service, not the public URL.
+            - name: INTERNAL_ISSUER
+              value: {{ printf "http://%s:%v" (include "pq-oidc.providerName" $) $.Values.provider.port | quote }}
+            - name: CLIENT_SECRET
+              valueFrom:
+                secretKeyRef: { name: {{ include "pq-oidc.secretName" $ }}, key: {{ $name }}-client-secret }
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 15
+          resources:
+            {{- toYaml $.Values.appResources | nindent 12 }}
+          securityContext:
+            {{- toYaml $.Values.containerSecurityContext | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullName }}
+  labels:
+    {{- include "pq-oidc.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $app.clientId }}
+spec:
+  selector:
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    app.kubernetes.io/component: {{ $app.clientId }}
+  ports:
+    - name: http
+      port: {{ $app.port }}
+      targetPort: http
+{{- end }}
+{{- end }}

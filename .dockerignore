@@ -1,0 +1,14 @@
+**/node_modules
+**/dist
+.git
+.github
+apps/lab/src
+apps/lab/public
+docs
+deploy
+tests
+coverage
+**/*.test.ts
+*.md
+.env
+.env.*
