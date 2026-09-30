@@ -7,7 +7,7 @@
 # There is no build step: Node.js 24 runs the TypeScript sources directly
 # (type stripping), so what you read in the repo is exactly what runs.
 
-FROM node:24-slim AS deps
+FROM node:26-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY packages/token-kit/package.json packages/token-kit/
@@ -17,7 +17,7 @@ COPY apps/lab/package.json apps/lab/
 # Production dependencies of the server packages only (no lab, no test tooling).
 RUN npm ci --omit=dev --ignore-scripts --workspace packages/provider --workspace packages/rp
 
-FROM node:24-slim
+FROM node:26-slim
 ENV NODE_ENV=production \
     NODE_OPTIONS=--disable-warning=ExperimentalWarning
 WORKDIR /app
