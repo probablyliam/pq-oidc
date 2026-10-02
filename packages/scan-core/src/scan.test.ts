@@ -112,8 +112,10 @@ describe('the other layers', () => {
     expect(finding('tls12', 'http.hsts')).toMatchObject({ tone: 'caution', title: 'No HSTS header' });
     expect(finding('tls12', 'http.cookies')).toMatchObject({ tone: 'caution', title: 'Cookie session can be sent over plain HTTP' });
     expect(finding('tls12', 'http.exposure')).toMatchObject({ kind: 'inference' });
-    // Cookie values are never kept.
-    expect(JSON.stringify(report('classical'))).not.toContain('abc');
+    // Cookie values are never kept: only the name and its flags. (The whole report is not searched for "abc":
+    // it holds certificates and signatures in base64 and hex, where any three letters can occur by chance.)
+    expect(report('classical').transport.cookies).toEqual([{ name: 'session', secure: true, httpOnly: true, sameSite: 'lax' }]);
+    expect(JSON.stringify(report('classical'))).not.toContain('session=abc');
   });
 
   it('token signing: read from metadata when published', () => {

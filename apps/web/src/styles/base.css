@@ -256,26 +256,97 @@ label {
 }
 
 main {
-  min-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 56px);
 }
-.band {
-  padding: 44px var(--gutter) 40px;
+main > .sheet {
+  flex: 1;
+  /* Full width always: a sheet that centres its content must not shrink to it. */
+  width: 100%;
+}
+/*
+ * The question, in a yellow panel on the sheet: in the middle of the page
+ * until there is a result, then at the top with the result beneath it. The
+ * sheet and its grid stay the same throughout, so nothing flashes.
+ */
+.scan.idle {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+.ask {
+  width: 100%;
+  max-width: 58rem;
+  padding: 30px 32px 28px;
   background: var(--signal);
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  will-change: transform;
 }
-.band h1 {
-  max-width: 18ch;
+.scan.idle .ask {
+  text-align: center;
 }
-.band.compact {
-  padding-top: 18px;
-  padding-bottom: 18px;
+.ask h1 {
+  max-width: 20ch;
+  margin: 0 auto;
+  font-size: clamp(2rem, 4.6vw, 2.9rem);
 }
-.band.compact .scan-form {
+.scan.scanning .ask h1 {
+  margin: 0;
+  font-size: clamp(1.7rem, 3.6vw, 2.3rem);
+}
+.sheet .ask .sub {
+  max-width: 46rem;
+  margin: 10px auto 0;
+  font-size: 1.12rem;
+  color: var(--ink);
+}
+.scan.scanning .ask .sub {
+  margin-left: 0;
+}
+.scan.scanning .ask {
+  padding: 16px 18px;
+  margin-bottom: 22px;
+}
+.scan.scanning .ask.titled {
+  padding: 22px 24px 20px;
+}
+.ask .scan-form {
+  max-width: none;
   margin-top: 0;
 }
-.band .sub {
-  max-width: 46rem;
-  margin-top: 12px;
-  font-size: 1.15rem;
+.scan.idle .scan-form {
+  margin-top: 26px;
+}
+.scan.idle .picks {
+  margin-top: 20px;
+}
+.scan.idle .picks > div {
+  grid-template-columns: 1fr;
+  justify-items: center;
+  gap: 6px;
+}
+.scan.idle .picks dd {
+  justify-content: center;
+}
+.scan.scanning .picks {
+  margin-top: 10px;
+}
+.ask .notice {
+  margin-top: 14px;
+  text-align: left;
+}
+.result {
+  max-width: 58rem;
+  animation: rise 0.4s ease both;
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
 }
 .sheet {
   padding: 36px var(--gutter) 64px;
@@ -437,10 +508,6 @@ button.pick[aria-pressed='true'] {
 .seg button[aria-pressed='true'] .tag {
   background: var(--paper);
 }
-.band .notice {
-  margin-top: 14px;
-  max-width: 52rem;
-}
 
 /* ---------- Tone ---------- */
 .good {
@@ -470,8 +537,11 @@ button.pick[aria-pressed='true'] {
   .scan-row {
     flex-direction: column;
   }
-  .band {
-    padding-top: 30px;
+  .ask {
+    padding: 20px 16px 18px;
+  }
+  .scan.scanning .ask {
+    padding: 14px 14px;
   }
 }
 

@@ -45,6 +45,8 @@ export interface DiscoverOptions extends FetchOptions {
   includeFullPath: boolean;
   /** Look only at the one place OIDC Discovery defines for this exact issuer, instead of searching. */
   exactIssuer?: boolean;
+  /** Places already tried, not to be fetched again. */
+  skip?: ReadonlySet<string>;
 }
 
 export interface Discovery {
@@ -78,6 +80,7 @@ export async function discoverOidc(url: URL, pinned: PinnedTarget, policy: Targe
   const candidates = options.exactIssuer ? [`${url.origin}${url.pathname.replace(/\/$/, '')}/.well-known/openid-configuration`] : discoveryCandidates(url, options.includeFullPath);
 
   for (const candidate of candidates) {
+    if (options.skip?.has(candidate)) continue;
     try {
       const response = await fetchPinned(new URL(candidate), pinned, { ...options, maxBytes: 256 * 1024 });
       const json = response.status === 200 ? parseJson(response.body) : undefined;

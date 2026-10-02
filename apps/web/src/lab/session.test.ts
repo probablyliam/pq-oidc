@@ -77,6 +77,18 @@ describe('what an attacker gets, each result a real decryption or verification',
     expect(attacks['pq-quantum']!.token.accepted).toBe(false);
   });
 
+  it('shows a re-derived secret that matches the real one only when the whole exchange was classical', async () => {
+    const classicalSession = await runSession(classical, typed);
+    const hit = await runAttack(classicalSession, 'quantum');
+    expect([...hit.key.derivedSecret!]).toEqual([...classicalSession.sharedSecret]);
+    const hybridSession = await runSession(hybridKex, typed);
+    const miss = await runAttack(hybridSession, 'quantum');
+    expect([...miss.key.derivedSecret!]).not.toEqual([...hybridSession.sharedSecret]);
+    expect([...miss.key.derivedSecret!.subarray(0, 32)]).toEqual(new Array(32).fill(0)); // the ML-KEM half she never got
+    expect(attacks['classical-ordinary']!.key.derivedSecret).toBeUndefined();
+    expect(attacks['classical-quantum']!.site.signature.length).toBeGreaterThan(0);
+  });
+
   it('never claims to recover an ML-KEM or ML-DSA key', () => {
     for (const a of Object.values(attacks)) {
       expect(a.key.kemRecovered).toBe(false);

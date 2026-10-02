@@ -78,14 +78,17 @@ export async function runScan(input: string, options: ScanOptions = {}): Promise
     oidc = own.summary;
     own.related.forEach((r) => relate(r.origin, r.role));
 
-    // A login page that hands off to an identity provider: the tokens are signed there, so look there too.
+    // The page sent visitors somewhere to sign in: an identity provider on another origin, or the site's own
+    // sign-in endpoint under a path (login.microsoftonline.com keeps its metadata under /common, not at the root).
+    // The tokens are signed there, so look there too.
     const last = follow.responses.at(-1);
-    if (!oidc.found && last && last.target.origin !== target.origin) {
-      progress(`Looking for OpenID Connect metadata at ${last.target.hostname}`);
-      const idp = await discoverOidc(last.target.url, last.pinned, policy, { lookup: options.lookup, deadline, includeFullPath: false });
+    if (!oidc.found && last && last.target.url.href !== target.url.href) {
+      const elsewhere = last.target.origin !== target.origin;
+      progress(`Looking for OpenID Connect metadata at ${last.target.hostname}${elsewhere ? '' : last.target.url.pathname}`);
+      const idp = await discoverOidc(last.target.url, last.pinned, policy, { lookup: options.lookup, deadline, includeFullPath: false, skip: new Set(oidc.tried.map((t) => t.url)) });
       if (idp.summary.found) {
         oidc = { ...idp.summary, tried: [...oidc.tried, ...idp.summary.tried] };
-        related.splice(0, related.length, ...related.map((r) => (r.origin === last.target.origin ? { ...r, role: 'identity provider: the page redirects here to sign in, and its keys sign the tokens' } : r)));
+        if (elsewhere) related.splice(0, related.length, ...related.map((r) => (r.origin === last.target.origin ? { ...r, role: 'identity provider: the page redirects here to sign in, and its keys sign the tokens' } : r)));
         idp.related.forEach((r) => relate(r.origin, r.role));
       } else {
         oidc = { ...oidc, tried: [...oidc.tried, ...idp.summary.tried] };

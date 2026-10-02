@@ -163,6 +163,12 @@ function tokenClaims(login: Login) {
   return { iss: ISSUER, aud: AUDIENCE, sub: login.username, name: login.username, iat: now, exp: now + 3600 };
 }
 
+/** The public key behind a signing key, as bytes: what anyone can read off the certificate or the key set. */
+export function publicBytes(key: LabKey): Uint8Array {
+  const jwk = key.publicJwk;
+  return base64urlToBytes('pub' in jwk ? jwk.pub : ((jwk as JsonWebKey).x ?? ''));
+}
+
 /** The private value behind a signing key, as bytes: what a quantum computer would hand back. */
 async function privateBytes(key: LabKey): Promise<Uint8Array> {
   if ('seed' in key) return key.seed;
@@ -259,9 +265,15 @@ export async function runSession(setup: Setup, login: Login = DEFAULT_LOGIN, pre
 export interface Attack {
   computer: Computer;
   /** Step 1: the key exchange. A quantum computer recovers the X25519 private half; nothing recovers an ML-KEM one. */
-  key: { ecdhRecovered: boolean; kemRecovered: false; decryptedLogin?: string };
+  key: {
+    ecdhRecovered: boolean;
+    kemRecovered: false;
+    /** The secret she fed to the key schedule: the whole thing, or only the X25519 half with zeros where ML-KEM's part should be. */
+    derivedSecret?: Uint8Array;
+    decryptedLogin?: string;
+  };
   /** Step 2: posing as the site, with a signature the browser checks against the real certificate. */
-  site: { keyRecovered: boolean; accepted: boolean };
+  site: { keyRecovered: boolean; signature: Uint8Array; accepted: boolean };
   /** Step 4: a token of her own, checked by the site with its real public key. */
   token: { keyRecovered: boolean; forged: string; accepted: boolean };
 }
@@ -291,7 +303,8 @@ export async function runAttack(session: Session, computer: Computer): Promise<A
   const visitor = message('ClientHello', crypto.getRandomValues(new Uint8Array(32)));
   const herHello = message('ServerHello', crypto.getRandomValues(new Uint8Array(32)));
   const herInput = certificateVerifyInput(transcriptHash(HASH, visitor, herHello, certificate));
-  const siteAccepted = await verifySignature(session.certKey.publicJwk, herInput, await signBytes(siteKey, herInput));
+  const herSignature = await signBytes(siteKey, herInput);
+  const siteAccepted = await verifySignature(session.certKey.publicJwk, herInput, herSignature);
 
   // A token of her own. The token-signing public key is published; Shor's algorithm turns a classical one into the private key.
   const tokenRecovered = quantum && session.setup.token === 'ecdsa';
@@ -301,8 +314,8 @@ export async function runAttack(session: Session, computer: Computer): Promise<A
 
   return {
     computer,
-    key: { ecdhRecovered: quantum, kemRecovered: false, decryptedLogin },
-    site: { keyRecovered: certRecovered, accepted: siteAccepted },
+    key: { ecdhRecovered: quantum, kemRecovered: false, derivedSecret: quantum ? guess : undefined, decryptedLogin },
+    site: { keyRecovered: certRecovered, signature: herSignature, accepted: siteAccepted },
     token: { keyRecovered: tokenRecovered, forged, accepted: tokenAccepted },
   };
 }

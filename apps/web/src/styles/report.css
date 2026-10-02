@@ -168,10 +168,6 @@
 .answer-more a {
   font-weight: 600;
 }
-.answers.preview > li {
-  grid-template-columns: 1fr;
-  padding: 13px 22px;
-}
 
 .also {
   padding: 16px 22px;
@@ -483,35 +479,6 @@
 }
 .raw > p {
   margin-top: 14px;
-}
-
-/* ---------- Before a scan ---------- */
-.idle {
-  max-width: 58rem;
-}
-.idle h2 {
-  font-size: 1.3rem;
-  margin-bottom: 12px;
-}
-.idle .fine {
-  margin-top: 10px;
-}
-.saved {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 18px;
-  margin-top: 26px;
-  max-width: 58rem;
-}
-.saved span {
-  color: var(--ink-soft);
-}
-.saved a {
-  font-weight: 600;
-}
-.saved a[aria-current='page'] {
-  color: var(--ink);
-  text-decoration-thickness: 3px;
 }
 
 @media (max-width: 760px) {

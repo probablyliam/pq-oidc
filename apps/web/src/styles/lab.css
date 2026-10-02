@@ -111,16 +111,9 @@
 .process.ghost .process-n {
   background: var(--rule);
 }
-/* Reveal: each card rises in turn once the visitor has logged in. */
+/* Reveal: a card rises when its turn comes (the view switches it to live one step at a time). */
 .process.live {
   animation: rise 0.45s cubic-bezier(0.2, 0.7, 0.3, 1) both;
-  animation-delay: calc(var(--i) * 0.12s);
-}
-@keyframes rise {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
 }
 .process > header {
   display: flex;
@@ -266,6 +259,16 @@
   /* post-quantum keys read dotted via the ring drawn in the component */
 }
 
+/* Anything that pops in scales about its own centre, not the corner of the drawing. */
+.scene .pop,
+.scene .check,
+.a-scene .got,
+.a-scene .nope,
+.a-scene .out {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
 /* The ghost scene sits quiet until login; then its parts draw and pop in. */
 .scene.ghost {
   opacity: 0.4;
@@ -356,6 +359,12 @@
   border: 1px solid var(--rule);
   border-radius: 3px;
   border-left: 5px solid var(--rule);
+}
+.attack-row.phase-idle {
+  border-left-color: var(--rule);
+}
+.attack-row.phase-idle .a-scene {
+  opacity: 0.45;
 }
 .attack-row.phase-won {
   border-left-color: var(--bad);
@@ -488,6 +497,52 @@
 .a-scene.phase-lost .out {
   opacity: 1;
   animation: pop 0.35s ease both;
+}
+
+/* Her working: one real value per line, marked by whether that step went her way. */
+.derive {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8rem;
+}
+.derive li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  padding-left: 16px;
+  position: relative;
+  color: var(--ink-soft);
+}
+.derive li::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 0.55em;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--rule);
+}
+.derive li.ok::before {
+  background: var(--bad);
+}
+.derive li.bad::before {
+  background: var(--good);
+}
+.derive li.ok span {
+  color: var(--ink);
+}
+.derive li.bad span {
+  color: var(--good);
+  font-weight: 600;
+}
+.derive code {
+  font-size: 0.78rem;
+  color: var(--ink);
 }
 
 /* The "working it out" readout. */

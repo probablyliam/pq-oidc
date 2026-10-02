@@ -178,6 +178,8 @@ export interface TransportSummary {
  */
 export interface PageSummary {
   kind: 'sign-in-service' | 'sign-in-page' | 'leads-to-sign-in' | 'other';
+  /** What the kind rests on, strongest first: published metadata, a password field, a username field, the address alone. */
+  how?: 'metadata' | 'password-field' | 'username-field' | 'address';
   /** The origin the address redirected to, when it left the scanned one. */
   leadsTo?: string;
   evidence: { label: string; value: string }[];

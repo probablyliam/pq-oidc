@@ -56,9 +56,12 @@ export function ProcessScene({ step, pq, live }: { step: Step; pq: boolean; live
       {step === 'cert' && (
         <g>
           <path className="wire draw" d="M186 46H70" />
-          <g className="pop d2" transform="translate(96 32)">
-            <rect className="card" x="0" y="0" width="48" height="30" rx="3" strokeDasharray={pq ? '3 2' : undefined} />
-            <path className="sig" d="M7 10h22M7 16h30M7 22h16" />
+          {/* The position lives on an outer group: a CSS transform on the animated one would replace it. */}
+          <g transform="translate(96 32)">
+            <g className="pop d2">
+              <rect className="card" x="0" y="0" width="48" height="30" rx="3" strokeDasharray={pq ? '3 2' : undefined} />
+              <path className="sig" d="M7 10h22M7 16h30M7 22h16" />
+            </g>
           </g>
           <g className="pop d3 check"><path d="M103 47l6 6 12-13" /></g>
           <text className="scene-tag" x="120" y="74">verified</text>
@@ -66,12 +69,14 @@ export function ProcessScene({ step, pq, live }: { step: Step; pq: boolean; live
       )}
       {step === 'token' && (
         <g>
-          <g className="pop" transform="translate(96 30)">
-            <rect className="card" x="0" y="0" width="48" height="30" rx="3" strokeDasharray={pq ? '3 2' : undefined} />
-            <rect className="t-h" x="6" y="7" width="9" height="5" />
-            <rect className="t-p" x="18" y="7" width="14" height="5" />
-            <rect className="t-s" x="35" y="7" width="7" height="5" />
-            <path className="sig" d="M7 19h34M7 24h20" />
+          <g transform="translate(96 30)">
+            <g className="pop">
+              <rect className="card" x="0" y="0" width="48" height="30" rx="3" strokeDasharray={pq ? '3 2' : undefined} />
+              <rect className="t-h" x="6" y="7" width="9" height="5" />
+              <rect className="t-p" x="18" y="7" width="14" height="5" />
+              <rect className="t-s" x="35" y="7" width="7" height="5" />
+              <path className="sig" d="M7 19h34M7 24h20" />
+            </g>
           </g>
           <path className="wire draw d2" d="M96 45H54" />
           <g className="pop d3 check"><path d="M150 42l6 6 12-13" /></g>

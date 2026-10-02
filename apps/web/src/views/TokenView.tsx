@@ -257,8 +257,8 @@ export function TokenView({ meta }: { meta: Meta | null }) {
   const alsoNoticed = findings.filter((f) => f.tone === 'bad' && f.id !== 'signature.check').map((f) => f.title);
 
   return (
-    <>
-      <section className="band">
+    <section className="sheet scan scanning">
+      <div className="ask titled">
         <h1>Is this token quantum-safe?</h1>
         <p className="sub">Paste a JWT. It is read here in your browser and never sent anywhere.</p>
         <form className="token-input" onSubmit={(event) => event.preventDefault()}>
@@ -281,10 +281,10 @@ export function TokenView({ meta }: { meta: Meta | null }) {
             ))}
           </dl>
         </form>
-      </section>
+      </div>
 
       {analysis && verdict && (
-        <section className="sheet">
+        <div className="result">
           <article className="report token-report">
             <header className={`verdict verdict-${verdict.status}`}>
               <p className="verdict-host">{exampleId ? 'An example token made on this page' : issuerHost ? `Issued by ${issuerHost}` : 'Pasted token'}</p>
@@ -356,8 +356,8 @@ export function TokenView({ meta }: { meta: Meta | null }) {
               </p>
             </details>
           </article>
-        </section>
+        </div>
       )}
-    </>
+    </section>
   );
 }

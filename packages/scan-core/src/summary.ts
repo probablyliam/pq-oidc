@@ -56,9 +56,15 @@ export interface PlainSummary {
 
 function describePage(page: PageSummary): PlainPage {
   const elsewhere = page.leadsTo ? new URL(page.leadsTo).host : undefined;
+  const seen = {
+    'password-field': 'it asks for a password',
+    'username-field': 'it asks for a username first',
+    address: 'the address is a sign-in endpoint; its form is built by script',
+    metadata: 'it publishes how it signs people in',
+  }[page.how ?? 'password-field'];
   const note = {
     'sign-in-service': 'A sign-in service: other sites send people here to log in. A scan can also check how it signs you in, not just the connection.',
-    'sign-in-page': 'A sign-in page. A scan can also check how it signs you in, not just the connection.',
+    'sign-in-page': `A sign-in page: ${seen}.`,
     'leads-to-sign-in': `This address sends visitors on to sign in at ${elsewhere}.`,
     other: elsewhere ? `Not a sign-in page. This address sends visitors on to ${elsewhere}. A scan can still check the connection and the site’s identity below.` : 'Not a sign-in page. A scan can still check the connection and the site’s identity below.',
   }[page.kind];

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { DEFAULT_POLICY, parseTarget, TargetRejected } from '@pq-oidc/scan-core/policy';
 import { api, ApiError } from '../api.ts';
@@ -160,10 +160,30 @@ function LiveScan({ id }: { id: string }) {
 
 export function ScanView({ route, meta }: Props) {
   const scanId = route.path[0] === 'scan' ? route.path[1] : undefined;
+  const ask = useRef<HTMLDivElement>(null);
+  const lastTop = useRef<number>(undefined);
+
+  // The question sits in the middle of the page until a scan starts, then at the top with the result
+  // below. Measure where it was and slide it from there, so the move reads as the page making room.
+  useLayoutEffect(() => {
+    const panel = ask.current;
+    if (!panel) return;
+    const top = panel.getBoundingClientRect().top + window.scrollY;
+    const from = lastTop.current;
+    lastTop.current = top;
+    if (from === undefined || Math.abs(from - top) < 1 || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    panel.style.transition = 'none';
+    panel.style.transform = `translateY(${from - top}px)`;
+    const frame = requestAnimationFrame(() => {
+      panel.style.transition = 'transform 0.45s cubic-bezier(0.2, 0.7, 0.3, 1)';
+      panel.style.transform = '';
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [scanId]);
 
   return (
-    <>
-      <section className={scanId ? 'band compact' : 'band'}>
+    <section className={`sheet scan ${scanId ? 'scanning' : 'idle'}`}>
+      <div className="ask" ref={ask}>
         {!scanId && (
           <>
             <h1>Is this login quantum-safe?</h1>
@@ -177,13 +197,13 @@ export function ScanView({ route, meta }: Props) {
             Scanning is done by a small service that runs beside this page, and it is not running here. Start the project with <code>npm start</code> to scan.
           </p>
         )}
-      </section>
+      </div>
 
       {scanId && meta && (
-        <section className="sheet">
+        <div className="result" key={scanId}>
           <LiveScan id={scanId} />
-        </section>
+        </div>
       )}
-    </>
+    </section>
   );
 }
