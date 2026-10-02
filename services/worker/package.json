@@ -1,0 +1,16 @@
+{
+  "name": "@pq-oidc/worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Claims scan jobs from the API and runs them. The only component that connects to scan targets; holds no user data.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "start": "node src/server.ts"
+  },
+  "dependencies": {
+    "@pq-oidc/scan-core": "0.1.0"
+  }
+}

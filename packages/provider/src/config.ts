@@ -6,7 +6,7 @@ import { toClientMetadata } from './clients.ts';
 import type { DemoClient } from './clients.ts';
 import { SIGNING_ALGS } from './keys.ts';
 import type { PrivateJwks } from './keys.ts';
-import { errorPage } from './views.ts';
+import { errorPage, signedOutPage, signOutPage } from './views.ts';
 
 export interface ConfigurationOptions {
   clients: DemoClient[];
@@ -45,6 +45,22 @@ export function createConfiguration({ clients, jwks, cookieKeys }: Configuration
 
     features: {
       devInteractions: { enabled: false }, // we render our own login page
+      // RP-initiated logout: an app can end the provider's session too, not only its own.
+      rpInitiatedLogout: {
+        enabled: true,
+        logoutSource: (ctx, form) => {
+          const nonce = randomBytes(16).toString('base64');
+          ctx.set(securityHeaders(nonce));
+          ctx.type = 'html';
+          ctx.body = signOutPage(nonce, form);
+        },
+        postLogoutSuccessSource: (ctx) => {
+          const nonce = randomBytes(16).toString('base64');
+          ctx.set(securityHeaders(nonce));
+          ctx.type = 'html';
+          ctx.body = signedOutPage(nonce);
+        },
+      },
     },
 
     interactions: {

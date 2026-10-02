@@ -1,4 +1,4 @@
-import { ALGORITHMS, html, renderPage } from '@pq-oidc/token-kit';
+import { ALGORITHMS, html, renderPage, SafeHtml as Raw } from '@pq-oidc/token-kit';
 import type { SafeHtml } from '@pq-oidc/token-kit';
 import { DEMO_ACCOUNTS, DEMO_PASSWORD } from './accounts.ts';
 import type { DemoClient } from './clients.ts';
@@ -85,6 +85,39 @@ export function errorPage(nonce: string, error: string, description: string | un
         <h1>Something went wrong</h1>
         <div class="notice bad"><code>${error}</code>${description ? html`: ${description}` : ''}</div>
         <p class="muted small">Go back to the app you came from and try signing in again.</p>
+      </section>`,
+  });
+}
+
+/**
+ * Asks before ending the provider's session. `form` is oidc-provider's own
+ * markup (a form with a hidden anti-forgery field); the buttons submit it.
+ */
+export function signOutPage(nonce: string, form: string): string {
+  return renderPage({
+    title: 'Sign out · pq-oidc',
+    nonce,
+    body: html`${brand}
+      <section class="card">
+        <h1>Sign out of the identity provider too?</h1>
+        <p class="muted">You are signed out of the app. Staying signed in here means other apps can sign you in without asking for your password.</p>
+        ${new Raw(form)}
+        <div class="row">
+          <button type="submit" form="op.logoutForm" name="logout" value="yes">Sign out</button>
+          <button type="submit" form="op.logoutForm" class="secondary">Stay signed in</button>
+        </div>
+      </section>`,
+  });
+}
+
+export function signedOutPage(nonce: string): string {
+  return renderPage({
+    title: 'Signed out · pq-oidc',
+    nonce,
+    body: html`${brand}
+      <section class="card">
+        <h1>Signed out</h1>
+        <p class="muted">You can close this page.</p>
       </section>`,
   });
 }

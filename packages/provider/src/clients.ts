@@ -12,6 +12,8 @@ export interface DemoClient {
   name: string;
   redirectUri: string;
   idTokenAlg: ProviderSigningAlg;
+  /** Where the browser may be sent after signing out at the provider. */
+  postLogoutRedirectUri?: string;
 }
 
 export function toClientMetadata(client: DemoClient): ClientMetadata {
@@ -20,6 +22,7 @@ export function toClientMetadata(client: DemoClient): ClientMetadata {
     client_secret: client.clientSecret,
     client_name: client.name,
     redirect_uris: [client.redirectUri],
+    post_logout_redirect_uris: client.postLogoutRedirectUri ? [client.postLogoutRedirectUri] : [],
     // OAuth 2.1: authorization code only. No implicit flow, no password grant.
     grant_types: ['authorization_code'],
     response_types: ['code'],
@@ -28,9 +31,19 @@ export function toClientMetadata(client: DemoClient): ClientMetadata {
   };
 }
 
-/** The two demo apps, configurable through environment variables. */
+/** The registered apps, configurable through environment variables. */
 export function demoClientsFromEnv(env: NodeJS.ProcessEnv): DemoClient[] {
+  const scannerUrl = (env.SCANNER_URL ?? 'http://localhost:8080').replace(/\/$/, '');
   return [
+    // The scanner signs its own users in here. It understands ML-DSA, so that is what it gets.
+    {
+      clientId: 'scanner-web',
+      clientSecret: env.SCANNER_CLIENT_SECRET ?? 'scanner-web-demo-secret',
+      name: 'pq-oidc scanner',
+      redirectUri: `${scannerUrl}/auth/callback`,
+      postLogoutRedirectUri: `${scannerUrl}/`,
+      idTokenAlg: parseAlg(env.SCANNER_ID_TOKEN_ALG, 'ML-DSA-65'),
+    },
     {
       clientId: 'legacy-app',
       clientSecret: env.LEGACY_CLIENT_SECRET ?? 'legacy-app-demo-secret',

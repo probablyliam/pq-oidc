@@ -5,5 +5,6 @@ export * from './report.ts';
 export * from './scan.ts';
 export { assess } from './assess.ts';
 export { discoverOidc } from './oidc/discover.ts';
+export * from './oidc/issuer-keys.ts';
 export { FetchError, fetchPinned } from './http/fetch.ts';
 export * from './tls/registry.ts';

@@ -9,3 +9,4 @@ export * from './readiness.ts';
 export * from './jose.ts';
 export * from './signature.ts';
 export * from './analyze.ts';
+export * from './split-horizon.ts';

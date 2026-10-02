@@ -43,6 +43,15 @@ export interface DiscoverOptions extends FetchOptions {
   lookup?: Lookup;
   /** True when `url` is what the user asked to scan (its whole path may be an issuer); false for an endpoint found in a redirect. */
   includeFullPath: boolean;
+  /** Look only at the one place OIDC Discovery defines for this exact issuer, instead of searching. */
+  exactIssuer?: boolean;
+}
+
+export interface Discovery {
+  summary: OidcSummary;
+  related: RelatedOrigin[];
+  /** The key set as published, when it could be read. */
+  jwks?: Json;
 }
 
 function parseJson(body: Buffer): Json | undefined {
@@ -62,12 +71,13 @@ const originOf = (value: unknown): string | undefined => {
   }
 };
 
-export async function discoverOidc(url: URL, pinned: PinnedTarget, policy: TargetPolicy, options: DiscoverOptions): Promise<{ summary: OidcSummary; related: RelatedOrigin[] }> {
+export async function discoverOidc(url: URL, pinned: PinnedTarget, policy: TargetPolicy, options: DiscoverOptions): Promise<Discovery> {
   const summary: OidcSummary = { found: false, tried: [] };
   const related: RelatedOrigin[] = [];
   let metadata: Json | undefined;
+  const candidates = options.exactIssuer ? [`${url.origin}${url.pathname.replace(/\/$/, '')}/.well-known/openid-configuration`] : discoveryCandidates(url, options.includeFullPath);
 
-  for (const candidate of discoveryCandidates(url, options.includeFullPath)) {
+  for (const candidate of candidates) {
     try {
       const response = await fetchPinned(new URL(candidate), pinned, { ...options, maxBytes: 256 * 1024 });
       const json = response.status === 200 ? parseJson(response.body) : undefined;
@@ -114,6 +124,7 @@ export async function discoverOidc(url: URL, pinned: PinnedTarget, policy: Targe
       summary.jwksError = response.truncated ? 'The key set is larger than 512 kB.' : `The key set could not be read (HTTP ${response.status}).`;
     } else {
       summary.keys = analyzeProvider(metadata, jwks, response.body.length).keys.filter((k) => k.use !== 'enc');
+      return { summary, related, jwks };
     }
   } catch (error) {
     if (error instanceof TargetRejected) summary.jwksError = `The scanner will not fetch jwks_uri: ${error.message}`;

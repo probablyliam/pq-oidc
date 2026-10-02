@@ -1,0 +1,19 @@
+{
+  "name": "@pq-oidc/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The scanner's API: sign-in (OIDC relying party), scan jobs, history. Owns the database; never connects to a scan target.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "start": "node src/server.ts"
+  },
+  "dependencies": {
+    "@pq-oidc/scan-core": "0.1.0",
+    "@pq-oidc/token-kit": "0.1.0",
+    "jose": "6.2.12",
+    "openid-client": "6.8.8"
+  }
+}
