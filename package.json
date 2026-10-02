@@ -21,7 +21,8 @@
     "lab:dev": "npm run dev -w apps/lab",
     "lab:build": "npm run build -w apps/lab",
     "smoke": "node --disable-warning=ExperimentalWarning scripts/smoke.ts",
-    "check": "node --disable-warning=ExperimentalWarning scripts/check.ts"
+    "check": "node --disable-warning=ExperimentalWarning scripts/check.ts",
+    "interop": "node --disable-warning=ExperimentalWarning scripts/interop.ts"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

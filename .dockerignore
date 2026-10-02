@@ -12,3 +12,5 @@ coverage
 *.md
 .env
 .env.*
+interop
+scripts

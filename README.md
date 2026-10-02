@@ -23,7 +23,7 @@ Switching isn't just a setting. Apps that haven't upgraded reject the new tokens
 
 | | |
 |---|---|
-| **Check any identity provider** | Enter an issuer URL (Okta, Auth0, Entra ID, Keycloak, Google…). It reads the provider's public keys and reports whether its tokens could be forged with a quantum computer, plus OAuth 2.1 hygiene (PKCE, implicit flow, `alg: none`). [In the browser](https://probablyliam.github.io/pq-oidc/#provider) or `npm run check -- <issuer>`. |
+| **Check any identity provider** | Enter an issuer URL (Okta, Auth0, Entra ID, Keycloak, Google…). It reads the provider's public keys and reports whether its tokens could be forged with a quantum computer, plus OAuth 2.1 hygiene (PKCE, implicit flow, `alg: none`). Results have shareable links. [In the browser](https://probablyliam.github.io/pq-oidc/#provider) or `npm run check -- <issuer>`. |
 | **Check your own tokens** | Paste a JWT. It calculates, byte for byte, how big it becomes with each ML-DSA parameter set and which real limits it breaks (browser cookies, nginx headers, Node.js headers), then re-signs it with ML-DSA-65 in your browser to prove the numbers. Nothing is uploaded. |
 | **Run a post-quantum provider** | `npm start` runs the provider and two apps: one receives ES256 tokens, one receives ML-DSA-65 tokens. Sign in to both and compare. |
 | **Rehearse the migration** | Flip one setting (`LEGACY_ID_TOKEN_ALG=ML-DSA-65`) to see what an unprepared app does, or use the simulator in the Token Lab. |
@@ -130,6 +130,7 @@ sequenceDiagram
 - **Provider** ([`packages/provider`](packages/provider)): [`oidc-provider`](https://github.com/panva/node-oidc-provider), which is OpenID Certified, configured as an OAuth 2.1-style server: authorization code flow only, PKCE S256 required, exact redirect URIs, short-lived single-use codes. It publishes an ES256 key and an ML-DSA-65 key (RFC 9964 `"kty": "AKP"`) side by side. Each registered app's `id_token_signed_response_alg` decides which one signs its tokens. That setting is the migration switch.
 - **Apps** ([`packages/rp`](packages/rp)): `openid-client` runs the protocol (state, nonce, PKCE, code exchange). The ID token signature is then verified explicitly with an **algorithm allowlist**. That check is what makes an unprepared app refuse ML-DSA, and what stops `alg: none` and algorithm-confusion attacks.
 - **Shared toolkit** ([`packages/token-kit`](packages/token-kit)): token measurement, exact size projection, verification with plain-language errors, and the provider readiness analysis used by both the CLI and the Token Lab.
+- **Python verifier** ([`interop/python`](interop/python)): about 150 lines on `pyca/cryptography`, because no Python JWT library supports RFC 9964 yet. `npm run interop` has Node sign tokens for Python to verify, Python sign one for Node to verify, and checks that both verifiers reject six forgeries with identical rejection codes. CI runs it on every push.
 - **Token Lab** ([`apps/lab`](apps/lab)): a static React site. ML-DSA runs in the browser through `@noble/post-quantum`, and ES256/RS256 through Web Crypto. Tests prove its tokens interoperate with Node's native ML-DSA in both directions.
 
 No build step for the server code: Node.js 24 runs the TypeScript sources directly, so what you read is what runs.
@@ -138,6 +139,7 @@ No build step for the server code: Node.js 24 runs the TypeScript sources direct
 
 The [threat model](docs/threat-model.md) walks through STRIDE for the provider, apps and tokens, and links each mitigation to the test that proves it. The automated tests include:
 
+- **Two independent verifiers** (TypeScript and Python) that must agree on every forged token.
 - **Token forgery:** `alg: none`, algorithm confusion (HS256 signed with the public key), attacker keys embedded in the header, edited claims, expired tokens, wrong audience, nonce replay.
 - **Protocol abuse:** missing PKCE, `plain` PKCE, implicit flow, unregistered redirect URIs (open redirect / code theft), unknown clients, authorization code replay, stolen codes without the verifier, one app redeeming another's code, wrong client secret.
 - **Web:** CSP without `unsafe-inline`, `frame-ancestors 'none'`, HTML escaping of reflected input, login CSRF across browser sessions, no private key material in the JWKS.
@@ -161,6 +163,7 @@ packages/provider    OIDC provider: config, keys, login UI
 packages/rp          demo app (run as "legacy" or "pq")
 packages/token-kit   measure, project, verify, provider readiness (shared)
 apps/lab             Token Lab website (GitHub Pages)
+interop/python       RFC 9964 verifier in Python, cross-checked against Node
 scripts/             npm start, smoke test, CLI checker
 tests/               end-to-end and protocol security tests
 deploy/helm/pq-oidc  Helm chart
@@ -174,6 +177,11 @@ npm test            # 68 tests: unit, interop, end-to-end, protocol security
 npm run lint
 npm run typecheck
 npm run smoke       # sign in to both apps against a running deployment
+
+# Python <-> Node interop (needs Python 3.10+)
+python -m venv interop/python/.venv
+interop/python/.venv/bin/pip install -r interop/python/requirements.txt   # Windows: .venv\Scripts\pip
+npm run interop
 ```
 
 ## Standards

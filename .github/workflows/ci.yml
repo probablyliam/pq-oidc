@@ -32,6 +32,27 @@ jobs:
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
 
+  interop:
+    name: Python and Node.js agree on RFC 9964
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: interop/python/requirements.txt
+      - run: pip install -r interop/python/requirements.txt
+      - name: Node signs, Python verifies; Python signs, Node verifies
+        run: npm run interop
+        env:
+          PYTHON: python
+
   kubernetes:
     name: Deploy to kind and sign in
     runs-on: ubuntu-24.04

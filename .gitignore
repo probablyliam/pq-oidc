@@ -9,3 +9,8 @@ coverage/
 *.pem
 jwks.private.json
 .DS_Store
+
+# Python (interop check)
+.venv/
+__pycache__/
+.pytest_cache/

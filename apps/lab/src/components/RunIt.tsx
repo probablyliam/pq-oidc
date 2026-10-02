@@ -38,6 +38,7 @@ export function RunIt() {
             <li>Per-app signing algorithms, with ES256 and ML-DSA-65 keys published side by side</li>
             <li>Automated attack tests: alg none, algorithm confusion, code replay, PKCE bypass, open redirects</li>
             <li>A STRIDE threat model and architecture decision records</li>
+            <li>A Python verifier that cross-checks the RFC 9964 implementation against Node.js</li>
             <li>Docker image, Helm chart, and a Kubernetes (kind) test in CI</li>
           </ul>
           <a className="btn" href={REPO_URL}>

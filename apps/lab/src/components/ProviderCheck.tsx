@@ -20,6 +20,20 @@ type Result =
   | { state: 'error'; issuer: string; message: string };
 
 const fmt = new Intl.NumberFormat('en-US');
+
+/**
+ * A shared link (?issuer=https://…) re-runs the check for whoever opens it.
+ * Only https issuers are honoured from the URL, so a crafted link can't make
+ * a visitor's browser probe their own machine.
+ */
+function issuerFromLink(): string | undefined {
+  const value = new URLSearchParams(window.location.search).get('issuer');
+  return value?.startsWith('https://') ? value : undefined;
+}
+
+function shareLink(issuer: string): string {
+  return `${window.location.origin}${window.location.pathname}?issuer=${encodeURIComponent(issuer)}#provider`;
+}
 const ICON: Record<CheckStatus, string> = { pass: '✓', warn: '!', fail: '✗', info: 'i' };
 
 async function fetchJson(url: string): Promise<{ json: Record<string, unknown>; text: string }> {
@@ -95,16 +109,33 @@ function Verdict({ report, snapshot }: { report: ProviderReport; snapshot: boole
 export function ProviderCheck() {
   const [issuer, setIssuer] = useState(PRESETS[0]!.issuer);
   const [result, setResult] = useState<Result>({ state: 'idle' });
+  const [copied, setCopied] = useState(false);
+  const checkedIssuer = result.state === 'done' && !result.snapshot ? result.report.issuer : undefined;
 
-  async function run(target: string) {
+  async function run(target: string, updateAddressBar = true) {
     setIssuer(target === 'pq-oidc-snapshot' ? 'http://localhost:3000 (snapshot)' : target);
     setResult({ state: 'loading', issuer: target });
-    setResult(await check(target));
+    setCopied(false);
+    const next = await check(target);
+    setResult(next);
+    if (updateAddressBar && next.state === 'done' && !next.snapshot && target.startsWith('https://')) {
+      window.history.replaceState(null, '', shareLink(target));
+    }
   }
 
   useEffect(() => {
-    void run(PRESETS[0]!.issuer);
+    void run(issuerFromLink() ?? PRESETS[0]!.issuer, false);
   }, []);
+
+  async function copyLink() {
+    if (!checkedIssuer) return;
+    try {
+      await navigator.clipboard.writeText(shareLink(issuer));
+      setCopied(true);
+    } catch {
+      window.history.replaceState(null, '', shareLink(issuer)); // fall back to the address bar
+    }
+  }
 
   function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -222,6 +253,15 @@ export function ProviderCheck() {
                   </>
                 )}
               </p>
+
+              {checkedIssuer && issuer.startsWith('https://') && (
+                <div className="presets">
+                  <button type="button" className="preset" onClick={copyLink}>
+                    {copied ? 'Link copied' : 'Copy a link to this result'}
+                  </button>
+                  <span className="small muted">Anyone who opens it gets a fresh, live check of the same provider.</span>
+                </div>
+              )}
 
               <details>
                 <summary>Raw documents</summary>
