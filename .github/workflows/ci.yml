@@ -16,7 +16,7 @@ concurrency:
 jobs:
   test:
     name: Lint, typecheck, test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -34,7 +34,7 @@ jobs:
 
   kubernetes:
     name: Deploy to kind and sign in
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: test
     steps:
       - uses: actions/checkout@v7
