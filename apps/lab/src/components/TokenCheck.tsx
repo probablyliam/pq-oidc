@@ -90,9 +90,9 @@ export function TokenCheck() {
 
   return (
     <div className="tool">
-      <p>
-        Paste a login token from your own system. It is decoded in your browser and never uploaded. You’ll see how
-        big it gets with each new signature and which limits it breaks.
+      <p className="tool-intro">
+        Paste a login token (a JWT) from your own system. It is decoded in your browser and never uploaded. You’ll see
+        how big it gets with each quantum-proof signature and which limits it breaks.
       </p>
         <div className="tool-input">
           <label htmlFor="jwt">JWT</label>
@@ -131,7 +131,7 @@ export function TokenCheck() {
         {token && !measurement && <div className="verdict-banner error">That isn’t a compact JWT (three base64url parts separated by dots).</div>}
 
         {measurement && pq65 && (
-          <div className="report">
+          <div className="token-report">
             <div className={`verdict-banner ${pq65.cookieBytes > COOKIE.bytes ? 'not-ready' : 'partial'}`}>
               <b>
                 {measurement.alg} today: {fmt.format(measurement.totalBytes)} bytes. With ML-DSA-65:{' '}

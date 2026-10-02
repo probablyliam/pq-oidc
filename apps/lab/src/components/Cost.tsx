@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { COOKIE_BYTE_LIMIT } from '@pq-oidc/token-kit/algorithms';
 import { generateKey, signJwt } from '../crypto/jws.ts';
 import { ByteMap } from './ByteMap.tsx';
-import { TokenCheck } from './TokenCheck.tsx';
 
 const COOKIE_NAME = 'id_token';
 const fmt = new Intl.NumberFormat('en-US');
@@ -57,21 +56,18 @@ export function Cost() {
   const over = pair ? pair.newToken.length - cookieRoom : 0;
 
   return (
-    <section className="step wide" id="cost">
-      <h2>Why hasn’t everyone switched?</h2>
-      <p className="lead">
-        The new signature is about fifty times longer. Below is one login token signed both ways, just now, in your
-        browser. Each square is one byte.
-      </p>
+    <section className="block" id="catch">
+      <h2>The catch: the quantum-proof signature is huge</h2>
+      <p className="sub">The same login token, signed both ways just now in your browser. One square is one byte.</p>
 
       {pair ? (
         <figure className="bytes">
           <figcaption>
-            Old signature: <b>{fmt.format(pair.oldToken.length)} bytes</b>
+            Today’s signature: <b>{fmt.format(pair.oldToken.length)} bytes</b>
           </figcaption>
           <ByteMap token={pair.oldToken} columns={columns} label={`Token with the old signature: ${pair.oldToken.length} bytes`} />
           <figcaption>
-            New signature: <b>{fmt.format(pair.newToken.length)} bytes</b>
+            Quantum-proof signature: <b>{fmt.format(pair.newToken.length)} bytes</b>
           </figcaption>
           <ByteMap
             token={pair.newToken}
@@ -80,7 +76,7 @@ export function Cost() {
             label={`Token with the new signature: ${pair.newToken.length} bytes, ${over} more than a cookie holds`}
           />
           <ul className="key">
-            <li className="k-header">Label</li>
+            <li className="k-header">Header</li>
             <li className="k-payload">Who you are</li>
             <li className="k-signature">Signature</li>
             <li className="k-over">Doesn’t fit in a cookie</li>
@@ -90,19 +86,12 @@ export function Cost() {
         <p className="explain">Signing…</p>
       )}
 
-      <p className="explain">
-        Many apps keep your login token in a browser cookie, and a cookie holds 4,096 bytes. The new token is{' '}
-        {pair ? fmt.format(over) : '…'} bytes too long, so the browser <mark>throws it away without telling anyone</mark>.
-        The login looks like it worked, then you’re signed out. Every app also needs updated code before it can read
-        the new signature at all.
+      <p className="note">
+        A browser cookie holds 4,096 bytes, and many apps keep your login token in one. The new token is{' '}
+        {pair ? fmt.format(over) : '…'} bytes too long, so the browser <mark>drops it without telling anyone</mark>: the
+        login looks like it worked, then you’re signed out. Apps also need new code before they can read the new
+        signature. That is why nobody can switch everything at once.
       </p>
-
-      <details className="drawer">
-        <summary>Check one of your own tokens</summary>
-        <div className="drawer-body">
-          <TokenCheck />
-        </div>
-      </details>
     </section>
   );
 }

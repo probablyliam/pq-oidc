@@ -1,41 +1,41 @@
-# Could a quantum computer log in as you?
+# pq-oidc: is your login quantum-ready?
 
 [![CI](https://github.com/probablyliam/pq-oidc/actions/workflows/ci.yml/badge.svg)](https://github.com/probablyliam/pq-oidc/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/probablyliam/pq-oidc/actions/workflows/codeql.yml/badge.svg)](https://github.com/probablyliam/pq-oidc/actions/workflows/codeql.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-**pq-oidc** answers that question for any login service, shows how the forgery would work, and is a working login service that makes the fix: it moves apps to quantum-proof signatures one at a time.
+A free tool that checks whether a quantum computer could forge sign-ins from any login service (Google, Okta, Entra ID, Keycloak…), and a working login service that makes the fix by moving apps to quantum-proof signatures one at a time.
 
-### ▶ [Try it: probablyliam.github.io/pq-oidc](https://probablyliam.github.io/pq-oidc/)
+### ▶ [Run a check: probablyliam.github.io/pq-oidc](https://probablyliam.github.io/pq-oidc/)
 
-<p align="center"><img src="docs/media/site-question.png" width="720" alt="The site asks 'Could a quantum computer log in as you?' and answers 'Yes.' for Google, because Google signs logins with RSA keys."></p>
+<p align="center"><img src="docs/media/tool-report.png" width="760" alt="The check for accounts.google.com: not quantum-ready, with the two RSA 2048-bit keys it signs logins with listed as breakable by a quantum computer."></p>
 
-## The idea in five sentences
+## What it checks, and what it doesn't
 
-1. When you sign in with Google or a work account, a login service gives the app a short signed message, a **token**, saying who you are.
-2. The app trusts the token because of its **signature**, which today is made with RSA or elliptic-curve keys.
-3. A large enough quantum computer could work out those secret keys from the public ones, and then sign in as anyone.
-4. A replacement signature exists (**ML-DSA**, standardised in 2024), but it is about fifty times longer, which breaks things: the token no longer fits in a browser cookie, and apps must be updated before they can read it.
-5. So the switch has to happen one app at a time, and this project is a login service that does exactly that.
+When you sign in with Google or a work account, a login service gives the app a short signed message, a **token**, saying who you are. The app trusts it because of the **signature**. Today's signatures (RSA, elliptic curves) can be broken by a large enough quantum computer, which could then sign in as anyone.
 
-The [site](https://probablyliam.github.io/pq-oidc/) walks through those five steps. You do each one yourself, with real signatures computed in your browser.
+This tool reads the keys a login service publishes and tells you whether its signatures are the breakable kind.
+
+**How it differs from TLS checkers** such as [DigiCert's PQC checker](https://www.digicert.com/pqc-checker): those test the *encrypted connection* to a website (protection against recording traffic now and decrypting it later). This tests the *login signature* (protection against someone forging a login). They are separate layers, and a service can pass one and fail the other: Google's connections already use quantum-safe key exchange, while its login signatures are still RSA.
+
+## The page, top to bottom
 
 <table>
 <tr>
-<td width="50%"><img src="docs/media/site-forged.png" alt="A forged login token, stamped FORGED, is accepted by the app once the attacker has a quantum computer."></td>
-<td width="50%"><img src="docs/media/site-fix.png" alt="With the new signature the same forged token is rejected."></td>
+<td width="50%"><img src="docs/media/scene-break-in.png" alt="A mock login next to a behind-the-scenes view: with a quantum computer and today's signature, the attacker gets in as Alice."></td>
+<td width="50%"><img src="docs/media/catch-bytes.png" alt="One square per byte: the token with the quantum-proof signature is 4,844 bytes and doesn't fit in a cookie."></td>
 </tr>
 <tr>
-<td><b>Old signature.</b> With a quantum computer, the forged token is accepted.</td>
-<td><b>New signature.</b> The same attack is rejected.</td>
+<td><b>What the result means.</b> Log in with a familiar form, watch what happens behind it, then try to break in with and without a quantum computer.</td>
+<td><b>The catch.</b> The quantum-proof signature is about fifty times longer, and the token stops fitting in a cookie.</td>
 </tr>
 <tr>
-<td width="50%"><img src="docs/media/site-cost.png" alt="One square per byte: the token with the new signature is 4,844 bytes, 757 more than a cookie holds."></td>
-<td width="50%"><img src="docs/media/site-switch.png" alt="A migration board: the login service holds both keys while four apps move to the new signature one at a time."></td>
+<td width="50%"><img src="docs/media/switch-game.png" alt="A game board: the login service and four apps; Payroll was switched too early and its users are locked out."></td>
+<td width="50%"><img src="docs/media/pq-app-signed-in.png" alt="The real PQ-Ready App after sign-in, reporting that the browser dropped the oversized cookie."></td>
 </tr>
 <tr>
-<td><b>The catch.</b> One square per byte. The new token doesn’t fit in a cookie.</td>
-<td><b>The switch.</b> One app at a time, or people get locked out.</td>
+<td><b>Make the switch.</b> Protect four apps without locking anyone out. Switch one too early and you see why order matters.</td>
+<td><b>The real thing.</b> The login service in this repo, signing in for real with a quantum-proof token.</td>
 </tr>
 </table>
 
@@ -43,8 +43,8 @@ The [site](https://probablyliam.github.io/pq-oidc/) walks through those five ste
 
 The check reads the public keys a login service publishes (every OpenID Connect provider publishes them) and reports whether they could be broken by a quantum computer.
 
-- **In the browser:** pick "Your company’s…" on the [site](https://probablyliam.github.io/pq-oidc/) and paste the address, for example `https://your-company.okta.com`. Your browser fetches the keys directly; nothing passes through this project.
-- **From a terminal** (works for services that block browsers, and for ones only reachable inside your network):
+- **In the browser:** type the address into the [check](https://probablyliam.github.io/pq-oidc/), for example `https://your-tenant.auth0.com`. Your browser fetches the keys directly; nothing passes through this project. Two demo services show what "partly" and "fully" switched look like.
+- **From a terminal** (for services that block browsers, such as Okta and Slack, and for ones only reachable inside your network):
 
 ```bash
 npm run check -- https://your-company.okta.com
