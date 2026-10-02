@@ -48,7 +48,7 @@ export function KindMark({ kind }: { kind: Kind }) {
 
 export function learnHref(link: LearnLink): string {
   if (link.view === 'login') return href('learn', { mode: link.mode, at: link.landmark, attacker: link.attacker });
-  return href(link.view);
+  return href('token');
 }
 
 export function Finding({ finding, all }: { finding: FindingLike; all?: FindingLike[] }) {

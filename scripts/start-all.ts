@@ -1,17 +1,13 @@
 /**
- * `npm start`: runs the whole system locally, each part in its own process
- * (the same way they run as separate containers in Kubernetes).
+ * `npm start`: runs the scanner locally, each part in its own process (the
+ * same way they run as separate containers in Kubernetes).
  *
- *   Scanner (web app + API)  http://localhost:8080     sign in as alice or bob
+ *   Scanner (web app + API)  http://localhost:8080
  *   Worker                   no port: it claims jobs from the API
- *   Identity provider        http://localhost:3000
  *   Lab servers              https://localhost:9441-9447, things to scan
- *   Legacy App, PQ-Ready App http://localhost:3001, :3002 (the per-app migration demo)
  *
  * `npm run dev` is the same with the web app served by Vite on :5173 (hot reload).
- *
- * Try moving Legacy App to post-quantum before it's ready:
- *   LEGACY_ID_TOKEN_ALG=ML-DSA-65 npm start
+ * `npm run oidc` starts the ML-DSA sign-in service and its two demo apps instead.
  */
 import { spawn, spawnSync } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
@@ -30,17 +26,14 @@ interface Service {
 }
 
 const services: Service[] = [
-  { name: 'provider', color: 35, script: 'packages/provider/src/server.ts', env: { PORT: '3000', SCANNER_URL: scannerUrl } },
   {
     name: 'api',
     color: 36,
     script: 'services/api/src/server.ts',
-    env: { PORT: '8080', INTERNAL_PORT: '8081', PUBLIC_URL: scannerUrl, OIDC_ISSUER: 'http://localhost:3000', SCAN_LAB_ORIGINS: lab, ...(dev ? {} : { WEB_DIR: 'apps/web/dist' }) },
+    env: { PORT: '8080', INTERNAL_PORT: '8081', PUBLIC_URL: scannerUrl, SCAN_LAB_ORIGINS: lab, ...(dev ? {} : { WEB_DIR: 'apps/web/dist' }) },
   },
   { name: 'worker', color: 32, script: 'services/worker/src/server.ts', env: { API_INTERNAL_URL: 'http://127.0.0.1:8081', SCAN_LAB_ORIGINS: lab } },
   { name: 'lab', color: 90, script: 'scripts/lab.ts', env: {} },
-  { name: 'legacy', color: 33, script: 'packages/rp/src/server.ts', env: { RP_PRESET: 'legacy', PORT: '3001', OTHER_APP_URL: 'http://localhost:3002/' } },
-  { name: 'pq', color: 34, script: 'packages/rp/src/server.ts', env: { RP_PRESET: 'pq', PORT: '3002', OTHER_APP_URL: 'http://localhost:3001/' } },
 ];
 
 if (dev) {
@@ -74,8 +67,8 @@ const children: ChildProcess[] = services.map(({ name, color, script, args = [],
 });
 
 setTimeout(() => {
-  console.log(`\nOpen ${scannerUrl} and sign in as alice or bob, password quantum-safe.`);
-  console.log('Scan one of the lab servers (the "Try" links), or any public sign-in page. Press Ctrl+C to stop.\n');
+  console.log(`\nOpen ${scannerUrl} and scan one of the lab servers (the "Try" links), or any public sign-in page.`);
+  console.log('Press Ctrl+C to stop.\n');
 }, 2500);
 
 function shutdown(code = 0) {

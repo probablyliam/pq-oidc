@@ -10,7 +10,8 @@
     "./registry": "./src/tls/registry.ts",
     "./keyschedule": "./src/tls/keyschedule.ts",
     "./policy": "./src/net/policy.ts",
-    "./testing": "./src/testing/index.ts"
+    "./testing": "./src/testing/index.ts",
+    "./summary": "./src/summary.ts"
   },
   "dependencies": {
     "@noble/hashes": "2.4.0",

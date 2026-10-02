@@ -248,26 +248,10 @@ label {
 .topbar nav a[aria-current='page'] {
   border-bottom-color: var(--signal);
 }
-.topbar .account {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+.topbar .repo {
   padding-left: 22px;
   border-left: 1px solid #3a4560;
   font-size: 0.95rem;
-}
-.topbar .account button,
-.topbar .account .button {
-  padding: 4px 10px;
-  border-color: var(--paper);
-  background: transparent;
-  color: var(--paper);
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-.topbar .account button:hover:not(:disabled),
-.topbar .account .button:hover {
-  background: #263148;
 }
 
 main {
@@ -379,6 +363,10 @@ footer.site p {
 .examples button.link {
   color: var(--ink);
 }
+.examples button.link[aria-pressed='true'] {
+  background: none;
+  text-decoration-thickness: 3px;
+}
 .band .notice {
   margin-top: 14px;
   max-width: 52rem;
@@ -405,7 +393,7 @@ footer.site p {
   .topbar .logo {
     width: 100%;
   }
-  .topbar .account {
+  .topbar .repo {
     padding-left: 0;
     border-left: 0;
   }

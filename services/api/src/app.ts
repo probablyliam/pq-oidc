@@ -1,21 +1,22 @@
 /**
  * The API as two request handlers, bound to two ports:
  *
- *   public    what browsers reach: sign-in, the session, scans, the web app
+ *   public    what browsers reach: start a scan, read a scan, the web app
  *   internal  what the worker reaches: the job queue; also /metrics
+ *
+ * There are no accounts (ADR 0014). Anyone can start a scan; what keeps that
+ * from being abused is a limit per visitor address, a limit per target host,
+ * and reusing a result when the same address was scanned moments ago.
  *
  * The API never connects to a scan target. It checks a target's syntax,
  * queues a job, and stores whatever the worker reports (ADR 0008).
  */
-import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { parseTarget, TargetRejected } from '@pq-oidc/scan-core/policy';
 import { ENGINE_VERSION } from '@pq-oidc/scan-core/report';
-import { Auth } from './auth.ts';
-import type { SessionContext } from './auth.ts';
 import type { ApiConfig } from './config.ts';
-import { clientAddress, HttpError, readJson, redirect, requestIdFor, Router, sendError, sendJson, WindowLimiter } from './http.ts';
-import type { Context } from './http.ts';
+import { clientAddress, HttpError, readJson, requestIdFor, Router, sendError, sendJson } from './http.ts';
 import type { Logger } from './log.ts';
 import { Metrics } from './metrics.ts';
 import { createStaticHandler } from './static.ts';
@@ -30,14 +31,11 @@ export interface ApiOptions {
   trustProxy?: boolean;
 }
 
-type Guard = 'public' | 'user' | 'user-write';
-type Scan = Omit<ScanRow, 'result'> & { result?: string | null };
-
 const MAX_REQUEST_BYTES = 16 * 1024;
 const MAX_RESULT_BYTES = 2 * 1024 * 1024;
 const iso = (ms: number | null) => (ms === null ? null : new Date(ms).toISOString());
 
-function parseJsonColumn(text: string | null | undefined): unknown {
+function parseJsonColumn(text: string | null): unknown {
   if (!text) return undefined;
   try {
     return JSON.parse(text);
@@ -46,8 +44,7 @@ function parseJsonColumn(text: string | null | undefined): unknown {
   }
 }
 
-/** A scan as its owner sees it. The full report is included only when asked for one scan. */
-function presentScan(row: Scan, full: boolean) {
+function presentScan(row: ScanRow) {
   return {
     id: row.id,
     kind: row.kind,
@@ -55,89 +52,67 @@ function presentScan(row: Scan, full: boolean) {
     targetUrl: row.targetUrl,
     status: row.status,
     createdAt: iso(row.createdAt),
-    startedAt: iso(row.startedAt),
     finishedAt: iso(row.finishedAt),
     progress: row.progress ?? undefined,
-    layers: parseJsonColumn(row.summary),
     error: row.errorCode ? { code: row.errorCode, message: row.errorMessage } : undefined,
-    report: full ? parseJsonColumn(row.result) : undefined,
+    report: parseJsonColumn(row.result),
   };
 }
 
 export function createApi(options: ApiOptions) {
   const { config, store, log } = options;
   const now = options.now ?? Date.now;
-  const auth = new Auth(config, store, now);
   const metrics = new Metrics();
-  const serveStatic = config.webDir ? createStaticHandler(config.webDir, config.oidc.issuer) : undefined;
-  const signInLimiter = new WindowLimiter(30, 60_000);
+  const serveStatic = config.webDir ? createStaticHandler(config.webDir) : undefined;
+  const publicOrigin = new URL(config.publicUrl).origin;
+
+  // Visitors are counted by a keyed hash of their address. The key lives only in this process,
+  // so the database never holds anything that can be turned back into an address.
+  const clientKey = randomBytes(32);
+  const clientOf = (req: IncomingMessage) => createHmac('sha256', clientKey).update(clientAddress(req, options.trustProxy ?? false)).digest('hex').slice(0, 32);
 
   const requests = metrics.counter('http_requests_total', 'Requests handled, by route and status.');
   const durations = metrics.histogram('http_request_duration_seconds', 'Time to handle a request.', [0.005, 0.025, 0.1, 0.5, 2.5]);
   const created = metrics.counter('scans_created_total', 'Scan jobs accepted.');
+  const reused = metrics.counter('scans_reused_total', 'Requests answered with a result that already existed.');
   const refused = metrics.counter('scans_refused_total', 'Scan requests refused, by reason.');
   const finished = metrics.counter('scan_jobs_finished_total', 'Scan jobs finished by a worker, by outcome.');
   const jobSeconds = metrics.histogram('scan_job_duration_seconds', 'Time from a job being claimed to its result.', [1, 2.5, 5, 10, 30, 60]);
   metrics.gauge('scan_jobs', 'Scan jobs in the database, by status.', () => store.countByStatus());
 
+  /**
+   * A scan costs the target a dozen connections, so a page on another site
+   * must not be able to make a visitor's browser start one. Browsers say
+   * where a request came from; when they do, it has to be here. Scripts and
+   * command-line clients send neither header and are held to the rate limits.
+   */
+  function requireSameOrigin(req: IncomingMessage) {
+    const origin = req.headers.origin;
+    const site = req.headers['sec-fetch-site'];
+    if ((origin !== undefined && origin !== publicOrigin) || (site !== undefined && site !== 'same-origin' && site !== 'none')) {
+      throw new HttpError(403, 'cross-site', 'Scans can only be started from this site.');
+    }
+  }
+
   // ---------------------------------------------------------------- public routes
 
-  const routes = new Router<SessionContext | undefined>();
-  const guards = new Map<string, Guard>();
-  const route = (guard: Guard, method: 'GET' | 'POST' | 'DELETE', pattern: string, handler: (ctx: Context<SessionContext | undefined>) => Promise<void> | void) => {
-    guards.set(`${method} ${pattern}`, guard);
-    routes.on(method, pattern, handler);
-  };
-  /** For routes guarded by 'user' or 'user-write', the session is always there. */
-  const user = (ctx: Context<SessionContext | undefined>) => ctx.session!;
+  const routes = new Router();
 
-  route('public', 'GET', '/healthz', ({ res }) => void res.writeHead(200, { 'Content-Type': 'text/plain' }).end('ok'));
-  route('public', 'GET', '/readyz', ({ res }) => void res.writeHead(store.healthy() ? 200 : 503, { 'Content-Type': 'text/plain' }).end(store.healthy() ? 'ready' : 'database unavailable'));
+  routes.on('GET', '/healthz', ({ res }) => void res.writeHead(200, { 'Content-Type': 'text/plain' }).end('ok'));
+  routes.on('GET', '/readyz', ({ res }) => void res.writeHead(store.healthy() ? 200 : 503, { 'Content-Type': 'text/plain' }).end(store.healthy() ? 'ready' : 'database unavailable'));
 
-  route('public', 'GET', '/api/v1/meta', ({ res }) =>
+  routes.on('GET', '/api/v1/meta', ({ res }) =>
     sendJson(res, 200, {
       service: 'pq-oidc',
       engine: ENGINE_VERSION,
-      signInUrl: '/auth/login',
-      identityProvider: config.oidc.issuer,
       labOrigins: config.policy.labOrigins,
       allowedPorts: config.policy.allowedPorts,
-      limits: { scansPerWindow: config.limits.scansPerWindow, windowSeconds: config.limits.windowMs / 1000, activePerUser: config.limits.activePerUser },
+      retentionHours: config.retentionMs / 3_600_000,
     }),
   );
 
-  route('public', 'GET', '/auth/login', async ({ req, res, url }) => {
-    const wait = signInLimiter.hit(clientAddress(req, options.trustProxy ?? false), now());
-    if (wait > 0) throw new HttpError(429, 'rate-limited', 'Too many sign-in attempts. Try again shortly.', { 'Retry-After': String(wait) });
-    const { location, setCookie } = await auth.startLogin(url.searchParams.get('return_to'));
-    redirect(res, location, { 'Set-Cookie': setCookie });
-  });
-
-  route('public', 'GET', '/auth/callback', async ({ req, res, url, log: requestLog }) => {
-    const { location, setCookie } = await auth.finishLogin(req, url, requestLog);
-    redirect(res, location, { 'Set-Cookie': setCookie });
-  });
-
-  route('user-write', 'POST', '/auth/logout', async (ctx) => {
-    const { setCookie, endSessionUrl } = await auth.logout(user(ctx));
-    sendJson(ctx.res, 200, { endSessionUrl }, { 'Set-Cookie': setCookie });
-  });
-
-  // "Who am I?" has an answer either way, so this is not an error when nobody is signed in.
-  route('public', 'GET', '/api/v1/session', ({ res, session }) => {
-    if (!session) return sendJson(res, 200, { user: null });
-    sendJson(res, 200, {
-      user: { name: session.user.name, email: session.user.email, sub: session.user.sub },
-      csrfToken: session.session.csrfToken,
-      expiresAt: iso(session.session.expiresAt),
-    });
-  });
-
-  // The ID token from the user's own sign-in, so they can put it through the token analyzer.
-  route('user', 'GET', '/api/v1/session/id-token', (ctx) => sendJson(ctx.res, 200, { idToken: user(ctx).session.idToken }));
-
-  route('user-write', 'POST', '/api/v1/scans', async (ctx) => {
-    const { user: owner } = user(ctx);
+  routes.on('POST', '/api/v1/scans', async (ctx) => {
+    requireSameOrigin(ctx.req);
     const body = await readJson(ctx.req, MAX_REQUEST_BYTES);
     const kind: JobKind = body.kind === 'issuer-keys' ? 'issuer-keys' : 'scan';
     if (typeof body.target !== 'string') throw new HttpError(400, 'invalid-request', 'Give the address to scan as "target".');
@@ -148,60 +123,53 @@ export function createApi(options: ApiOptions) {
     } catch (error) {
       if (!(error instanceof TargetRejected)) throw error;
       refused.inc({ reason: error.code });
-      ctx.log.info('scan target refused', { userId: owner.id, reason: error.code });
+      ctx.log.info('scan target refused', { reason: error.code });
       throw new HttpError(422, error.code, error.message);
     }
 
     const at = now();
+    // Someone scanned exactly this a moment ago: hand back that scan instead of knocking on the target again.
+    const existing = config.reuseMs > 0 ? store.findRecent(kind, target.url.href, at - config.reuseMs) : undefined;
+    if (existing) {
+      reused.inc({ kind });
+      return sendJson(ctx.res, 200, { scan: presentScan(existing), reused: true });
+    }
+
+    const client = clientOf(ctx.req);
     const limit = (reason: string, status: number, message: string, retryAfter: number) => {
       refused.inc({ reason });
       throw new HttpError(status, reason, message, { 'Retry-After': String(retryAfter) });
     };
     const { limits } = config;
-    if (store.countUserScansSince(owner.id, at - limits.windowMs) >= limits.scansPerWindow) {
-      limit('rate-limited', 429, `You can start ${limits.scansPerWindow} scans every ${limits.windowMs / 60_000} minutes. Try again later.`, 60);
+    if (store.countClientScansSince(client, at - limits.windowMs) >= limits.scansPerWindow) {
+      limit('rate-limited', 429, `That is ${limits.scansPerWindow} scans in ${limits.windowMs / 60_000} minutes, which is the limit. Try again later.`, 60);
     }
-    if (store.countUserActiveScans(owner.id) >= limits.activePerUser) {
-      limit('too-many-active', 429, `You already have ${limits.activePerUser} scans in progress. Wait for one to finish.`, 10);
+    if (store.countClientActiveScans(client) >= limits.activePerClient) {
+      limit('too-many-active', 429, `You already have ${limits.activePerClient} scans in progress. Wait for one to finish.`, 10);
     }
-    if (store.countHostScansSince(target.hostname, at - 60_000) >= limits.perHostPerMinute) {
-      limit('host-busy', 429, `${target.hostname} was scanned moments ago. Use that result, or try again in a minute.`, 60);
+    // Per service, not per name: a host and port is one thing to protect, and local test servers share a name.
+    const service = `${target.hostname}:${target.port}`;
+    if (store.countHostScansSince(service, at - 60_000) >= limits.perHostPerMinute) {
+      limit('host-busy', 429, `${service} has been scanned several times in the last minute. Try again in a minute.`, 60);
     }
     if (store.queueDepth() >= limits.maxQueueDepth) limit('queue-full', 503, 'The scanner is busy. Try again shortly.', 30);
 
-    const row = store.createScan({ id: randomUUID(), userId: owner.id, kind, input: body.target.trim().slice(0, 2048), targetUrl: target.url.href, targetHost: target.hostname }, at);
+    const row = store.createScan({ id: randomUUID(), client, kind, input: body.target.trim().slice(0, 2048), targetUrl: target.url.href, targetHost: service }, at);
     created.inc({ kind });
-    ctx.log.info('scan queued', { scanId: row.id, userId: owner.id, host: target.hostname, kind });
-    sendJson(ctx.res, 202, { scan: presentScan(row, false) }, { Location: `/api/v1/scans/${row.id}` });
+    ctx.log.info('scan queued', { scanId: row.id, host: target.hostname, kind });
+    sendJson(ctx.res, 202, { scan: presentScan(row) }, { Location: `/api/v1/scans/${row.id}` });
   });
 
-  route('user', 'GET', '/api/v1/scans', (ctx) => {
-    const limitParam = Number(ctx.url.searchParams.get('limit') ?? 25);
-    const limit = Number.isInteger(limitParam) ? Math.min(Math.max(limitParam, 1), 100) : 25;
-    const before = Date.parse(ctx.url.searchParams.get('before') ?? '');
-    const rows = store.listScans(user(ctx).user.id, limit, Number.isNaN(before) ? undefined : before);
-    sendJson(ctx.res, 200, { scans: rows.map((row) => presentScan(row, false)) });
-  });
-
-  /** One scan, if it belongs to the caller. Someone else's scan and a scan that does not exist look the same. */
-  const ownScan = (ctx: Context<SessionContext | undefined>): ScanRow => {
-    const row = store.getScan(user(ctx).user.id, ctx.params.id ?? '');
-    if (!row) throw new HttpError(404, 'not-found', 'No such scan.');
-    return row;
-  };
-
-  route('user', 'GET', '/api/v1/scans/:id', (ctx) => sendJson(ctx.res, 200, { scan: presentScan(ownScan(ctx), true) }));
-
-  route('user-write', 'DELETE', '/api/v1/scans/:id', (ctx) => {
-    const row = ownScan(ctx);
-    store.deleteScan(row.userId, row.id);
-    ctx.log.info('scan deleted', { scanId: row.id, userId: row.userId });
-    ctx.res.writeHead(204).end();
+  // A scan's ID is its only key: 122 random bits. Whoever has the link can read the result until it expires.
+  routes.on('GET', '/api/v1/scans/:id', (ctx) => {
+    const row = store.getScan(ctx.params.id ?? '');
+    if (!row) throw new HttpError(404, 'not-found', 'No such scan. Results are kept for a day.');
+    sendJson(ctx.res, 200, { scan: presentScan(row) });
   });
 
   // ---------------------------------------------------------------- internal routes
 
-  const internal = new Router<undefined>();
+  const internal = new Router();
   const workerId = (body: Record<string, unknown>): string => {
     if (typeof body.workerId !== 'string' || !/^[A-Za-z0-9._-]{1,80}$/.test(body.workerId)) throw new HttpError(400, 'invalid-request', 'workerId is required.');
     return body.workerId;
@@ -231,9 +199,8 @@ export function createApi(options: ApiOptions) {
     const worker = workerId(body);
     let outcome: Parameters<Store['finishJob']>[2];
     if (body.status === 'succeeded' && typeof body.result === 'object' && body.result !== null) {
-      // The worker handles hostile input, so its output is data, not trusted structure.
-      const result = body.result as { layers?: unknown };
-      outcome = { result: JSON.stringify(result), summary: JSON.stringify(Array.isArray(result.layers) ? result.layers : []) };
+      // The worker handles hostile input, so its output is stored as data and never interpreted here.
+      outcome = { result: JSON.stringify(body.result) };
     } else if (body.status === 'failed' && typeof body.error === 'object' && body.error !== null) {
       const error = body.error as { code?: unknown; message?: unknown };
       outcome = { errorCode: String(error.code ?? 'failed').slice(0, 60), errorMessage: String(error.message ?? 'The scan failed.').slice(0, 500) };
@@ -257,7 +224,7 @@ export function createApi(options: ApiOptions) {
     return timingSafeEqual(createHash('sha256').update(presented).digest(), workerTokenHash);
   };
 
-  async function dispatch<S>(router: Router<S>, req: IncomingMessage, res: ServerResponse, prepare: (key: string, ctx: Context<S>) => void, fallback?: (pathname: string) => boolean) {
+  async function dispatch(router: Router, req: IncomingMessage, res: ServerResponse, guard: (key: string) => void, fallback?: (pathname: string) => boolean) {
     const started = process.hrtime.bigint();
     const requestId = requestIdFor(req);
     const requestLog = log.child({ requestId });
@@ -273,9 +240,8 @@ export function createApi(options: ApiOptions) {
         throw new HttpError(404, 'not-found', 'Not found.');
       }
       pattern = matched.route.pattern;
-      const ctx = { req, res, url, params: matched.params, requestId, log: requestLog, session: undefined as S };
-      prepare(`${method} ${pattern}`, ctx);
-      await matched.route.handler(ctx);
+      guard(`${method} ${pattern}`);
+      await matched.route.handler({ req, res, url, params: matched.params, requestId, log: requestLog });
     } catch (error) {
       if (res.headersSent) return void res.destroy();
       if (error instanceof HttpError) {
@@ -290,20 +256,7 @@ export function createApi(options: ApiOptions) {
     }
   }
 
-  const handler = (req: IncomingMessage, res: ServerResponse) =>
-    dispatch(
-      routes,
-      req,
-      res,
-      (key, ctx) => {
-        const guard = guards.get(key) ?? 'user-write'; // a route with no declared guard gets the strictest one
-        ctx.session = auth.sessionFor(req);
-        if (guard === 'public') return;
-        if (!ctx.session) throw new HttpError(401, 'unauthenticated', 'Sign in to continue.');
-        if (guard === 'user-write') auth.requireSameSite(req, ctx.session);
-      },
-      serveStatic ? (pathname) => serveStatic(res, pathname) : undefined,
-    );
+  const handler = (req: IncomingMessage, res: ServerResponse) => dispatch(routes, req, res, () => {}, serveStatic ? (pathname) => serveStatic(res, pathname) : undefined);
 
   const internalHandler = (req: IncomingMessage, res: ServerResponse) =>
     dispatch(internal, req, res, (key) => {
@@ -311,9 +264,13 @@ export function createApi(options: ApiOptions) {
       if (!isWorker(req)) throw new HttpError(401, 'unauthenticated', 'A worker token is required.');
     });
 
-  // Expired sessions and sign-in attempts are removed as time passes, not only when looked up.
-  const sweeper = setInterval(() => store.sweep(now()), 10 * 60_000);
+  // Results are kept for a day and then deleted, whether or not anyone looks.
+  const purge = () => {
+    const removed = store.purge(now() - config.retentionMs);
+    if (removed > 0) log.info('expired scans deleted', { removed });
+  };
+  const sweeper = setInterval(purge, 10 * 60_000);
   sweeper.unref();
 
-  return { handler, internalHandler, auth, metrics, close: () => clearInterval(sweeper) };
+  return { handler, internalHandler, metrics, purge, close: () => clearInterval(sweeper) };
 }

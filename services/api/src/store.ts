@@ -1,12 +1,15 @@
 /**
- * Everything the API persists, behind one module (ADR 0008): users, sessions,
- * sign-in attempts, and scan jobs. SQLite through node:sqlite, so there is no
- * native build and no database server to run.
+ * Everything the API persists, behind one module (ADR 0008): scan jobs and
+ * their results. SQLite through node:sqlite, so there is no native build and
+ * no database server to run.
+ *
+ * There are no users (ADR 0014). A scan belongs to nobody; whoever holds its
+ * ID can read it, and it is deleted after a day. The only thing kept about
+ * the requester is a keyed hash of their address, for rate limiting.
  *
  * The scans table is also the job queue. A worker claims a job and holds a
  * lease on it; if the worker dies the lease expires and the job is retried
- * once, then failed with a reason. Every query that returns a scan to a user
- * takes the user's ID: there is no way to read a scan without naming its owner.
+ * once, then failed with a reason.
  */
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -15,31 +18,8 @@ import { DatabaseSync } from 'node:sqlite';
 export type JobKind = 'scan' | 'issuer-keys';
 export type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed';
 
-export interface User {
-  id: string;
-  issuer: string;
-  sub: string;
-  name: string | null;
-  email: string | null;
-}
-
-export interface Session {
-  userId: string;
-  csrfToken: string;
-  idToken: string | null;
-  expiresAt: number;
-}
-
-export interface LoginAttempt {
-  state: string;
-  nonce: string;
-  codeVerifier: string;
-  returnTo: string;
-}
-
 export interface ScanRow {
   id: string;
-  userId: string;
   kind: JobKind;
   input: string;
   targetUrl: string;
@@ -50,8 +30,6 @@ export interface ScanRow {
   finishedAt: number | null;
   attempts: number;
   progress: string | null;
-  /** One-line summaries per layer, for list views. JSON. */
-  summary: string | null;
   /** The full report. JSON. */
   result: string | null;
   errorCode: string | null;
@@ -60,36 +38,10 @@ export interface ScanRow {
 
 const MIGRATIONS: string[] = [
   `
-  CREATE TABLE users (
-    id TEXT PRIMARY KEY,
-    issuer TEXT NOT NULL,
-    sub TEXT NOT NULL,
-    name TEXT,
-    email TEXT,
-    created_at INTEGER NOT NULL,
-    last_seen_at INTEGER NOT NULL,
-    UNIQUE (issuer, sub)
-  );
-  -- The primary key is a hash of the session ID, so a copy of this table is not a set of usable cookies.
-  CREATE TABLE sessions (
-    id_hash TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    csrf_token TEXT NOT NULL,
-    id_token TEXT,
-    created_at INTEGER NOT NULL,
-    expires_at INTEGER NOT NULL
-  );
-  CREATE TABLE login_attempts (
-    id_hash TEXT PRIMARY KEY,
-    state TEXT NOT NULL,
-    nonce TEXT NOT NULL,
-    code_verifier TEXT NOT NULL,
-    return_to TEXT NOT NULL,
-    expires_at INTEGER NOT NULL
-  );
   CREATE TABLE scans (
     id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    -- A keyed hash of the requester's address. Used to count their recent scans; it is not the address.
+    client TEXT NOT NULL,
     kind TEXT NOT NULL,
     input TEXT NOT NULL,
     target_url TEXT NOT NULL,
@@ -102,19 +54,19 @@ const MIGRATIONS: string[] = [
     lease_expires_at INTEGER,
     worker_id TEXT,
     progress TEXT,
-    summary TEXT,
     result TEXT,
     error_code TEXT,
     error_message TEXT
   );
-  CREATE INDEX scans_by_user ON scans (user_id, created_at DESC);
+  CREATE INDEX scans_by_client ON scans (client, created_at);
   CREATE INDEX scans_queue ON scans (status, created_at);
+  CREATE INDEX scans_by_target ON scans (target_url, created_at);
   CREATE INDEX scans_by_host ON scans (target_host, created_at);
   `,
 ];
 
-const SCAN_COLUMNS = `id, user_id AS userId, kind, input, target_url AS targetUrl, target_host AS targetHost, status, created_at AS createdAt,
-  started_at AS startedAt, finished_at AS finishedAt, attempts, progress, summary, result, error_code AS errorCode, error_message AS errorMessage`;
+const SCAN_COLUMNS = `id, kind, input, target_url AS targetUrl, target_host AS targetHost, status, created_at AS createdAt,
+  started_at AS startedAt, finished_at AS finishedAt, attempts, progress, result, error_code AS errorCode, error_message AS errorMessage`;
 
 export interface ClaimedJob {
   id: string;
@@ -179,94 +131,45 @@ export class Store {
     }
   }
 
-  // ---------------------------------------------------------------- users and sessions
+  // ---------------------------------------------------------------- scans, as a visitor sees them
 
-  upsertUser(user: { id: string; issuer: string; sub: string; name: string | null; email: string | null }, now: number): User {
+  createScan(scan: { id: string; client: string; kind: JobKind; input: string; targetUrl: string; targetHost: string }, now: number): ScanRow {
     return this.db
       .prepare(
-        `INSERT INTO users (id, issuer, sub, name, email, created_at, last_seen_at) VALUES (:id, :issuer, :sub, :name, :email, :now, :now)
-         ON CONFLICT (issuer, sub) DO UPDATE SET name = excluded.name, email = excluded.email, last_seen_at = excluded.last_seen_at
-         RETURNING id, issuer, sub, name, email`,
-      )
-      .get({ ...user, now }) as unknown as User;
-  }
-
-  getUser(id: string): User | undefined {
-    return this.db.prepare('SELECT id, issuer, sub, name, email FROM users WHERE id = ?').get(id) as User | undefined;
-  }
-
-  createSession(idHash: string, session: Session, now: number) {
-    this.db
-      .prepare('INSERT INTO sessions (id_hash, user_id, csrf_token, id_token, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(idHash, session.userId, session.csrfToken, session.idToken, now, session.expiresAt);
-  }
-
-  getSession(idHash: string, now: number): Session | undefined {
-    return this.db
-      .prepare('SELECT user_id AS userId, csrf_token AS csrfToken, id_token AS idToken, expires_at AS expiresAt FROM sessions WHERE id_hash = ? AND expires_at > ?')
-      .get(idHash, now) as Session | undefined;
-  }
-
-  deleteSession(idHash: string) {
-    this.db.prepare('DELETE FROM sessions WHERE id_hash = ?').run(idHash);
-  }
-
-  saveLoginAttempt(idHash: string, attempt: LoginAttempt, expiresAt: number) {
-    this.db
-      .prepare('INSERT INTO login_attempts (id_hash, state, nonce, code_verifier, return_to, expires_at) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(idHash, attempt.state, attempt.nonce, attempt.codeVerifier, attempt.returnTo, expiresAt);
-  }
-
-  /** Returns the attempt and deletes it: a sign-in attempt can be finished once. */
-  takeLoginAttempt(idHash: string, now: number): LoginAttempt | undefined {
-    return this.db
-      .prepare('DELETE FROM login_attempts WHERE id_hash = ? AND expires_at > ? RETURNING state, nonce, code_verifier AS codeVerifier, return_to AS returnTo')
-      .get(idHash, now) as LoginAttempt | undefined;
-  }
-
-  /** Removes expired sessions and sign-in attempts. */
-  sweep(now: number) {
-    this.db.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(now);
-    this.db.prepare('DELETE FROM login_attempts WHERE expires_at <= ?').run(now);
-  }
-
-  // ---------------------------------------------------------------- scans, as their owner sees them
-
-  createScan(scan: { id: string; userId: string; kind: JobKind; input: string; targetUrl: string; targetHost: string }, now: number): ScanRow {
-    return this.db
-      .prepare(
-        `INSERT INTO scans (id, user_id, kind, input, target_url, target_host, status, created_at)
-         VALUES (:id, :userId, :kind, :input, :targetUrl, :targetHost, 'queued', :now) RETURNING ${SCAN_COLUMNS}`,
+        `INSERT INTO scans (id, client, kind, input, target_url, target_host, status, created_at)
+         VALUES (:id, :client, :kind, :input, :targetUrl, :targetHost, 'queued', :now) RETURNING ${SCAN_COLUMNS}`,
       )
       .get({ ...scan, now }) as unknown as ScanRow;
   }
 
-  getScan(userId: string, id: string): ScanRow | undefined {
-    return this.db.prepare(`SELECT ${SCAN_COLUMNS} FROM scans WHERE id = ? AND user_id = ?`).get(id, userId) as ScanRow | undefined;
+  getScan(id: string): ScanRow | undefined {
+    return this.db.prepare(`SELECT ${SCAN_COLUMNS} FROM scans WHERE id = ?`).get(id) as ScanRow | undefined;
   }
 
-  /** Newest first, without the full reports. */
-  listScans(userId: string, limit: number, before?: number): Omit<ScanRow, 'result'>[] {
+  /**
+   * The newest scan of exactly this address that is still fresh and did not
+   * fail, whoever asked for it. Asking again for something just scanned gets
+   * that answer instead of another round of connections to the target.
+   */
+  findRecent(kind: JobKind, targetUrl: string, since: number): ScanRow | undefined {
     return this.db
-      .prepare(
-        `SELECT ${SCAN_COLUMNS.replace(' result,', '')} FROM scans
-         WHERE user_id = :userId AND kind = 'scan' AND created_at < :before ORDER BY created_at DESC LIMIT :limit`,
-      )
-      .all({ userId, limit, before: before ?? Number.MAX_SAFE_INTEGER }) as unknown as Omit<ScanRow, 'result'>[];
+      .prepare(`SELECT ${SCAN_COLUMNS} FROM scans WHERE kind = ? AND target_url = ? AND created_at >= ? AND status != 'failed' ORDER BY created_at DESC LIMIT 1`)
+      .get(kind, targetUrl, since) as ScanRow | undefined;
   }
 
-  deleteScan(userId: string, id: string): boolean {
-    return this.db.prepare('DELETE FROM scans WHERE id = ? AND user_id = ?').run(id, userId).changes > 0;
+  /** Deletes scans older than the retention period. Returns how many went. */
+  purge(olderThan: number): number {
+    return Number(this.db.prepare(`DELETE FROM scans WHERE created_at < ? AND status IN ('succeeded', 'failed')`).run(olderThan).changes);
   }
 
   // ---------------------------------------------------------------- limits
 
-  countUserScansSince(userId: string, since: number): number {
-    return (this.db.prepare('SELECT COUNT(*) AS n FROM scans WHERE user_id = ? AND created_at >= ?').get(userId, since) as { n: number }).n;
+  countClientScansSince(client: string, since: number): number {
+    return (this.db.prepare('SELECT COUNT(*) AS n FROM scans WHERE client = ? AND created_at >= ?').get(client, since) as { n: number }).n;
   }
 
-  countUserActiveScans(userId: string): number {
-    return (this.db.prepare("SELECT COUNT(*) AS n FROM scans WHERE user_id = ? AND status IN ('queued', 'running')").get(userId) as { n: number }).n;
+  countClientActiveScans(client: string): number {
+    return (this.db.prepare("SELECT COUNT(*) AS n FROM scans WHERE client = ? AND status IN ('queued', 'running')").get(client) as { n: number }).n;
   }
 
   /** Scans of one host by anyone: the limit that stops the service being used to hammer a third party. */
@@ -323,13 +226,13 @@ export class Store {
   }
 
   /** Stores the outcome. False if this worker no longer holds the job (its lease expired and someone else has it). */
-  finishJob(id: string, workerId: string, outcome: { result: string; summary: string } | { errorCode: string; errorMessage: string }, now: number): boolean {
+  finishJob(id: string, workerId: string, outcome: { result: string } | { errorCode: string; errorMessage: string }, now: number): boolean {
     const succeeded = 'result' in outcome;
     return (
       this.db
         .prepare(
           `UPDATE scans SET status = :status, finished_at = :now, worker_id = NULL, lease_expires_at = NULL, progress = NULL,
-             result = :result, summary = :summary, error_code = :errorCode, error_message = :errorMessage
+             result = :result, error_code = :errorCode, error_message = :errorMessage
            WHERE id = :id AND worker_id = :workerId AND status = 'running'`,
         )
         .run({
@@ -338,7 +241,6 @@ export class Store {
           now,
           status: succeeded ? 'succeeded' : 'failed',
           result: succeeded ? outcome.result : null,
-          summary: succeeded ? outcome.summary : null,
           errorCode: succeeded ? null : outcome.errorCode,
           errorMessage: succeeded ? null : outcome.errorMessage,
         }).changes > 0

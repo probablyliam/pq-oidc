@@ -2,7 +2,7 @@
  * The score for one login, and for the attack on it.
  *
  * The scenario, with its layers kept apart:
- *   1. Alice submits a login form.                                (application)
+ *   1. The visitor submits a login form.                          (application)
  *   2. A TLS 1.3 handshake: key establishment, then the server
  *      proves its identity with a certificate and a signature.    (TLS)
  *   3. The login travels through the channel.                     (application over TLS)
@@ -10,14 +10,15 @@
  *      using a different key from the certificate's.              (application)
  *   5. The browser uses the token; the server verifies it.        (application)
  *
- * With an attacker, she taps the wire for the whole login and the timeline
- * continues into what she can do with her recording.
+ * An attacker taps the wire for the whole login. Once the visitor picks what
+ * she attacks with, the timeline continues into what she can do with her
+ * recording.
  *
  * The score only arranges things in time. Every value it shows comes from the
  * session that actually ran (session.ts).
  */
 import type { Action, Beat, Landmark, Prop, Score } from './engine.ts';
-import { hex, MODES } from './session.ts';
+import { hex, MODES, passwordIn } from './session.ts';
 import type { AttackOutcome, Session } from './session.ts';
 
 export type Actor = 'b' | 's' | 'm';
@@ -89,24 +90,30 @@ function operate(actor: Actor, { inputs, output }: OperateOptions): Action[] {
 }
 const OPERATE_SPAN: [number, number] = [0.24, 0.76];
 
-export function buildScore(session: Session, attack?: AttackOutcome): LoginScore {
+/**
+ * `watched` puts the attacker on the stage, recording, without yet saying what she attacks with.
+ * Scores for the same session share every beat of the login, so one can replace another mid-way.
+ */
+export function buildScore(session: Session, attack?: AttackOutcome, watched = attack !== undefined): LoginScore {
   const mode = MODES[session.mode];
   const kem = mode.postQuantumKex;
   const pqSig = mode.postQuantumSignatures;
-  const tapped = attack !== undefined;
+  const tapped = watched || attack !== undefined;
+  const who = session.login.username;
+  const sentPassword = `password=${passwordIn(session.loginDecrypted)}`;
   const sigBytes = session.certificateVerify.length.toLocaleString('en-US');
   const tokenBytes = session.token.length.toLocaleString('en-US');
 
   const props: Prop[] = [
-    { id: 'screen', kind: 'screen', label: 'payroll.example', home: 'b.screen', visible: true, channels: { typed: 0, pressed: 0, waiting: 0, welcome: 0 } },
+    { id: 'screen', kind: 'screen', label: 'payroll.example', home: 'b.screen', visible: true, channels: { waiting: 0, welcome: 0 } },
     { id: 'wire', kind: 'wire', label: 'Network', home: 'wire', visible: true, channels: { sealed: 0, tunnel: 0 } },
     { id: 'trust', kind: 'trust', label: 'Authorities this browser trusts', home: 'b.trust', visible: true, channels: { checked: 0 } },
     { id: 'certKey', kind: 'key', label: 'Certificate private key', look: { hue: 'cert', solid: true, lattice: pqSig, note: mode.signatureName }, home: 's.slot1', visible: true },
     { id: 'cert', kind: 'cert', label: 'Certificate', look: { hue: 'cert', lattice: pqSig, note: 'key + CA signature' }, home: 's.slot2', visible: true },
     { id: 'tokenKey', kind: 'key', label: 'Token-signing private key', look: { hue: 'token', solid: true, lattice: pqSig, note: mode.signatureAlg }, home: 's.slot3', visible: true },
-    { id: 'pwStore', kind: 'data', label: 'Stored password hash', look: { note: 'alice: $argon2id$…' }, home: 's.slot9', visible: true },
+    { id: 'pwStore', kind: 'data', label: 'Stored password hash', look: { note: `${who}: $argon2id$…` }, home: 's.slot9', visible: true },
 
-    { id: 'cred', kind: 'data', label: 'Login', look: { plain: 'username=alice&password=correct-horse', cipher: hex(session.loginRecord.subarray(5), 18) }, channels: { cipher: 0 } },
+    { id: 'cred', kind: 'data', label: `Login: ${who}`, look: { plain: sentPassword, cipher: hex(session.loginRecord.subarray(5), 18) }, channels: { cipher: 0 } },
     { id: 'cPriv', kind: 'key', label: 'Browser’s private half', look: { hue: 'session', solid: true, note: 'never sent' } },
     { id: 'cPub', kind: 'key', label: 'Browser’s public half', look: { hue: 'session', note: hex(session.clientShare, 5) } },
     { id: 'sPriv', kind: 'key', label: 'Server’s private half', look: { hue: 'session', solid: true, note: 'never sent' } },
@@ -119,7 +126,7 @@ export function buildScore(session: Session, attack?: AttackOutcome): LoginScore
     { id: 'cvSig', kind: 'signature', label: 'Signature', look: { hue: 'cert', lattice: pqSig, note: `${sigBytes} bytes` }, channels: { formed: 0 } },
     { id: 'certSent', kind: 'cert', label: 'Certificate', look: { hue: 'cert', lattice: pqSig, note: 'key + CA signature' } },
     { id: 'saidC', kind: 'data', label: 'Everything said so far', look: { note: 'the browser’s own record' } },
-    { id: 'claims', kind: 'data', label: 'Claims', look: { note: 'sub: alice, exp: +1 h' } },
+    { id: 'claims', kind: 'data', label: 'Claims', look: { note: `sub: ${who}, exp: +1 h` } },
     { id: 'token', kind: 'token', label: 'Token', look: { lattice: pqSig, note: `${tokenBytes} bytes, ${mode.signatureAlg}` }, channels: { formed: 0 } },
     { id: 'tokenPub', kind: 'key', label: 'Token public key', look: { hue: 'token', lattice: pqSig, note: 'published for every app' } },
   ];
@@ -140,12 +147,7 @@ export function buildScore(session: Session, attack?: AttackOutcome): LoginScore
       { id: 'mCPub', kind: 'key', label: 'Browser’s public half', look: { hue: 'session', hostile: true, note: hex(session.clientShare, 5) } },
       { id: 'mSPub', kind: 'key', label: 'Server’s public half', look: { hue: 'session', hostile: true, note: hex(session.serverShare, 5) } },
       { id: 'mFlight', kind: 'sealed', label: 'Encrypted handshake', look: { hostile: true, note: 'unreadable' }, channels: { formed: 1 } },
-      { id: 'mLogin', kind: 'data', label: 'Recorded login', look: { hostile: true, plain: session.loginDecrypted.split('\n')[1] ?? '', cipher: hex(session.loginRecord.subarray(5), 18) }, channels: { cipher: 1 } },
-      { id: 'mPriv', kind: 'key', label: 'Browser’s private half', look: { hue: 'session', solid: true, hostile: true, note: 'recovered' }, channels: { formed: 0 } },
-      { id: 'mSecret', kind: 'secret', label: kem ? 'Half a secret' : 'Shared secret', look: { hostile: true, note: kem ? 'the ML-KEM half is missing' : hex(session.sharedSecret, 5) }, channels: { formed: 0 } },
-      { id: 'mTokenPub', kind: 'key', label: 'Token public key', look: { hue: 'token', lattice: pqSig, hostile: true, note: 'it is public' } },
-      { id: 'mTokenKey', kind: 'key', label: attack.recoveredTokenKey ? 'Token-signing private key' : 'A key she made up', look: { hue: 'token', solid: true, hostile: true, lattice: pqSig, note: attack.recoveredTokenKey ? 'recovered' : 'not the server’s' }, channels: { formed: 0 } },
-      { id: 'mToken', kind: 'token', label: 'Forged token', look: { hostile: true, lattice: pqSig, note: 'says: I am Alice' }, channels: { formed: 0 } },
+      { id: 'mLogin', kind: 'data', label: 'Recorded login', look: { hostile: true, plain: attack?.decryptedLogin ? `password=${passwordIn(attack.decryptedLogin)}` : '', cipher: hex(session.loginRecord.subarray(5), 18) }, channels: { cipher: 1 } },
     );
     if (kem) {
       props.push(
@@ -153,6 +155,15 @@ export function buildScore(session: Session, attack?: AttackOutcome): LoginScore
         { id: 'mKemCt', kind: 'sealed', label: 'ML-KEM ciphertext', look: { hue: 'session', lattice: true, hostile: true, note: 'public' }, channels: { formed: 1 } },
       );
     }
+  }
+  if (attack) {
+    props.push(
+      { id: 'mPriv', kind: 'key', label: 'Browser’s private half', look: { hue: 'session', solid: true, hostile: true, note: 'recovered' }, channels: { formed: 0 } },
+      { id: 'mSecret', kind: 'secret', label: kem ? 'Half a secret' : 'Shared secret', look: { hostile: true, note: kem ? 'the ML-KEM half is missing' : hex(session.sharedSecret, 5) }, channels: { formed: 0 } },
+      { id: 'mTokenPub', kind: 'key', label: 'Token public key', look: { hue: 'token', lattice: pqSig, hostile: true, note: 'it is public' } },
+      { id: 'mTokenKey', kind: 'key', label: attack.recoveredTokenKey ? 'Token-signing private key' : 'A key she made up', look: { hue: 'token', solid: true, hostile: true, lattice: pqSig, note: attack.recoveredTokenKey ? 'recovered' : 'not the server’s' }, channels: { formed: 0 } },
+      { id: 'mToken', kind: 'token', label: 'Forged token', look: { hostile: true, lattice: pqSig, note: `says: I am ${who}` }, channels: { formed: 0 } },
+    );
   }
 
   const specs: BeatSpec[] = [];
@@ -162,21 +173,12 @@ export function buildScore(session: Session, attack?: AttackOutcome): LoginScore
 
   // ------------------------------------------------------------------ Login
   beat({
-    id: 'type',
-    seconds: 5,
+    id: 'hold',
+    seconds: 6,
     layer: 'application',
     landmark: { id: 'login', label: 'Login' },
-    caption: 'Alice types her password and presses Log in.',
-    detail: 'An ordinary form on payroll.example. Nothing has left the browser.',
-    ...SIMPLIFIED,
-    actions: [set('screen', { typed: 1 }, [0.05, 0.7]), set('screen', { pressed: 1 }, [0.8, 0.95])],
-  });
-  beat({
-    id: 'hold',
-    seconds: 5,
-    layer: 'application',
-    caption: 'The browser has the login ready, and holds on to it. Nothing sensitive goes out until there is a private channel to send it through.',
-    detail: 'POST /login, with the username and password in the body.',
+    caption: 'The browser has the login ready, and holds it back until the connection is private.',
+    detail: 'POST /login, with the username and password in the body. Nothing has left the browser.',
     ...SIMPLIFIED,
     actions: [set('screen', { waiting: 1 }, [0, 0.3]), appear('cred', 'b.screen', [0.1, 0.3]), move('cred', 'b.hold', [0.35, 0.9])],
   });
@@ -187,9 +189,7 @@ export function buildScore(session: Session, attack?: AttackOutcome): LoginScore
     seconds: 7,
     layer: 'tls',
     landmark: { id: 'key-establishment', label: 'Key establishment' },
-    caption: kem
-      ? 'First, the browser makes two one-time key pairs of different kinds. It keeps the private half of each and will send the public halves.'
-      : 'First, the browser makes a one-time key pair. It keeps the private half and will send the public half.',
+    caption: kem ? 'First it makes two one-time key pairs, of two different kinds. The private halves never leave.' : 'First it makes a one-time key pair. The private half never leaves.',
     detail: kem ? 'An X25519 pair and an ML-KEM-768 pair: the hybrid group X25519MLKEM768.' : 'An X25519 key pair, used for this connection only.',
     ...SIMPLIFIED,
     ops: [{ actor: 'b', label: 'Generate keys', span: [0.05, 0.5] }],
@@ -205,7 +205,7 @@ export function buildScore(session: Session, attack?: AttackOutcome): LoginScore
     id: 'client-hello',
     seconds: 7,
     layer: 'tls',
-    caption: kem ? 'The public halves cross the network in the open. Anyone on the path can copy them.' : 'The public half crosses the network in the open. Anyone on the path can copy it.',
+    caption: kem ? 'The public halves cross the network in the open. Anyone can copy them.' : 'The public half crosses the network in the open. Anyone can copy it.',
     detail: 'The ClientHello. It is not encrypted: there is no key to encrypt it with yet.',
     ...SIMPLIFIED,
     actions: [
@@ -220,9 +220,7 @@ export function buildScore(session: Session, attack?: AttackOutcome): LoginScore
     id: 'server-keys',
     seconds: 7,
     layer: 'tls',
-    caption: kem
-      ? 'The server makes its own one-time pair. For the ML-KEM part it does something different: it locks a fresh secret inside a box only the browser’s ML-KEM private key can open.'
-      : 'The server makes its own one-time pair.',
+    caption: kem ? 'The server makes its own pair, and locks a fresh secret in a box only the browser’s ML-KEM private key can open.' : 'The server makes its own one-time pair.',
     detail: kem ? 'ML-KEM encapsulation: the server gets a 32-byte secret and a ciphertext to send back.' : 'Another X25519 pair.',
     ...SIMPLIFIED,
     ops: [{ actor: 's', label: kem ? 'Generate + encapsulate' : 'Generate keys', span: [0.05, 0.6] }],
@@ -249,7 +247,7 @@ export function buildScore(session: Session, attack?: AttackOutcome): LoginScore
     id: 'server-hello',
     seconds: 7,
     layer: 'tls',
-    caption: kem ? 'It sends its public half and the locked box back, also in the open.' : 'It sends its public half back, also in the open.',
+    caption: kem ? 'Its public half and the locked box come back, also in the open.' : 'Its public half comes back, also in the open.',
     detail: 'The ServerHello. From here on, the rest of the handshake is encrypted.',
     ...SIMPLIFIED,
     actions: [
@@ -264,7 +262,7 @@ export function buildScore(session: Session, attack?: AttackOutcome): LoginScore
     id: 'combine',
     seconds: 9,
     layer: 'tls',
-    caption: 'Each side combines its own private half with the other’s public half. Both arrive at the same secret, and the secret itself never crossed the network.',
+    caption: 'Each side combines its private half with the other’s public half. Both get the same secret, and it never crossed the network.',
     detail: `X25519 on both sides gave ${hex(session.ecdhSecret)}…${kem ? ' The browser also opens the box with its ML-KEM private key.' : ''}`,
     ...SIMPLIFIED,
     ops: [
@@ -281,7 +279,7 @@ export function buildScore(session: Session, attack?: AttackOutcome): LoginScore
       id: 'decapsulate',
       seconds: 8,
       layer: 'tls',
-      caption: 'The browser opens the box and gets the second secret. The two are joined: an attacker would need both to have anything.',
+      caption: 'The browser opens the box for the second secret. The two are joined: an attacker needs both.',
       detail: `ML-KEM decapsulation, then the two secrets concatenated: ${hex(session.sharedSecret)}…`,
       ...SIMPLIFIED,
       ops: [
@@ -319,7 +317,7 @@ export function buildScore(session: Session, attack?: AttackOutcome): LoginScore
     id: 'derive',
     seconds: 7,
     layer: 'tls',
-    caption: 'From the secret, both sides derive the keys that will encrypt everything from here on.',
+    caption: 'From the secret, both sides derive the keys that encrypt everything from here on.',
     detail: `The TLS 1.3 key schedule (HKDF). Channel key: ${hex(session.channelKey)}…`,
     ...SIMPLIFIED,
     ops: [
@@ -339,7 +337,7 @@ export function buildScore(session: Session, attack?: AttackOutcome): LoginScore
     seconds: 9,
     layer: 'tls',
     landmark: { id: 'secure-channel', label: 'Secure channel' },
-    caption: 'A secret shared with a stranger says nothing about who the stranger is. So the server signs a record of the conversation with the private key of its certificate.',
+    caption: 'But who is on the other end? The server signs the conversation so far with its certificate’s private key.',
     detail: `CertificateVerify: a ${mode.signatureName} signature over a hash of every handshake message so far, ${sigBytes} bytes.`,
     ...SIMPLIFIED,
     ops: [{ actor: 's', label: 'Sign', span: OPERATE_SPAN }],
@@ -349,7 +347,7 @@ export function buildScore(session: Session, attack?: AttackOutcome): LoginScore
     id: 'send-proof',
     seconds: 7,
     layer: 'tls',
-    caption: 'It sends the certificate and the signature. These already travel encrypted.',
+    caption: 'It sends the certificate and the signature, already encrypted.',
     detail: 'In TLS 1.3 everything after the ServerHello is encrypted, including the certificate.',
     ...SIMPLIFIED,
     actions: [move('certSent', 'b.tls', [0, 0.8]), move('cvSig', 'b.tls2', [0.05, 0.85]), move('certSent', 'b.slot6', [0.84, 1]), move('cvSig', 'b.slot3', [0.88, 1]), ...record('mFlight', 'tls', kem ? 'm.slot5' : 'm.slot3', 0.36)],
@@ -358,7 +356,7 @@ export function buildScore(session: Session, attack?: AttackOutcome): LoginScore
     id: 'check-cert',
     seconds: 7,
     layer: 'tls',
-    caption: 'The browser checks that an authority it already trusts vouches for this certificate.',
+    caption: 'The browser checks that an authority it trusts vouches for the certificate.',
     detail: 'The certificate carries the server’s public key and a certificate authority’s signature binding it to the name payroll.example.',
     ...SIMPLIFIED,
     actions: [move('certSent', 'b.trust', [0.05, 0.4]), set('trust', { checked: 1 }, [0.45, 0.7]), move('certSent', 'b.slot6', [0.75, 1])],
@@ -367,7 +365,7 @@ export function buildScore(session: Session, attack?: AttackOutcome): LoginScore
     id: 'verify',
     seconds: 9,
     layer: 'tls',
-    caption: 'Then it checks the signature with the public key from the certificate. It matches: whoever is on the other end holds the certificate’s private key.',
+    caption: 'Then it checks the signature with the certificate’s public key. It matches: this is the real server.',
     detail: `${mode.signatureName} verification over the browser’s own record of the handshake returned ${session.certificateVerifyValid}.`,
     ...SIMPLIFIED,
     ops: [{ actor: 'b', label: 'Verify', span: OPERATE_SPAN, result: { ok: session.certificateVerifyValid, text: 'It is payroll.example' } }],
@@ -418,17 +416,17 @@ export function buildScore(session: Session, attack?: AttackOutcome): LoginScore
     id: 'check-password',
     seconds: 8,
     layer: 'application',
-    caption: 'And checks the password against what it has stored. This is the login itself, and TLS has no part in it.',
+    caption: 'And checks the password against what it has stored. This is the login itself; TLS has no part in it.',
     detail: 'The application compares the password with a stored hash. No public-key cryptography is involved.',
     ...SIMPLIFIED,
-    ops: [{ actor: 's', label: 'Check password', span: OPERATE_SPAN, result: { ok: true, text: 'It is Alice' } }],
+    ops: [{ actor: 's', label: 'Check password', span: OPERATE_SPAN, result: { ok: true, text: `It is ${who}` } }],
     actions: operate('s', { inputs: [{ prop: 'pwStore', back: 's.slot9' }, { prop: 'cred' }] }),
   });
   beat({
     id: 'issue-token',
     seconds: 10,
     layer: 'application',
-    caption: 'So that Alice need not send her password again, the server writes a token saying who she is, and signs it. This is a different private key from the certificate’s.',
+    caption: `So the password is not needed again, the server writes a token saying this is ${who}, and signs it with a different private key.`,
     detail: `A JWT signed with ${mode.signatureAlg}, ${tokenBytes} bytes. Signing does not encrypt: anyone holding the token can read it.`,
     ...SIMPLIFIED,
     ops: [{ actor: 's', label: 'Sign', span: OPERATE_SPAN }],
@@ -439,7 +437,7 @@ export function buildScore(session: Session, attack?: AttackOutcome): LoginScore
     seconds: 6,
     layer: 'application',
     caption: 'The token goes back through the channel.',
-    detail: 'Inside the encrypted channel, so only Alice’s browser receives it.',
+    detail: 'Inside the encrypted channel, so only this browser receives it.',
     ...SIMPLIFIED,
     actions: [move('token', 'b.app', [0, 0.82]), move('token', 'b.hold', [0.86, 1])],
   });
@@ -450,7 +448,7 @@ export function buildScore(session: Session, attack?: AttackOutcome): LoginScore
     seconds: 6,
     layer: 'application',
     landmark: { id: 'success', label: 'Success' },
-    caption: 'From now on each request carries the token instead of the password.',
+    caption: 'From now on, each request carries the token instead of the password.',
     detail: 'Authorization: Bearer <token>, through the same channel.',
     ...SIMPLIFIED,
     actions: [move('token', 'b.app', [0.05, 0.2]), move('token', 's.app', [0.22, 0.86]), move('token', 's.work', [0.9, 1])],
@@ -459,7 +457,7 @@ export function buildScore(session: Session, attack?: AttackOutcome): LoginScore
     id: 'verify-token',
     seconds: 9,
     layer: 'application',
-    caption: 'The server checks the token’s signature with the matching public key. Any app holding that public key can check it; only the private key can make one.',
+    caption: 'The server checks the token’s signature with the matching public key. Only the private key can make one.',
     detail: `${mode.signatureAlg} verification returned ${session.tokenValid}.`,
     ...SIMPLIFIED,
     ops: [{ actor: 's', label: 'Verify', span: OPERATE_SPAN, result: { ok: session.tokenValid, text: 'Signed by this service' } }],
@@ -469,8 +467,8 @@ export function buildScore(session: Session, attack?: AttackOutcome): LoginScore
     id: 'welcome',
     seconds: 5,
     layer: 'application',
-    caption: 'Alice is in.',
-    detail: 'Three layers did three jobs: key establishment made the channel private, a certificate signature said who the server is, and a token signature says who Alice is.',
+    caption: `Signed in as ${who}.`,
+    detail: `Three layers did three jobs: key establishment made the channel private, a certificate signature said who the server is, and a token signature says who ${who} is.`,
     ...SIMPLIFIED,
     actions: [set('screen', { welcome: 1 }, [0.1, 0.6])],
   });
@@ -525,7 +523,7 @@ export function buildScore(session: Session, attack?: AttackOutcome): LoginScore
       seconds: 9,
       layer: 'attacker',
       caption: attack.decryptedLogin
-        ? 'She derives the same channel key and decrypts her recording. Alice’s password, years after the login.'
+        ? `She derives the same channel key and decrypts her recording. There is ${who}’s password, years after the login.`
         : quantum
           ? 'Half a secret derives the wrong key. The recording stays noise.'
           : 'Without the secret there is no key. The recording stays noise.',
@@ -570,7 +568,7 @@ export function buildScore(session: Session, attack?: AttackOutcome): LoginScore
       id: 'forge',
       seconds: 9,
       layer: 'attacker',
-      caption: attack.recoveredTokenKey ? 'She writes a token that says she is Alice and signs it with the real key.' : 'She writes a token that says she is Alice and signs it with a key of her own, since that is all she has.',
+      caption: attack.recoveredTokenKey ? `She writes a token that says she is ${who} and signs it with the real key.` : `She writes a token that says she is ${who} and signs it with a key of her own, since that is all she has.`,
       detail: `A JWT signed with ${mode.signatureAlg}. ${attack.recoveredTokenKey ? 'It is indistinguishable from one the server made.' : 'The signature is valid for her key, not the server’s.'}`,
       ...REAL,
       ops: [{ actor: 'm', label: 'Sign', span: OPERATE_SPAN }],
@@ -584,11 +582,11 @@ export function buildScore(session: Session, attack?: AttackOutcome): LoginScore
       seconds: 10,
       layer: 'attacker',
       caption: attack.forgeryAccepted
-        ? 'The server checks the signature with its public key. It verifies. Mallory is in as Alice, and never needed a password.'
+        ? `The server checks the signature with its public key. It verifies. Mallory is in as ${who}, and never needed a password.`
         : 'The server checks the signature with its public key. It does not verify. She is turned away.',
       detail: `Real ${mode.signatureAlg} verification of her token returned ${attack.forgeryAccepted}.`,
       ...REAL,
-      ops: [{ actor: 's', label: 'Verify', span: [0.5, 0.86], result: { ok: attack.forgeryAccepted, text: attack.forgeryAccepted ? 'Accepted as Alice' : 'Rejected' } }],
+      ops: [{ actor: 's', label: 'Verify', span: [0.5, 0.86], result: { ok: attack.forgeryAccepted, text: attack.forgeryAccepted ? `Accepted as ${who}` : 'Rejected' } }],
       actions: [move('mToken', 's.app', [0, 0.36]), move('mToken', 's.opB', [0.38, 0.48]), move('tokenPub', 's.opA', [0.38, 0.48]), appear('tokenPub', 's.slot3', [0.3, 0.36]), move('mToken', 's.op', [0.5, 0.6]), move('tokenPub', 's.op', [0.5, 0.6]), move('mToken', 's.work2', [0.88, 1]), vanish('tokenPub', [0.88, 1])],
     });
     beat({

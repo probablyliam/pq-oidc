@@ -316,6 +316,52 @@ export function analyzeToken(input: string, nowSeconds = Math.floor(Date.now() /
   return analysis;
 }
 
+/** A token in one line, for someone who does not want the details. */
+export interface TokenVerdict {
+  /** safe: fine against a quantum computer. later: at risk once one exists. now: a problem today. */
+  status: 'safe' | 'later' | 'now' | 'unknown';
+  headline: string;
+  explanation: string;
+}
+
+export function tokenVerdict(analysis: TokenAnalysis, check?: SignatureCheck): TokenVerdict {
+  if (check?.status === 'invalid') {
+    return { status: 'now', headline: 'The signature does not match', explanation: 'This token was changed after it was signed, or was not signed by the issuer it names. A service must refuse it.' };
+  }
+  const checked = check?.status === 'valid' ? ' Its signature checks out against the issuer’s published keys.' : '';
+  if (analysis.format === 'opaque') {
+    return { status: 'unknown', headline: 'Not a readable token', explanation: 'This is not a JWT. Its meaning is kept on the server that issued it, so there is nothing here to check.' };
+  }
+  if (analysis.format === 'jwe') {
+    return analysis.jwe?.quantum === 'shor'
+      ? { status: 'now', headline: 'Encrypted, but a quantum computer could open it', explanation: 'A copy of this token saved today could be decrypted once a large quantum computer exists.' }
+      : analysis.jwe?.quantum === 'unknown'
+        ? { status: 'unknown', headline: 'Encrypted, in a way this tool does not know', explanation: 'Its contents are hidden, and the method named in its header is not one this tool recognises.' }
+        : { status: 'safe', headline: 'Encrypted, and quantum-safe', explanation: 'Its contents are hidden, and a quantum computer does not help to reveal them.' };
+  }
+  const alg = analysis.alg;
+  switch (alg?.quantum) {
+    case 'none':
+      return { status: 'now', headline: 'Not signed', explanation: 'Anyone could have written this token. A service must refuse it.' };
+    case 'shor':
+      return {
+        status: 'later',
+        headline: 'A quantum computer could forge tokens like this',
+        explanation: `It is signed with ${alg.alg}. Once a large quantum computer exists, that signature could be faked. Tokens recorded today are not affected.${checked}`,
+      };
+    case 'no-known-attack':
+      return { status: 'safe', headline: 'Quantum-safe signature', explanation: `It is signed with ${alg.alg}, which no quantum computer is known to break.${checked}` };
+    case 'grover':
+      return {
+        status: 'safe',
+        headline: 'Not affected by quantum computers',
+        explanation: `It is protected with a shared secret (${alg.alg}) rather than a signature. Quantum computers do not break that. The catch is an old one: anything able to check this token can also make one.`,
+      };
+    default:
+      return { status: 'unknown', headline: 'Unrecognised protection', explanation: 'The token names a signing method this tool does not know, so nothing can be said about it.' };
+  }
+}
+
 /** The finding for a signature check, or for the lack of one. */
 export function describeSignature(analysis: TokenAnalysis, check: SignatureCheck | undefined, keySource?: string): TokenFinding {
   const from = keySource ? ` published at ${keySource}` : '';

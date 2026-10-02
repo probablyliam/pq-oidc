@@ -1,21 +1,25 @@
 /**
- * The clock for the stage. It owns one number, the time, and everything on
- * screen follows from it: playing advances it, the scrubber and the keyboard
- * set it, and the stage is drawn for whatever it is.
+ * The clock for the stage. It owns one number, the time. Playing advances it
+ * and the timeline sets it; each change is drawn straight onto the stage,
+ * without a React render, so a frame costs only what moved. React hears
+ * about the things that change a few times a minute: which step this is,
+ * and whether the clock is running.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { KeyboardEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { KeyboardEvent, ReactNode } from 'react';
 import { KindMark } from '../components/Finding.tsx';
 import { sceneAt } from './engine.ts';
 import { layoutFor } from './layout.ts';
 import type { LoginScore } from './score.ts';
 import { Stage } from './Stage.tsx';
+import type { StageHandle, StageProps } from './Stage.tsx';
 
-const SPEEDS = [0.5, 1, 2];
+/** Seconds of the score per second on the clock. The score is written slowly; this is the pace it is shown at. */
+const RATE = 3;
 const LAYERS = [
-  { id: 'application', name: 'Application', does: 'the login itself, and the token' },
-  { id: 'tls', name: 'TLS', does: 'key establishment, the server’s identity, encryption' },
-  { id: 'attacker', name: 'Attacker', does: 'what she can do with what she recorded' },
+  { id: 'application', name: 'Application' },
+  { id: 'tls', name: 'TLS' },
+  { id: 'attacker', name: 'Attacker' },
 ] as const;
 
 function useMediaQuery(query: string): boolean {
@@ -29,30 +33,70 @@ function useMediaQuery(query: string): boolean {
   return matches;
 }
 
-const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
+/** An instruction from outside: go to this moment, and play from it or wait there. */
+export interface Cue {
+  id: number;
+  at: number;
+  play: boolean;
+}
 
 export interface PlayerProps {
   score: LoginScore;
-  attacker: boolean;
-  /** Where to start, in seconds. */
-  startAt: number;
-  /** Start playing once the stage scrolls into view. */
-  autoplay: boolean;
+  cue: Cue;
+  screen: StageProps['screen'];
+  /** Shown in place of a caption before anything has happened. */
+  invitation: string;
+  /** Pressing play before anything has happened is the same as pressing Log in. */
+  onStart: () => void;
+  /** What to do next, offered once the timeline has run out. */
+  ending?: ReactNode;
 }
 
-export function Player({ score, attacker, startAt, autoplay }: PlayerProps) {
-  const [time, setTime] = useState(startAt);
-  const [playing, setPlaying] = useState(false);
-  const [speed, setSpeed] = useState(1);
-  const narrow = useMediaQuery('(max-width: 760px)');
-  const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
-  const root = useRef<HTMLDivElement>(null);
-  const autoplayed = useRef(false);
+type Edge = 'start' | 'middle' | 'end';
 
-  const layout = useMemo(() => layoutFor(narrow ? 'column' : 'row', attacker), [narrow, attacker]);
-  const scene = useMemo(() => sceneAt(score, time), [score, time]);
-  const beat = score.beats[scene.beatIndex]!;
-  const seek = useCallback((t: number) => setTime(Math.min(Math.max(t, 0), score.duration)), [score.duration]);
+export function Player({ score, cue, screen, invitation, onStart, ending }: PlayerProps) {
+  const narrow = useMediaQuery('(max-width: 900px)');
+  const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
+  const layout = useMemo(() => layoutFor(narrow ? 'column' : 'row', true), [narrow]);
+  const root = useRef<HTMLDivElement>(null);
+  const stage = useRef<StageHandle>(null);
+  const scrubber = useRef<HTMLInputElement>(null);
+  const time = useRef(cue.at);
+  const [playing, setPlaying] = useState(false);
+  const [beatIndex, setBeatIndex] = useState(() => sceneAt(score, cue.at).beatIndex);
+  const [edge, setEdge] = useState<Edge>('start');
+  const shown = useRef({ beatIndex, edge });
+
+  /** Puts the stage, and the timeline, at a moment. */
+  const show = useCallback(
+    (t: number) => {
+      const at = Math.min(Math.max(t, 0), score.duration);
+      time.current = at;
+      const scene = sceneAt(score, at);
+      stage.current?.draw(scene);
+      if (scrubber.current) {
+        scrubber.current.value = String(at);
+        scrubber.current.style.setProperty('--played', `${(at / score.duration) * 100}%`);
+      }
+      const now: Edge = at <= 0.001 ? 'start' : at >= score.duration - 0.001 ? 'end' : 'middle';
+      if (scene.beatIndex !== shown.current.beatIndex) setBeatIndex((shown.current.beatIndex = scene.beatIndex));
+      if (now !== shown.current.edge) setEdge((shown.current.edge = now));
+    },
+    [score],
+  );
+
+  // A new score or arrangement is drawn where the clock already is.
+  useLayoutEffect(() => show(time.current), [show, layout]);
+
+  // A cue from outside: Log in was pressed, an attack was chosen, or a link asked for a moment.
+  useLayoutEffect(() => {
+    // With reduced motion nothing plays, so a cue shows the finished state of the step it points at.
+    show(reducedMotion && cue.play ? sceneAt(score, cue.at).beat.end - 0.001 : cue.at);
+    setPlaying(cue.play && !reducedMotion);
+    // Something is about to happen on the stage: bring all of it into view.
+    if (cue.play) root.current?.scrollIntoView({ block: 'start', behavior: reducedMotion ? 'auto' : 'smooth' });
+    // Only a new cue moves the clock: a new score alone keeps its place.
+  }, [cue.id]);
 
   // Playing: advance the time by however long the last frame took.
   useEffect(() => {
@@ -62,67 +106,53 @@ export function Player({ score, attacker, startAt, autoplay }: PlayerProps) {
     const tick = (now: number) => {
       const elapsed = Math.min((now - last) / 1000, 0.1); // a background tab must not jump ahead
       last = now;
-      setTime((t) => {
-        const next = t + elapsed * speed;
-        if (next >= score.duration) {
-          setPlaying(false);
-          return score.duration;
-        }
-        return next;
-      });
+      const next = time.current + elapsed * RATE;
+      if (next >= score.duration) {
+        show(score.duration);
+        setPlaying(false);
+        return;
+      }
+      show(next);
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [playing, speed, score.duration]);
+  }, [playing, score, show]);
 
-  // Start by itself the first time the stage is on screen, unless the visitor prefers no motion.
-  useEffect(() => {
-    if (!autoplay || reducedMotion || autoplayed.current || !root.current) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry?.isIntersecting && !autoplayed.current) {
-          autoplayed.current = true;
-          setPlaying(true);
-        }
-      },
-      { threshold: 0.4 },
-    );
-    observer.observe(root.current);
-    return () => observer.disconnect();
-  }, [autoplay, reducedMotion]);
+  // A shorter score can arrive a render before the clock is redrawn on it.
+  const beat = score.beats[Math.min(beatIndex, score.beats.length - 1)]!;
+  const idle = edge === 'start' && !playing;
 
-  const toBeat = (delta: number) => {
-    setPlaying(false);
-    // Back from the middle of a beat goes to its start; from its start, to the previous one.
-    const index = delta < 0 && time - beat.start > 0.4 ? scene.beatIndex : scene.beatIndex + delta;
-    const target = score.beats[Math.min(Math.max(index, 0), score.beats.length - 1)]!;
-    // With reduced motion a step shows the finished state of the beat, since nothing will play it.
-    seek(reducedMotion ? target.end - 0.001 : target.start);
-  };
   const toLandmark = (delta: number) => {
     const times = score.landmarks.map((l) => l.t);
-    const target = delta > 0 ? times.find((t) => t > time + 0.01) : [...times].reverse().find((t) => t < time - 0.4);
+    const target = delta > 0 ? times.find((t) => t > time.current + 0.01) : [...times].reverse().find((t) => t < time.current - 0.4);
     setPlaying(false);
-    seek(target ?? (delta > 0 ? score.duration : 0));
+    show(target ?? (delta > 0 ? score.duration : 0));
+  };
+  const nextStep = () => {
+    const current = sceneAt(score, time.current);
+    const atEnd = time.current >= current.beat.end - 0.01;
+    show(score.beats[Math.min(current.beatIndex + (atEnd ? 1 : 0), score.beats.length - 1)]!.end - 0.001);
   };
   const toggle = () => {
-    if (reducedMotion) return toBeat(1);
-    if (time >= score.duration) seek(0);
-    setPlaying((p) => !p);
+    if (playing) return setPlaying(false);
+    if (time.current <= 0.001) return onStart();
+    if (reducedMotion) return nextStep();
+    if (time.current >= score.duration - 0.001) show(0);
+    setPlaying(true);
   };
 
   function onScrubKey(event: KeyboardEvent<HTMLInputElement>) {
     const step = event.shiftKey ? 10 : 2;
     const keys: Record<string, () => void> = {
-      ArrowLeft: () => seek(time - step),
-      ArrowRight: () => seek(time + step),
-      ArrowDown: () => seek(time - step),
-      ArrowUp: () => seek(time + step),
+      ArrowLeft: () => show(time.current - step),
+      ArrowRight: () => show(time.current + step),
+      ArrowDown: () => show(time.current - step),
+      ArrowUp: () => show(time.current + step),
       PageUp: () => toLandmark(-1),
       PageDown: () => toLandmark(1),
-      Home: () => seek(0),
-      End: () => seek(score.duration),
+      Home: () => show(0),
+      End: () => show(score.duration),
       ' ': toggle,
     };
     const action = keys[event.key];
@@ -132,108 +162,86 @@ export function Player({ score, attacker, startAt, autoplay }: PlayerProps) {
     action();
   }
 
-  const layers = LAYERS.filter((l) => l.id !== 'attacker' || attacker);
+  const playLabel = playing ? 'Pause' : reducedMotion && !idle ? 'Next step' : 'Play';
 
   return (
     <div className="player" ref={root}>
-      <Stage score={score} scene={scene} layout={layout} />
+      <Stage ref={stage} score={score} layout={layout} screen={screen} />
 
       <div className="console">
-      <div className="caption">
-        <div className="caption-main" aria-live="polite">
-          <p className="caption-text">{beat.caption}</p>
-          {beat.honesty && (
-            <p className="caption-honesty">
-              <KindMark kind={beat.mark ?? 'model'} />
-              <span>{beat.honesty}</span>
-            </p>
-          )}
-          <details>
-            <summary>Technical detail</summary>
-            <p>{beat.detail}</p>
-          </details>
-        </div>
-        <ol className="caption-layers" aria-label="Which layer this step belongs to">
-          {layers.map((layer) => (
-            <li key={layer.id} aria-current={beat.layer === layer.id ? 'true' : undefined}>
-              <b>{layer.name}</b>
-              <span>{layer.does}</span>
-            </li>
-          ))}
-        </ol>
-      </div>
-
-      <div className="transport">
-        <div className="transport-buttons">
-          <button type="button" className="primary" onClick={toggle}>
-            {reducedMotion ? 'Next step' : playing ? 'Pause' : 'Play'}
-          </button>
-          <button type="button" onClick={() => toBeat(-1)} disabled={time <= 0}>
-            Back
-          </button>
-          <button type="button" onClick={() => toBeat(1)} disabled={time >= score.duration}>
-            Next
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              seek(0);
-              setPlaying(!reducedMotion);
-            }}
-          >
-            Replay
-          </button>
-          {!reducedMotion && (
-            <div className="seg speed" role="group" aria-label="Speed">
-              {SPEEDS.map((s) => (
-                <button key={s} type="button" aria-pressed={speed === s} onClick={() => setSpeed(s)}>
-                  {s}×
-                </button>
-              ))}
+        <div className="caption">
+          <p className="caption-text" aria-live="polite">
+            {idle ? invitation : beat.caption}
+          </p>
+          {edge === 'end' && !playing && ending}
+          {!idle && (
+            <div className="caption-meta">
+              <ol className="caption-layers" aria-label="Which layer this step belongs to">
+                {LAYERS.map((layer) => (
+                  <li key={layer.id} aria-current={beat.layer === layer.id ? 'true' : undefined}>
+                    {layer.name}
+                  </li>
+                ))}
+              </ol>
+              <details>
+                <summary>Technical detail</summary>
+                <p>{beat.detail}</p>
+                {beat.honesty && (
+                  <p className="caption-honesty">
+                    <KindMark kind={beat.mark ?? 'model'} />
+                    <span>{beat.honesty}</span>
+                  </p>
+                )}
+              </details>
             </div>
           )}
-          <span className="time">
-            {clock(time)} / {clock(score.duration)}
-          </span>
         </div>
 
-        <div className="timeline">
-          <input
-            type="range"
-            min={0}
-            max={score.duration}
-            step={0.05}
-            value={time}
-            aria-label="Timeline"
-            aria-valuetext={`${clock(time)} of ${clock(score.duration)}. ${beat.caption}`}
-            onChange={(event) => {
-              setPlaying(false);
-              seek(Number(event.target.value));
-            }}
-            onKeyDown={onScrubKey}
-          />
-          <ol className="landmarks">
-            {score.landmarks.map((landmark, i) => {
-              const next = score.landmarks[i + 1]?.t ?? score.duration;
-              return (
-                <li key={landmark.id} style={{ left: `${(landmark.t / score.duration) * 100}%`, width: `${((next - landmark.t) / score.duration) * 100}%` }}>
-                  <button
-                    type="button"
-                    aria-current={time >= landmark.t && time < next ? 'step' : undefined}
-                    onClick={() => {
-                      setPlaying(false);
-                      seek(landmark.t);
-                    }}
-                  >
-                    {landmark.label}
-                  </button>
-                </li>
-              );
-            })}
-          </ol>
+        <div className="transport">
+          <button type="button" className={`play ${playing ? 'is-playing' : ''}`} onClick={toggle} aria-label={playLabel} title={playLabel}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              {playing ? <path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" /> : reducedMotion && !idle ? <path d="M6 5l8 7-8 7zM15.5 5H18v14h-2.5z" /> : <path d="M8 5l11 7-11 7z" />}
+            </svg>
+          </button>
+          <div className="timeline">
+            <input
+              ref={scrubber}
+              type="range"
+              min={0}
+              max={score.duration}
+              step={0.05}
+              defaultValue={cue.at}
+              aria-label="Timeline"
+              aria-valuetext={idle ? invitation : beat.caption}
+              onChange={(event) => {
+                setPlaying(false);
+                show(Number(event.target.value));
+              }}
+              onKeyDown={onScrubKey}
+            />
+            <ol className="landmarks">
+              {score.landmarks.map((landmark, i) => {
+                const next = score.landmarks[i + 1]?.t ?? score.duration;
+                // The first one is the start itself, and too short a stretch to carry a name.
+                if (landmark.t === 0) return null;
+                return (
+                  <li key={landmark.id} style={{ left: `${(landmark.t / score.duration) * 100}%`, width: `${((next - landmark.t) / score.duration) * 100}%` }}>
+                    <button
+                      type="button"
+                      aria-current={!idle && beat.start >= landmark.t && beat.start < next ? 'step' : undefined}
+                      onClick={() => {
+                        setPlaying(false);
+                        show(landmark.t);
+                      }}
+                    >
+                      {landmark.label}
+                    </button>
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
         </div>
-        <p className="fine keys">On the timeline: arrow keys move 2 seconds (Shift: 10), Page Up and Page Down jump between landmarks, Space plays or pauses.</p>
-      </div>
       </div>
     </div>
   );

@@ -73,7 +73,31 @@ export const MODES: Record<Mode, ModeInfo> = {
   },
 };
 
-export const LOGIN_REQUEST = 'POST /login\nusername=alice&password=correct-horse';
+/** What the visitor typed into the login form. It never leaves the page. */
+export interface Login {
+  username: string;
+  password: string;
+}
+export const DEFAULT_LOGIN: Login = { username: 'alice', password: 'hunter2' };
+/** As much as a chip on the stage can show. */
+export const LOGIN_LIMITS = { username: 8, password: 11 };
+
+/** The request the browser sends: an ordinary form post. */
+export const loginRequest = (login: Login) => `POST /login\nusername=${encodeURIComponent(login.username)}&password=${encodeURIComponent(login.password)}`;
+export const LOGIN_REQUEST = loginRequest(DEFAULT_LOGIN);
+
+/** Reads the password back out of a request, as the server does after decrypting it, and as an attacker would. */
+export function passwordIn(request: string): string {
+  return new URLSearchParams(request.split('\n')[1] ?? '').get('password') ?? '';
+}
+
+/** Empty fields fall back to the example login; long ones are cut to what the stage can show. */
+export function cleanLogin(login: Login): Login {
+  return {
+    username: login.username.trim().slice(0, LOGIN_LIMITS.username) || DEFAULT_LOGIN.username,
+    password: login.password.slice(0, LOGIN_LIMITS.password) || DEFAULT_LOGIN.password,
+  };
+}
 const ISSUER = 'https://payroll.example';
 const AUDIENCE = 'payroll';
 const HASH = 'sha384'; // TLS_AES_256_GCM_SHA384
@@ -81,6 +105,7 @@ const encoder = new TextEncoder();
 
 export interface Session {
   mode: Mode;
+  login: Login;
   /** Public values, exactly what crosses the network in the clear. */
   clientShare: Uint8Array;
   serverShare: Uint8Array;
@@ -154,12 +179,12 @@ function schedule(sharedSecret: Uint8Array, hello: Uint8Array[], rest: Uint8Arra
   return { handshake, application: (finished: Uint8Array) => applicationSecrets(HASH, handshake.handshakeSecret, transcriptHash(HASH, ...hello, ...rest, finished)) };
 }
 
-function tokenClaims() {
+function tokenClaims(login: Login) {
   const now = Math.floor(Date.now() / 1000);
-  return { iss: ISSUER, aud: AUDIENCE, sub: 'alice', name: 'Alice Nakamura', iat: now, exp: now + 3600 };
+  return { iss: ISSUER, aud: AUDIENCE, sub: login.username, name: login.username, iat: now, exp: now + 3600 };
 }
 
-export async function runSession(mode: Mode): Promise<Session> {
+export async function runSession(mode: Mode, login: Login = DEFAULT_LOGIN): Promise<Session> {
   const info = MODES[mode];
 
   // Key establishment. Each side makes a one-time pair and sends the public half.
@@ -205,16 +230,17 @@ export async function runSession(mode: Mode): Promise<Session> {
   // The login travels as application data under the client's traffic key.
   const clientKeys = trafficKeys(HASH, clientSide.application(finishedMessage).clientApplicationTraffic, 32);
   const serverKeys = trafficKeys(HASH, serverSide.application(finishedMessage).clientApplicationTraffic, 32);
-  const loginRecord = await sealRecord(clientKeys, encoder.encode(LOGIN_REQUEST));
+  const loginRecord = await sealRecord(clientKeys, encoder.encode(loginRequest(login)));
   const loginDecrypted = (await openRecord(serverKeys, loginRecord)) ?? '';
 
   // The token is signed by a different key: the application's, not TLS's.
   const tokenKey = await generateKey(info.signatureAlg, 'payroll-tokens');
-  const token = await signJwt(tokenKey, tokenClaims());
+  const token = await signJwt(tokenKey, tokenClaims(login));
   const tokenValid = (await verifyJwt(token, [tokenKey.publicJwk], { issuer: ISSUER, audience: AUDIENCE, algorithms: [info.signatureAlg] })).ok;
 
   return {
     mode,
+    login,
     clientShare: client.publicKey,
     serverShare: server.publicKey,
     kemPublicKey: kem?.publicKey,
@@ -274,7 +300,7 @@ export async function runAttack(session: Session, attacker: 'classical' | 'quant
   // The token-signing public key is published. Shor's algorithm turns a classical one into the private key.
   const recoveredTokenKey = quantum && !info.postQuantumSignatures;
   const forgingKey = recoveredTokenKey ? session.tokenKey : await generateKey(info.signatureAlg, session.tokenKey.kid);
-  const forgedToken = await signJwt(forgingKey, { ...tokenClaims(), name: 'Alice Nakamura (forged by Mallory)' });
+  const forgedToken = await signJwt(forgingKey, { ...tokenClaims(session.login), name: `${session.login.username} (forged by Mallory)` });
   const forgeryAccepted = (await verifyJwt(forgedToken, [session.tokenKey.publicJwk], { issuer: ISSUER, audience: AUDIENCE, algorithms: [info.signatureAlg] })).ok;
 
   return {

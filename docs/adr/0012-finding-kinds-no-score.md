@@ -26,4 +26,14 @@ Each layer also gets a quantum-exposure class, which is itself an inference with
 ## Consequences
 
 - No number to compare across sites. Comparison is per layer, per finding.
+
+## Addition: a verdict in plain words, in front of the findings
+
+The first results page showed every finding at once, and the owner's reaction was "what the heck am I even looking at". The findings are unchanged; what comes first is now a summary (`packages/scan-core/src/summary.ts`):
+
+- One verdict: **Not quantum-safe**, **Partly quantum-safe**, **Quantum-safe**, or **Could not tell**.
+- Three questions with short answers: can a recording of this connection be read later (key establishment), can someone pretend to be this site (the certificate), can someone fake a sign-in (the token signature).
+- Everything else, including every finding with its evidence and its observed / inferred / could-not-determine mark, under "Technical details".
+
+This is still not a score. The verdict is a stated function of the layer assessments: not safe if recorded traffic is exposed now; safe only if key establishment and both signatures are; unknown if the scan could not see key establishment; partly otherwise. A sign-in the scan could not see does not block "safe" but is shown as "cannot tell from outside". The rules are in the file and under test.
 - "Could not determine" is a normal, expected outcome and is shown as prominently as the rest.

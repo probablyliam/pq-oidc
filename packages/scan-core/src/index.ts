@@ -3,6 +3,7 @@ export * from './net/policy.ts';
 export * from './net/resolve.ts';
 export * from './report.ts';
 export * from './scan.ts';
+export * from './summary.ts';
 export { assess } from './assess.ts';
 export { discoverOidc } from './oidc/discover.ts';
 export * from './oidc/issuer-keys.ts';

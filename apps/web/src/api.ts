@@ -1,24 +1,16 @@
 /**
- * The web app's side of the API. The browser holds no tokens: requests carry
- * the session cookie, and anything that changes state also carries the
- * per-session CSRF token the API handed out with the session.
+ * The web app's side of the API. There are no accounts and no cookies: start
+ * a scan, then read it by its ID until it finishes.
  */
-import type { LayerSummary, ScanReport } from '@pq-oidc/scan-core/report';
+import type { ScanReport } from '@pq-oidc/scan-core/report';
 
 export interface Meta {
   service: string;
   engine: string;
-  signInUrl: string;
   /** Local test servers this deployment is allowed to scan. */
   labOrigins: string[];
-  /** The issuer this deployment signs its users in with. */
-  identityProvider: string;
   allowedPorts: number[];
-}
-
-export interface SessionInfo {
-  user: { name: string | null; email: string | null; sub: string };
-  expiresAt: string;
+  retentionHours: number;
 }
 
 export interface IssuerKeysResult {
@@ -42,7 +34,6 @@ export interface Scan {
   createdAt: string;
   finishedAt: string | null;
   progress?: string;
-  layers?: LayerSummary[];
   error?: { code: string; message: string };
   report?: ScanReport | IssuerKeysResult;
 }
@@ -60,21 +51,18 @@ export class ApiError extends Error {
   }
 }
 
-let csrfToken = '';
-
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   let response: Response;
   try {
     response = await fetch(path, {
       method,
-      credentials: 'same-origin',
-      headers: body === undefined && method === 'GET' ? {} : { 'content-type': 'application/json', 'x-csrf-token': csrfToken },
-      body: body === undefined ? (method === 'GET' ? undefined : '{}') : JSON.stringify(body),
+      credentials: 'omit',
+      headers: body === undefined ? {} : { 'content-type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
     throw new ApiError(0, 'network', 'The scan service did not answer. Check your connection and try again.');
   }
-  if (response.status === 204) return undefined as T;
   const data: unknown = await response.json().catch(() => undefined);
   if (!response.ok) {
     const error = (data as { error?: { code?: string; message?: string } } | undefined)?.error;
@@ -95,38 +83,17 @@ export const api = {
     }
   },
 
-  /** Null when nobody is signed in. */
-  async session(): Promise<SessionInfo | null> {
-    const session = await request<{ user: SessionInfo['user'] | null; csrfToken?: string; expiresAt?: string }>('GET', '/api/v1/session');
-    if (!session.user) return null;
-    csrfToken = session.csrfToken ?? '';
-    return { user: session.user, expiresAt: session.expiresAt ?? '' };
-  },
-
-  signInUrl(returnTo: string): string {
-    return `/auth/login?return_to=${encodeURIComponent(returnTo)}`;
-  },
-
-  async signOut(): Promise<string | undefined> {
-    const { endSessionUrl } = await request<{ endSessionUrl?: string }>('POST', '/auth/logout');
-    csrfToken = '';
-    return endSessionUrl;
-  },
-
   createScan: (target: string, kind: Scan['kind'] = 'scan') => request<{ scan: Scan }>('POST', '/api/v1/scans', { target, kind }).then((r) => r.scan),
   getScan: (id: string) => request<{ scan: Scan }>('GET', `/api/v1/scans/${encodeURIComponent(id)}`).then((r) => r.scan),
-  listScans: () => request<{ scans: Scan[] }>('GET', '/api/v1/scans?limit=50').then((r) => r.scans),
-  deleteScan: (id: string) => request<void>('DELETE', `/api/v1/scans/${encodeURIComponent(id)}`),
-  /** The ID token from this user's own sign-in. */
-  idToken: () => request<{ idToken: string | null }>('GET', '/api/v1/session/id-token').then((r) => r.idToken),
 
   /** Polls a job until it finishes, reporting each state on the way. */
   async waitForScan(id: string, onUpdate: (scan: Scan) => void, signal: AbortSignal): Promise<Scan> {
     for (;;) {
       const scan = await this.getScan(id);
+      if (signal.aborted) return scan;
       onUpdate(scan);
       if (scan.status === 'succeeded' || scan.status === 'failed') return scan;
-      await new Promise((resolve) => setTimeout(resolve, 600));
+      await new Promise((resolve) => setTimeout(resolve, 500));
       if (signal.aborted) return scan;
     }
   },

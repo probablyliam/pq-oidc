@@ -1,28 +1,19 @@
 /* ---------- Token page ---------- */
-.token-page {
+.token-report {
   --part-header: #6b7686;
   --part-payload: var(--ink);
   --part-signature: var(--k-token);
 }
 .token-input {
   margin-top: 22px;
-  max-width: 62rem;
-}
-.token-input label {
-  display: block;
-  margin-bottom: 6px;
+  max-width: 58rem;
 }
 .token-input textarea {
+  display: block;
   font-size: 0.82rem;
   line-height: 1.45;
   word-break: break-all;
   resize: vertical;
-}
-.token-report {
-  margin-top: 26px;
-  display: grid;
-  gap: 20px;
-  max-width: 62rem;
 }
 
 /* Encoded, signed, encrypted: three separate facts. */
@@ -62,8 +53,7 @@
 }
 
 .anatomy {
-  background: var(--paper);
-  border: 2px solid var(--ink);
+  border: 1px solid var(--rule);
   border-radius: 3px;
 }
 .token-text {
@@ -115,22 +105,11 @@
   margin-top: 6px;
 }
 
-.verify {
-  padding: 16px 18px;
-}
-.verify .notice {
-  margin-top: 14px;
-}
-.verify .notice p + p {
-  margin-top: 8px;
-}
-.token-report > .findings {
-  background: var(--paper);
+.token-report .findings {
+  border: 1px solid var(--rule);
+  border-radius: 3px;
 }
 
-.sizes {
-  padding: 16px 18px;
-}
 .sizes p {
   margin-top: 8px;
   max-width: 50rem;

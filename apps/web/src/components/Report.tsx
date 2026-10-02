@@ -1,24 +1,46 @@
+import { useState } from 'react';
 import { NOT_OBSERVABLE } from '@pq-oidc/scan-core/report';
-import type { Finding as ScanFinding, LayerId, LayerSummary, QuantumExposure, ScanReport } from '@pq-oidc/scan-core/report';
+import type { Finding as ScanFinding, LayerSummary, ScanReport } from '@pq-oidc/scan-core/report';
 import { cipherSuiteName, GROUPS, groupName, signatureSchemeName, versionName } from '@pq-oidc/scan-core/registry';
-import { href } from '../router.ts';
-import { Finding, KIND_MEANING, KindMark } from './Finding.tsx';
+import { plainSummary } from '@pq-oidc/scan-core/summary';
+import type { PlainAnswer } from '@pq-oidc/scan-core/summary';
+import { Finding, KIND_MEANING, KindMark, learnHref } from './Finding.tsx';
 import type { Kind } from './Finding.tsx';
 
-/** What each exposure class means, in the words used on the layer stack. */
-export const EXPOSURE: Record<QuantumExposure, string> = {
-  'harvest-now-decrypt-later': 'Traffic recorded today can be decrypted later',
-  'depends-on-client': 'Protected only for clients that support it',
-  'forgery-once-quantum': 'Forgeable once a quantum computer exists',
-  'reduced-margin': 'Weakened at most, not broken',
-  'no-known-attack': 'No known quantum attack',
-  'not-applicable': 'Not a quantum question',
-  undetermined: 'Could not determine',
-};
+/**
+ * A scan result, in two depths. First, for anyone: one verdict and three
+ * questions with short answers. Then, for someone who wants to check the
+ * work: every finding with its evidence, behind "Technical details".
+ */
 
-const when = (iso: string) => new Date(iso).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+function ago(iso: string): string {
+  const minutes = Math.round((Date.now() - new Date(iso).getTime()) / 60_000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+  if (minutes < 60 * 24) return `${Math.round(minutes / 60)} hour${Math.round(minutes / 60) === 1 ? '' : 's'} ago`;
+  return `on ${new Date(iso).toLocaleDateString([], { dateStyle: 'medium' })}`;
+}
 
-/** The parts of a key-exchange group, drawn in the same grammar as the learning stage: dotted means post-quantum. */
+function Answer({ answer }: { answer: PlainAnswer }) {
+  return (
+    <li className={`answer status-${answer.status}`}>
+      <h3>{answer.question}</h3>
+      <div>
+        <p className="answer-short">
+          <i className="mark" aria-hidden="true" />
+          {answer.short}
+        </p>
+        <p className="answer-text">{answer.answer}</p>
+        <p className="answer-more">
+          {answer.technical && <code>{answer.technical}</code>}
+          {answer.learn && <a href={learnHref(answer.learn)}>{answer.learn.view === 'token' ? 'Check a token from this site' : 'See how this works'}</a>}
+        </p>
+      </div>
+    </li>
+  );
+}
+
+/** The parts of a key-exchange group, drawn in the same grammar as the login explainer: dotted means post-quantum. */
 function GroupParts({ group }: { group: number }) {
   const info = GROUPS[group];
   if (!info) return null;
@@ -33,90 +55,15 @@ function GroupParts({ group }: { group: number }) {
   );
 }
 
-function LayerRow({ layer, count }: { layer: LayerSummary; count: number }) {
-  return (
-    <li className={`layer-row tone-${layer.tone} ${layer.exposure === 'undetermined' ? 'unknown' : ''}`}>
-      <a
-        href={`#layer-${layer.id}`}
-        onClick={(event) => {
-          event.preventDefault();
-          document.getElementById(`layer-${layer.id}`)?.scrollIntoView();
-        }}
-      >
-        <span className="layer-name">{layer.name}</span>
-        <span className="layer-headline">{layer.headline}</span>
-        <span className="layer-exposure">{EXPOSURE[layer.exposure]}</span>
-        <span className="sr-only">, {count} findings</span>
-      </a>
-    </li>
-  );
-}
-
-function Triad({ report }: { report: ScanReport }) {
-  const observed = report.layers.filter((l) => l.exposure !== 'undetermined' || l.id === 'dependencies');
-  const unknown = report.findings.filter((f) => f.kind === 'undetermined');
-  const attention = report.findings.filter((f) => f.tone === 'bad' || (f.tone === 'caution' && f.kind === 'inference'));
-  const jump = (id: string) => (event: React.MouseEvent) => {
-    event.preventDefault();
-    document.getElementById(id)?.scrollIntoView({ block: 'center' });
-  };
-  return (
-    <div className="triad">
-      <section>
-        <h3>What was observed</h3>
-        <ul>
-          {observed
-            .filter((l) => l.id !== 'dependencies')
-            .map((l) => (
-              <li key={l.id}>
-                <a href={`#layer-${l.id}`} onClick={jump(`layer-${l.id}`)}>
-                  {l.headline}
-                </a>
-              </li>
-            ))}
-        </ul>
-      </section>
-      <section>
-        <h3>What could not be determined</h3>
-        <ul>
-          {unknown.map((f) => (
-            <li key={f.id}>
-              <a href={`#finding-${f.id}`} onClick={jump(`finding-${f.id}`)}>
-                {f.title}
-              </a>
-            </li>
-          ))}
-        </ul>
-      </section>
-      <section>
-        <h3>What may need a closer look</h3>
-        {attention.length === 0 ? (
-          <p className="fine">Nothing in this scan stands out.</p>
-        ) : (
-          <ul>
-            {attention.map((f) => (
-              <li key={f.id} className={`tone-${f.tone}`}>
-                <a href={`#finding-${f.id}`} onClick={jump(`finding-${f.id}`)}>
-                  {f.title}
-                </a>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-    </div>
-  );
-}
-
 const KIND_ORDER: ScanFinding['kind'][] = ['observation', 'inference', 'undetermined'];
 
 function LayerSection({ layer, report }: { layer: LayerSummary; report: ScanReport }) {
   const findings = report.findings.filter((f) => f.layer === layer.id);
   const main = report.tls.probes.find((p) => p.id === 'pq-capable-client');
   return (
-    <section className={`layer tone-${layer.tone}`} id={`layer-${layer.id}`}>
+    <section className={`layer tone-${layer.tone}`}>
       <header>
-        <h3>{layer.name}</h3>
+        <h4>{layer.name}</h4>
         <p className="layer-headline">
           {layer.headline}
           {layer.id === 'key-establishment' && main?.group !== undefined && <GroupParts group={main.group} />}
@@ -131,7 +78,7 @@ function LayerSection({ layer, report }: { layer: LayerSummary; report: ScanRepo
         <ul className="related">
           {report.related.map((r) => (
             <li key={r.origin}>
-              <a href={href('', { target: r.origin })}>Scan {new URL(r.origin).host}</a>
+              <a href={`#/?target=${encodeURIComponent(r.origin)}`}>Scan {new URL(r.origin).host}</a>
             </li>
           ))}
         </ul>
@@ -150,8 +97,8 @@ function RawData({ report }: { report: ScanReport }) {
     URL.revokeObjectURL(link.href);
   };
   return (
-    <details className="raw">
-      <summary>Every handshake the scanner made, and the certificates it received</summary>
+    <section className="raw">
+      <h4>Every handshake the scanner made</h4>
       <div className="scroll-x">
         <table>
           <thead>
@@ -219,7 +166,7 @@ function RawData({ report }: { report: ScanReport }) {
           Download the full report as JSON
         </button>
       </p>
-    </details>
+    </section>
   );
 }
 
@@ -236,53 +183,94 @@ export function Legend({ kinds = ['observation', 'inference', 'undetermined'] }:
   );
 }
 
-export function Report({ report, recorded }: { report: ScanReport; recorded?: boolean }) {
-  const counts = (id: LayerId) => report.findings.filter((f) => f.layer === id).length;
+export interface ReportProps {
+  report: ScanReport;
+  /** A saved result from an earlier real scan, not a live one. */
+  recorded?: boolean;
+  /** How long a live result's link keeps working. */
+  retentionHours?: number;
+}
+
+export function Report({ report, recorded, retentionHours }: ReportProps) {
+  const [copied, setCopied] = useState(false);
+  const summary = plainSummary(report);
+  const host = new URL(report.target.url).host;
+
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+    } catch {
+      // The link is in the address bar either way.
+    }
+  }
+
   return (
     <article className="report">
-      <header className="report-head">
-        <h2>{new URL(report.target.url).host}</h2>
-        <p className="fine">
-          {recorded ? 'Recorded scan from ' : 'Scanned '}
-          {when(report.startedAt)} at {report.network.address}. {report.tls.probes.length} handshakes in{' '}
-          {report.durationMs < 1000 ? `${report.durationMs} ms` : `${(report.durationMs / 1000).toFixed(1)} s`}.
-          {report.target.lab && ' A lab server on this machine.'}
+      <header className={`verdict verdict-${summary.verdict}`}>
+        <p className="verdict-host">{host}</p>
+        <h2>{summary.headline}</h2>
+        <p className="verdict-why">{summary.explanation}</p>
+        <p className="verdict-meta">
+          {recorded ? `A saved result from a real scan ${ago(report.startedAt)}. Servers change.` : `Scanned ${ago(report.startedAt)}.`}
+          {!recorded && retentionHours !== undefined && (
+            <>
+              {' '}
+              <button type="button" className="link" onClick={() => void copyLink()}>
+                {copied ? 'Link copied' : 'Copy a link to this result'}
+              </button>{' '}
+              (kept for {retentionHours} hours)
+            </>
+          )}
         </p>
-        {recorded && <p className="notice caution">This is a saved result from a real scan, not a live one. Servers change; run the scanner to see today’s answer.</p>}
       </header>
 
-      {!report.reachable ? (
-        <ul className="findings">
-          {report.findings.map((f) => (
-            <Finding key={f.id} finding={f} />
+      {report.reachable && (
+        <ol className="answers">
+          {summary.answers.map((answer) => (
+            <Answer key={answer.id} answer={answer} />
           ))}
-        </ul>
-      ) : (
-        <>
-          <ol className="layer-stack" aria-label="Layers of this sign-in, and what a quantum computer would change for each">
-            {report.layers.map((layer) => (
-              <LayerRow key={layer.id} layer={layer} count={counts(layer.id)} />
-            ))}
-          </ol>
-          <Triad report={report} />
-          <Legend />
-          {report.layers.map((layer) => (
-            <LayerSection key={layer.id} layer={layer} report={report} />
-          ))}
-          <section className="limits">
-            <h3>What a scan from outside cannot see</h3>
-            <ul>
-              {NOT_OBSERVABLE.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-            <p>
-              <a href={href('migrate')}>Finding these is where a migration starts.</a>
-            </p>
-          </section>
-          <RawData report={report} />
-        </>
+        </ol>
       )}
+
+      {summary.alsoNoticed.length > 0 && (
+        <section className="also">
+          <h3>Also noticed</h3>
+          <ul>
+            {summary.alsoNoticed.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+          <p className="fine">These are problems today, with or without quantum computers.</p>
+        </section>
+      )}
+
+      <details className="technical">
+        <summary>Technical details</summary>
+        <p className="fine">
+          {report.tls.probes.length} TLS handshakes to {report.network.address} in {report.durationMs < 1000 ? `${report.durationMs} ms` : `${(report.durationMs / 1000).toFixed(1)} s`}. Every
+          statement below is marked by how it is known.
+        </p>
+        <Legend />
+        {report.reachable ? (
+          report.layers.map((layer) => <LayerSection key={layer.id} layer={layer} report={report} />)
+        ) : (
+          <ul className="findings">
+            {report.findings.map((f) => (
+              <Finding key={f.id} finding={f} />
+            ))}
+          </ul>
+        )}
+        <section className="limits">
+          <h4>What a scan from outside cannot see</h4>
+          <ul>
+            {NOT_OBSERVABLE.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </section>
+        {report.reachable && <RawData report={report} />}
+      </details>
     </article>
   );
 }

@@ -11,26 +11,28 @@ Decisions with reasoning live in [`docs/adr/`](adr/). Nothing here is pushed to 
 | 1 | Scan core: target policy, SSRF-safe resolver and connector | done |
 | 2 | Real analysis: TLS handshake observer, certificates, HTTP transport, OIDC metadata, report | done |
 | 3 | Token analysis with real verification | done |
-| 4 | API service, job model, persistence, worker, OIDC sign-in, authorization | done |
-| 5 | Results UI: layered report, history, compare, token page | done |
-| 6 | Scrubbable login timeline with the attacker in the same environment | done |
-| 7 | Migration exercise, seeded from scan results | in progress |
+| 4 | API service, job model, persistence, worker | done, then reworked: no accounts (ADR 0014) |
+| 5 | Results UI | done, then reworked: verdict first, technical detail folded away (ADR 0012) |
+| 6 | Login explainer | done, then reworked: the visitor types and logs in (ADR 0011) |
+| 7 | Migration exercise | cut at the owner's request (ADR 0014); model and tests remain in history at `411c1d6` |
 | 8 | Docker, Helm (NetworkPolicy), CI | pending |
 | 9 | Hardening: security review, accessibility, mobile, performance, test gaps | pending |
 | 10 | Final review against the definition of done, `FINAL_REPORT.md`, README | pending |
 
 ## Next steps
 
-Work stopped mid-Phase 7 (usage limit). Resume here, in this order:
+**Direction changed on 2026-10-02 after the owner tried the first version.** Their feedback, which overrides the original brief where the two disagree: no sign-in and no saved scans; a result a normal person can read, with the technical detail available underneath; a login explainer you do rather than watch, with one simple control; no migration page. The model is VirusTotal: paste something, get an answer. All four are done and waiting for the owner to try (ADRs 0011, 0012, 0014).
 
-1. **Phase 7, migration.** `apps/web/src/migrate/model.ts` is written but has never been run: add `model.test.ts` (safe order never breaks production and reaches `done`; each early change produces its problem; `rehearse` finds a break without causing it; `rollOut` records an incident only when untested; `seedFromScan` for the recorded reports). Then replace the placeholder `apps/web/src/views/MigrateView.tsx` with the real view (parts in path order, look / try in staging / roll out, outage banner, completion summary, `?scan=` and `?recorded=` seeding) and fill `styles/migrate.css`. Link reports to it with the scan ID.
-2. **Reviews.** Two independent reviews of the backend (TLS/crypto correctness; SSRF and API security) were started and then stopped unread when the usage limit hit. Re-run them and fix what they find.
-3. **Browser test.** `tests/browser/`: drive the built app with `playwright-core` (channel `msedge` locally, `chrome` in CI): sign in, scan a lab server, read the report; token page; set the timeline range input and assert the SVG matches `sceneAt`. Regenerate `docs/screenshots/` from it (working shots are in the untracked `.shots/`).
-4. **Phase 8, infrastructure.** Dockerfile (add `services/`, `packages/scan-core`, build `apps/web`), `docker-compose.yml`, Helm: api (PVC for SQLite, one replica), worker, NetworkPolicies (worker: internet egress minus private ranges; api: no egress except the provider), `.env.example`, CI jobs (tests, web build, kind deploy, NetworkPolicy check), Pages workflow path `apps/web`. None of this can be run on this machine; render and schema-check the chart with tools kept outside the repo.
-5. **Phase 9, hardening.** Provider login rate limit; favicon 404 on the provider; `npm audit`; accessibility pass (focus order, contrast, SVG labels); bundle size (code-split the learn view).
+Next, in this order:
+
+1. **The owner's reaction to the reworked version.** Pace of the explainer (one constant, `RATE` in `apps/web/src/learn/Player.tsx`), wording of the verdicts, anything else that reads as too much.
+2. **Security review of the backend, done by reading it rather than by delegating:** the SSRF boundary (`packages/scan-core/src/net`), the TLS parser's handling of hostile input, and the anonymous API's limits.
+3. **Browser test in the repository.** `tests/browser/`: drive the built app with `playwright-core` (channel `msedge` locally, `chrome` in CI): scan a lab server and read the verdict; token page; type a login and assert the typed password reaches the attacker's panel on a classical site and not on a hybrid one. Regenerate `docs/screenshots/` from it (working shots are in the untracked `.shots/`).
+4. **Phase 8, infrastructure.** Dockerfile (add `services/`, `packages/scan-core`, build `apps/web`), `docker-compose.yml`, Helm: api (PVC for SQLite, one replica), worker, NetworkPolicies (worker: internet egress minus private ranges; api: no egress at all), `.env.example`, CI jobs (tests, web build, kind deploy, NetworkPolicy check), Pages workflow path `apps/web`. None of this can be run on this machine; render and schema-check the chart with tools kept outside the repo.
+5. **Phase 9, hardening.** `npm audit`; accessibility pass (focus order, contrast, the stage's labels for screen readers); bundle size (code-split the explainer); the attacker table on a phone.
 6. **Phase 10.** Rewrite `README.md` (it still describes the old site), update `docs/threat-model.md` for the scanner, API and worker, write `docs/FINAL_REPORT.md`, copy screenshots to `docs/screenshots/`.
 
-Useful commands: `npm start` (whole stack on :8080, sign in as alice / quantum-safe), `npm run dev`, `npm run lab`, `npm test`, `npm run scan -- <url>`, `npx tsc -p tsconfig.json --noEmit`, `npm run typecheck -w apps/web`, `npx eslint .`.
+Useful commands: `npm start` (scanner, worker and test servers; open http://localhost:8080), `npm run dev`, `npm run lab`, `npm run oidc` (the ML-DSA identity provider, separate from the scanner), `npm test`, `npm run scan -- <url>`, `npm run typecheck`, `npx eslint .`.
 
 ---
 
@@ -127,7 +129,7 @@ Therefore the scanner sends its own ClientHello and reads the server's answer of
 
 ### 7. Authentication
 
-It belongs here: the scanner makes outbound connections on a user's behalf, so it needs an identity for rate limits, history and accountability. The API is an OIDC relying party using Authorization Code + PKCE through `openid-client`; the browser only ever holds a session cookie (backend-for-frontend). The identity provider is the project's own `packages/provider` rather than Keycloak: it already exists, it is the thing the rest of the project is about, and it lets the tool analyze the ML-DSA-signed ID token from its own sign-in. Any standards-compliant OIDC issuer can be configured instead. See ADR 0009.
+**Superseded: there is none (ADR 0014).** The first version required sign-in through the project's own provider (ADR 0009). The owner tried it and rejected it: it added a redirect and an account to a tool whose point is "paste an address, get an answer", and with published demo passwords it identified nobody. Scans are now anonymous, limited per visitor and per target, and deleted after a day. The provider remains in the repository as the ML-DSA-signing identity provider (`npm run oidc`).
 
 ### 8. Where Kubernetes adds value
 
@@ -137,7 +139,7 @@ Constraint: this machine has no Docker, kind or Helm, and the owner does not wan
 
 ### 9. Learning experience redesign
 
-One persistent stage (browser, network, server) drawn in SVG and driven by a pure function `sceneAt(t)`. A single clock; play, pause, scrub, keyboard. Objects are created, travel, combine in operations and transform; an operation scrubbed to its midpoint is drawn half done. TLS and the application are separate layers with **separate server keys** (certificate key, token-signing key). The attacker joins the same stage as a tap on the wire, and the same timeline continues into the attack. Values come from real primitives run in the browser; the protocol is simplified and the quantum step is conceptual, and both are labelled. Scan findings deep-link to the landmark and mode that explain them. See ADR 0011.
+One persistent stage (browser, network, server, and an attacker recording the network), driven by a pure function `sceneAt(t)`. The visitor types a made-up login into the form on the stage and presses Log in; the cryptography runs on what they typed and the stage shows where it went. One control: play or pause, and a timeline to drag. Objects are created, travel, combine in operations and transform; an operation scrubbed to its midpoint is drawn half done. TLS and the application are separate layers with **separate server keys** (certificate key, token-signing key). The attacker joins the same stage as a tap on the wire, and the same timeline continues into the attack. Values come from real primitives run in the browser; the protocol is simplified and the quantum step is conceptual, and both are labelled. Scan findings deep-link to the landmark and mode that explain them. See ADR 0011.
 
 ### 10. Phases and definitions of done
 
@@ -165,10 +167,11 @@ One persistent stage (browser, network, server) drawn in SVG and driven by a pur
 | 11 | Timeline as a pure function of time | [0011](adr/0011-timeline-pure-function.md) |
 | 12 | Finding kinds instead of a score | [0012](adr/0012-finding-kinds-no-score.md) |
 | 13 | Technology deliberately not added | [0013](adr/0013-not-added.md) |
+| 14 | No accounts: anonymous scans, limits, one-day retention; migration page cut | [0014](adr/0014-no-accounts.md) |
 
 ## Open questions
 
-None blocking. Assumptions made without the owner: scanning requires sign-in; one scan covers one origin; the public GitHub Pages build stays a static mode.
+None blocking. "Scanning requires sign-in" was an assumption made without the owner, and it was wrong (ADR 0014). Still assumed: one scan covers one origin; the public GitHub Pages build stays a static mode showing saved results.
 
 ## Verified vs. unverified
 
@@ -205,4 +208,15 @@ Filled in at the end of each phase.
 - **Verified in headless Edge** (scripts and screenshots in the untracked `.shots/`): sign in, scan a lab server, report renders; recorded reports; token examples; own-token verification; the stage at fixed playhead positions in all three modes with and without an attacker; phone viewport (390 px) with no horizontal overflow on any page; no console errors under the Content-Security-Policy after fonts were made same-origin.
 - **Verified by tests** (`apps/web/src/learn/learn.test.ts`, 38 tests): the nine mode/attacker scores validate; `sceneAt` is order-independent; a share is mid-network at mid-trip; a signature is half formed at the midpoint of signing; the login is scrambled only between encrypt and decrypt; no prop jumps between frames; the six attack outcomes are real decryptions and verifications.
 - **Not yet checked**: history and compare views in a browser; autoplay with motion enabled; keyboard control of the playhead in a browser; screen-reader behaviour; Firefox and Safari.
-- **Known gaps**: `MigrateView` is a placeholder; `README.md` still describes the old site; nothing in `deploy/`, `Dockerfile`, `docker-compose.yml` or `.github/` has been updated for the new services yet.
+- **Known gaps**: `README.md` still describes the old site; nothing in `deploy/`, `Dockerfile`, `docker-compose.yml` or `.github/` has been updated for the new services yet.
+
+### The rework (no accounts, verdict first, a login you do)
+
+The Phase 4 to 6 notes above describe the first version; sign-in, history, compare and CSRF-token tests no longer exist.
+
+- **Verified by tests** (467 in all, `npm test`):
+  - `tests/service.test.ts` (45, API + worker + lab servers in one process): a scan needs no cookie and is read by its ID; cross-site and non-JSON posts are refused; target refusals before queuing; per-visitor, in-progress and per-service limits, the last one keyed on normalised name and port; a repeat within the window returns the earlier scan and a failed one is not reused; only a keyed hash of the address is stored; results are deleted after the retention period; worker token, port separation, leases and retry; no token or address in the logs.
+  - `packages/scan-core/src/summary.test.ts` (15): the verdict and the three answers for each lab configuration; an unreachable target is "could not tell", never "safe".
+  - `apps/web/src/learn/learn.test.ts` (42): as before, plus: a typed login is what is encrypted, sent and decrypted; a quantum attacker's own decryption gives it back on a classical site; on a hybrid site nothing she holds contains it; a watched-only score shares every beat of the login with an attack score.
+- **Verified in headless Edge** (`.shots/v2-*.mjs`): scan a lab server from the home page with one press and read the verdict (classical: not quantum-safe; hybrid: partly; post-quantum: quantum-safe; expired certificate listed under "also noticed"); saved results; token examples; typing a login, pressing Log in, the typed password in the login chip and, after "give her a quantum computer" on the classical site, in the attacker's panel; a link from a result landing on a moment and playing; phone width. No console errors. Frame times while playing: 990 frames in 6 s, median 6.1 ms, worst 7.7 ms.
+- **Not verified**: how the explainer feels to a person at the chosen pace; Firefox and Safari (the stage relies on CSS `zoom`, standard and shipping in all three, tested only in Edge); screen readers; the service behind a real proxy.

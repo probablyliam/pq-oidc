@@ -1,19 +1,25 @@
 /**
- * Draws the stage for one moment in time. Everything here is a function of
- * the scene it is given: there are no transitions, timers or CSS animations,
- * so whatever the playhead says is exactly what is on screen (ADR 0011).
+ * The stage. React builds it once for a score and a layout; after that every
+ * frame is drawn by `draw(scene)`, which moves and fades the elements
+ * directly. Things that move are their own compositor layers and change only
+ * by transform and opacity, so a frame repaints nothing that is standing
+ * still. `draw` remembers only what it last wrote: whatever the playhead
+ * says is exactly what is on screen (ADR 0011).
  *
  * The drawing grammar is the one in styles/base.css: solid means private,
  * outline means public, a dotted lattice texture means post-quantum, and a
  * red ring means the attacker holds it.
  */
-import type { Prop, PropState, Scene } from './engine.ts';
-import type { Layout, Point, Rect } from './layout.ts';
-import type { Actor, LoginScore, StageOp } from './score.ts';
+import { forwardRef, useImperativeHandle, useLayoutEffect, useMemo, useRef } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
+import type { Prop, Scene } from './engine.ts';
+import type { Layout, Rect } from './layout.ts';
+import type { Actor, LoginScore } from './score.ts';
 
 const CHIP_W = 110;
 const CHIP_H = 46;
 const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
+const round = (x: number) => Math.round(x * 1000) / 1000;
 
 const ICONS: Record<string, string> = {
   key: 'M-1.5 0a3.2 3.2 0 1 0-6.4 0a3.2 3.2 0 0 0 6.4 0Zm0 0h9.5m-3.4 0v3.2m3.4-3.2v2.4',
@@ -24,274 +30,292 @@ const ICONS: Record<string, string> = {
   cert: 'M-6.5-6.5h13v10h-13zM-3.5-3h7M-3.5 0h4M3.5 3.5l1.5 4 1.5-1.5 1.5 1.5 1-4',
 };
 
-/** Splits a label into at most two lines of similar length. */
-function wrap(label: string): string[] {
-  if (label.length <= 15) return [label];
-  const words = label.split(' ');
-  let best = 1;
-  for (let i = 1; i < words.length; i++) {
-    const [a, b] = [words.slice(0, i).join(' ').length, words.slice(0, best).join(' ').length];
-    if (Math.abs(a - label.length / 2) < Math.abs(b - label.length / 2)) best = i;
-  }
-  return [words.slice(0, best).join(' '), words.slice(best).join(' ')];
-}
-
-function position(layout: Layout, state: PropState): Point | undefined {
-  const [a, b] = [layout.anchors[state.from], layout.anchors[state.to]];
-  if (!a || !b) return undefined;
-  return { x: a.x + (b.x - a.x) * state.p, y: a.y + (b.y - a.y) * state.p };
-}
-
 /** A login in transit: readable text gives way, character by character, to the real ciphertext. */
 function scrambled(plain: string, cipher: string, amount: number): string {
   const length = 20;
   const from = plain.padEnd(length).slice(0, length);
   const to = cipher.replaceAll(' ', '').padEnd(length, '0').slice(0, length);
   const cut = Math.round(amount * length);
-  return to.slice(0, cut) + from.slice(cut);
+  return (to.slice(0, cut) + from.slice(cut)).trimEnd();
 }
 
-function Chip({ prop, state, at, scale }: { prop: Prop; state: PropState; at: Point; scale: number }) {
+const box = (r: Rect): CSSProperties => ({ left: r.x, top: r.y, width: r.w, height: r.h });
+
+function Chip({ prop, scale }: { prop: Prop; scale: number }) {
   const look = prop.look ?? {};
-  const formed = state.channels.formed ?? 1;
-  const cipher = state.channels.cipher ?? 0;
-  const lines = wrap(cipher > 0.5 && prop.id === 'cred' ? 'Encrypted login' : prop.label);
-  const note = look.plain !== undefined ? scrambled(String(look.plain), String(look.cipher ?? ''), cipher) : String(look.note ?? '');
-  const classes = ['chip', `kind-${prop.kind}`, look.hue ? `hue-${look.hue}` : '', look.solid ? 'solid' : 'outline', look.hostile ? 'hostile' : ''].join(' ');
-  // Something being made grows from the left; its text arrives once there is room for it.
-  const width = Math.max(8, CHIP_W * formed);
-  const textOpacity = clamp01((formed - 0.55) / 0.3);
-  const lattice = look.lattice === 'half' ? { x: -CHIP_W / 2 + width / 2, w: width / 2 } : look.lattice ? { x: -CHIP_W / 2, w: width } : undefined;
-  const labelY = lines.length === 2 ? -9 : -3;
-
+  const classes = [
+    'chip',
+    `kind-${prop.kind}`,
+    look.hue ? `hue-${look.hue}` : '',
+    look.solid ? 'solid' : 'outline',
+    look.lattice === 'half' ? 'lattice-half' : look.lattice ? 'lattice' : '',
+    look.hostile ? 'hostile' : '',
+    prop.channels?.formed !== undefined ? 'forms' : '',
+  ].join(' ');
   return (
-    <g className={classes} transform={`translate(${at.x} ${at.y}) scale(${scale})`} opacity={state.opacity}>
-      <rect className="body" x={-CHIP_W / 2} y={-CHIP_H / 2} width={width} height={CHIP_H} rx="4" />
-      {prop.kind === 'sealed' && <rect className="hatch" x={-CHIP_W / 2} y={-CHIP_H / 2} width={width} height={CHIP_H} rx="4" />}
-      {look.plain !== undefined && <rect className="cipher-fill" x={-CHIP_W / 2} y={-CHIP_H / 2} width={CHIP_W} height={CHIP_H} rx="4" opacity={cipher} />}
-      {lattice && <rect className="lattice" x={lattice.x} y={-CHIP_H / 2} width={lattice.w} height={CHIP_H} rx="4" />}
-      {prop.kind === 'token' && (
-        <g className="token-strip">
-          <rect className="t-header" x={-CHIP_W / 2 + 4} y={-CHIP_H / 2 + 4} width="18" height="7" />
-          <rect className="t-payload" x={-CHIP_W / 2 + 23} y={-CHIP_H / 2 + 4} width="34" height="7" />
-          <rect className="t-signature" x={-CHIP_W / 2 + 58} y={-CHIP_H / 2 + 4} width={48 * formed} height="7" />
-        </g>
+    <div className={classes} data-chip={prop.id} style={{ width: CHIP_W * scale, height: CHIP_H * scale }}>
+      {look.plain !== undefined && <i className="chip-cipher" />}
+      {prop.kind === 'token' ? (
+        <span className="token-strip">
+          <i className="t-header" />
+          <i className="t-payload" />
+          <i className="t-signature" />
+        </span>
+      ) : (
+        <svg className="chip-icon" viewBox="-9 -9 18 18" aria-hidden="true">
+          <path d={ICONS[prop.kind] ?? ICONS.data} />
+        </svg>
       )}
-      <g opacity={textOpacity} className={cipher > 0.5 ? 'on-dark' : undefined}>
-        {prop.kind !== 'token' && <path className="icon" d={ICONS[prop.kind] ?? ICONS.data} transform={`translate(${-CHIP_W / 2 + 13} ${labelY + (lines.length === 2 ? 4 : 0)})`} />}
-        {lines.map((line, i) => (
-          <text key={i} className="label" x={prop.kind === 'token' ? -CHIP_W / 2 + 6 : -CHIP_W / 2 + 25} y={labelY + i * 12 + (prop.kind === 'token' ? 9 : 0)}>
-            {line}
-          </text>
-        ))}
-        <text className="note" x={-CHIP_W / 2 + 6} y={CHIP_H / 2 - 6}>
-          {note}
-        </text>
-      </g>
-      {look.hostile && <rect className="ring" x={-CHIP_W / 2 - 2.5} y={-CHIP_H / 2 - 2.5} width={width + 5} height={CHIP_H + 5} rx="6" />}
-    </g>
-  );
-}
-
-function Panel({ rect, title, subtitle, className, scale }: { rect: Rect; title: string; subtitle: string; className: string; scale: number }) {
-  return (
-    <g className={`panel-box ${className}`}>
-      <rect x={rect.x} y={rect.y} width={rect.w} height={rect.h} rx="4" />
-      <text className="panel-title" x={rect.x + 14} y={rect.y + 22 * Math.min(scale, 1.2)} fontSize={15 * scale}>
-        {title}
-        <tspan className="panel-sub" dx="8" fontSize={12 * scale}>
-          {subtitle}
-        </tspan>
-      </text>
-    </g>
-  );
-}
-
-/** The login form, then "logging in", then the signed-in page: all driven by the scene. */
-function Screen({ rect, channels, scale }: { rect: Rect; channels: Record<string, number>; scale: number }) {
-  const { typed = 0, pressed = 0, waiting = 0, welcome = 0 } = channels;
-  const password = '••••••••••••'.slice(0, Math.round(typed * 12));
-  const user = 'alice'.slice(0, Math.round(clamp01(typed * 2.2) * 5));
-  const s = scale;
-  const fieldW = rect.w * 0.34;
-  return (
-    <g className="screen" transform={`translate(${rect.x} ${rect.y})`}>
-      <rect className="screen-frame" width={rect.w} height={rect.h} rx="3" />
-      <text className="screen-site" x={12} y={20 * s} fontSize={12 * s}>
-        payroll.example
-      </text>
-      <g opacity={1 - waiting}>
-        <rect className="field" x={12} y={32 * s} width={fieldW} height={24 * s} />
-        <text className="field-text" x={18} y={32 * s + 16 * s} fontSize={12 * s}>
-          {user}
-        </text>
-        <rect className="field" x={22 + fieldW} y={32 * s} width={fieldW} height={24 * s} />
-        <text className="field-text" x={28 + fieldW} y={32 * s + 16 * s} fontSize={12 * s}>
-          {password}
-        </text>
-        <rect className={pressed > 0.5 ? 'button pressed' : 'button'} x={32 + fieldW * 2} y={32 * s} width={70 * s} height={24 * s} rx="3" />
-        <text className={pressed > 0.5 ? 'button-text pressed' : 'button-text'} x={32 + fieldW * 2 + 35 * s} y={32 * s + 16 * s} fontSize={12 * s} textAnchor="middle">
-          Log in
-        </text>
-      </g>
-      <text className="screen-status" x={12} y={50 * s} fontSize={14 * s} opacity={waiting * (1 - welcome)}>
-        Logging in as alice…
-      </text>
-      <g opacity={welcome}>
-        <text className="screen-welcome" x={12} y={48 * s} fontSize={17 * s}>
-          Welcome, Alice
-        </text>
-        <text className="screen-status" x={12} y={66 * s} fontSize={12 * s}>
-          Your payslips are ready.
-        </text>
-      </g>
-    </g>
-  );
-}
-
-function Lanes({ layout, sealed, tunnel, tapped }: { layout: Layout; sealed: number; tunnel: number; tapped: boolean }) {
-  const { tls, app } = layout.lanes;
-  const k = layout.glyphScale;
-  const row = layout.orientation === 'row';
-  // In a row the label sits above its lane on one line; in a column there is only room for two short lines inside it.
-  const label = (rect: Rect, what: string, state: string, className: string, opacity: number) =>
-    row ? (
-      <text className={`lane-label ${className}`} x={rect.x + rect.w / 2} y={rect.y - 7} fontSize={11.5} textAnchor="middle" opacity={opacity}>
-        {what}: {state}
-      </text>
-    ) : (
-      <text className={`lane-label ${className}`} x={rect.x + rect.w / 2} y={rect.y + 15 * k} fontSize={10.5 * k} textAnchor="middle" opacity={opacity}>
-        <tspan fontWeight="700">{what}</tspan>
-        <tspan x={rect.x + rect.w / 2} dy={13 * k}>
-          {state}
-        </tspan>
-      </text>
-    );
-  return (
-    <g className="lanes">
-      <text className="network-title" x={tls.x + (row ? tls.w / 2 : 8)} y={row ? 30 : tls.y + 16 * k} fontSize={15 * k} textAnchor={row ? 'middle' : 'start'} opacity={row ? 1 : 0}>
-        Network
-      </text>
-      <rect className="lane open" x={tls.x} y={tls.y} width={tls.w} height={tls.h} />
-      <rect className="lane sealed" x={tls.x} y={tls.y} width={tls.w} height={tls.h} opacity={sealed} />
-      {label(tls, 'TLS handshake', 'in the open, anyone can read it', 'open', 1 - sealed)}
-      {label(tls, 'TLS handshake', 'encrypted from here on', 'sealed', sealed)}
-      <rect className="lane none" x={app.x} y={app.y} width={app.w} height={app.h} />
-      <rect className="lane tunnel" x={app.x} y={app.y} width={app.w} height={app.h} opacity={tunnel} />
-      {label(app, 'Application data', 'no channel yet', 'open', 1 - tunnel)}
-      {label(app, 'Application data', row ? 'inside the secure channel' : 'in the channel', 'sealed', tunnel)}
-      {tapped && layout.panels.attacker && (
-        <g className="tap">
-          {row ? (
-            <line x1={layout.anchors['tap.tls']!.x} y1={tls.y + tls.h / 2} x2={layout.anchors['tap.tls']!.x} y2={layout.panels.attacker.y} />
-          ) : (
-            <path
-              d={`M${layout.anchors['tap.tls']!.x} ${layout.anchors['tap.tls']!.y}H${app.x - 18}V${layout.panels.attacker.y - 8}M${layout.anchors['tap.app']!.x} ${layout.anchors['tap.app']!.y}H${app.x - 18}`}
-            />
-          )}
-          <circle cx={layout.anchors['tap.tls']!.x} cy={layout.anchors['tap.tls']!.y} r={5 * k} />
-          <circle cx={layout.anchors['tap.app']!.x} cy={layout.anchors['tap.app']!.y} r={5 * k} />
-        </g>
-      )}
-    </g>
-  );
-}
-
-function Chamber({ at, scale, op, beatProgress }: { at: Point; scale: number; op: StageOp | undefined; beatProgress: number }) {
-  const [start, end] = op?.span ?? [0, 0];
-  const working = op ? clamp01((beatProgress - start) / (end - start)) : 0;
-  const active = op !== undefined && beatProgress >= start && beatProgress <= end;
-  const resultOpacity = op?.result ? clamp01((beatProgress - end) / 0.06) : 0;
-  return (
-    <g className={`chamber ${active ? 'active' : ''} ${op ? 'named' : ''}`} transform={`translate(${at.x} ${at.y}) scale(${scale})`}>
-      <rect className="chamber-box" x="-64" y="-34" width="128" height="68" rx="4" />
-      {op && (
-        <>
-          <text className="chamber-label" x="0" y="-41" textAnchor="middle">
-            {op.label}
-          </text>
-          <rect className="chamber-progress" x="-64" y="30" width={128 * working} height="4" />
-        </>
-      )}
-      {op?.result && (
-        <g className={op.result.ok ? 'result ok' : 'result fail'} opacity={resultOpacity}>
-          <path d={op.result.ok ? 'M-8 0l5 5 10-11' : 'M-7-7l14 14m0-14l-14 14'} transform="translate(0 0)" />
-          <text x="0" y="52" textAnchor="middle">
-            {op.result.text}
-          </text>
-        </g>
-      )}
-    </g>
+      <span className="chip-label">{prop.label}</span>
+      <span className="chip-note">{look.plain !== undefined ? String(look.plain) : String(look.note ?? '')}</span>
+    </div>
   );
 }
 
 export interface StageProps {
   score: LoginScore;
-  scene: Scene;
   layout: Layout;
+  /** What the browser's screen shows: the login form, the wait, and the signed-in page. */
+  screen: { form: ReactNode; waiting: ReactNode; welcome: ReactNode };
 }
 
-export function Stage({ score, scene, layout }: StageProps) {
+export interface StageHandle {
+  draw: (scene: Scene) => void;
+}
+
+export const Stage = forwardRef<StageHandle, StageProps>(function Stage({ score, layout, screen }, handle) {
+  const fit = useRef<HTMLDivElement>(null);
+  const root = useRef<HTMLDivElement>(null);
+  /** The last value written for each thing `draw` controls, so a frame only touches what changed. */
+  const written = useRef(new Map<string, string | number | boolean>());
   const k = layout.glyphScale;
-  const wire = scene.props.wire?.channels ?? {};
-  const beat = score.beats[scene.beatIndex]!;
-  const opFor = (actor: Actor) => beat.ops?.find((op) => op.actor === actor);
-  const tapped = layout.panels.attacker !== undefined;
-  const chips = score.props.filter((prop) => !['screen', 'wire', 'trust', 'attacker'].includes(prop.kind));
-  // Things on the move are drawn last, so they pass over what is standing still.
-  const ordered = [...chips].sort((a, b) => Number(scene.props[a.id]!.p < 1) - Number(scene.props[b.id]!.p < 1));
-  const trust = scene.props.trust;
+  const row = layout.orientation === 'row';
+  const { tls, app } = layout.lanes;
+  const attackerPanel = layout.panels.attacker;
+  const chips = useMemo(() => score.props.filter((prop) => !['screen', 'wire', 'trust', 'attacker'].includes(prop.kind)), [score]);
+  const actors: Actor[] = attackerPanel ? ['b', 's', 'm'] : ['b', 's'];
+
+  // The stage is drawn in its own units and scaled as a whole to the width it is given.
+  useLayoutEffect(() => {
+    const outer = fit.current;
+    if (!outer) return;
+    const resize = () => root.current?.style.setProperty('zoom', String(outer.clientWidth / layout.width));
+    resize();
+    const observer = new ResizeObserver(resize);
+    observer.observe(outer);
+    return () => observer.disconnect();
+  }, [layout.width]);
+
+  // A different layout or score means different elements: forget what was written to the old ones.
+  const found = useRef(new Map<string, HTMLElement | null>());
+  useLayoutEffect(() => {
+    written.current.clear();
+    found.current.clear();
+  }, [layout, score]);
+
+  useImperativeHandle(
+    handle,
+    () => ({
+      draw(scene) {
+        const stage = root.current;
+        if (!stage) return;
+        const find = (selector: string) => {
+          let element = found.current.get(selector);
+          if (element === undefined) found.current.set(selector, (element = stage.querySelector<HTMLElement>(selector)));
+          return element;
+        };
+        const put = (key: string, value: string | number | boolean, apply: () => void) => {
+          if (written.current.get(key) === value) return;
+          written.current.set(key, value);
+          apply();
+        };
+        const fade = (key: string, selector: string, opacity: number) => put(key, round(opacity), () => find(selector)?.style.setProperty('opacity', String(round(opacity))));
+
+        const [w, h] = [CHIP_W * k, CHIP_H * k];
+        for (const prop of chips) {
+          const state = scene.props[prop.id];
+          const [a, b] = state ? [layout.anchors[state.from], layout.anchors[state.to]] : [];
+          const visible = state !== undefined && a !== undefined && b !== undefined && state.opacity > 0.01;
+          const id = prop.id;
+          put(`${id} shown`, visible, () => find(`[data-chip="${id}"]`)?.style.setProperty('visibility', visible ? 'visible' : 'hidden'));
+          if (!visible) continue;
+          const at = `translate3d(${(a.x + (b.x - a.x) * state.p - w / 2).toFixed(2)}px, ${(a.y + (b.y - a.y) * state.p - h / 2).toFixed(2)}px, 0)`;
+          put(`${id} at`, at, () => find(`[data-chip="${id}"]`)?.style.setProperty('transform', at));
+          fade(`${id} opacity`, `[data-chip="${id}"]`, state.opacity);
+          // Things on the move pass over what is standing still.
+          put(`${id} moving`, state.p < 1, () => find(`[data-chip="${id}"]`)?.style.setProperty('z-index', state.p < 1 ? '4' : '3'));
+          const { formed, cipher } = state.channels;
+          if (formed !== undefined) put(`${id} formed`, round(formed), () => find(`[data-chip="${id}"]`)?.style.setProperty('--formed', String(round(formed))));
+          if (cipher !== undefined && prop.look?.plain !== undefined) {
+            put(`${id} cipher`, round(cipher), () => find(`[data-chip="${id}"]`)?.style.setProperty('--cipher', String(round(cipher))));
+            const dark = cipher > 0.5;
+            put(`${id} dark`, dark, () => {
+              const chip = find(`[data-chip="${id}"]`);
+              if (!chip) return;
+              chip.dataset.dark = String(dark);
+              if (id === 'cred') chip.querySelector('.chip-label')!.textContent = dark ? 'Encrypted login' : prop.label;
+            });
+            const text = scrambled(String(prop.look.plain), String(prop.look.cipher ?? ''), cipher);
+            put(`${id} text`, text, () => {
+              const note = find(`[data-chip="${id}"] .chip-note`);
+              if (note) note.textContent = text;
+            });
+          }
+        }
+
+        const wire = scene.props.wire?.channels ?? {};
+        const [sealed, tunnel] = [wire.sealed ?? 0, wire.tunnel ?? 0];
+        fade('tls fill', '.lane.tls .lane-fill', sealed);
+        fade('tls open', '.lane.tls .lane-label.open', 1 - sealed);
+        fade('tls sealed', '.lane.tls .lane-label.sealed', sealed);
+        fade('app fill', '.lane.app .lane-fill', tunnel);
+        fade('app open', '.lane.app .lane-label.open', 1 - tunnel);
+        fade('app sealed', '.lane.app .lane-label.sealed', tunnel);
+        fade('trust', '.trust-check', scene.props.trust?.channels.checked ?? 0);
+
+        // The browser's screen: the form, then the wait, then the signed-in page.
+        const { waiting = 0, welcome = 0 } = scene.props.screen?.channels ?? {};
+        const layers: [name: string, opacity: number][] = [
+          ['form', 1 - waiting],
+          ['waiting', waiting * (1 - welcome)],
+          ['welcome', welcome],
+        ];
+        for (const [name, opacity] of layers) {
+          fade(`screen ${name}`, `.screen-${name}`, opacity);
+          // Only what is fully there can be typed into or pressed.
+          put(`screen ${name} live`, opacity > 0.98, () => {
+            const layer = find(`.screen-${name}`);
+            if (layer) layer.inert = opacity <= 0.98;
+          });
+        }
+
+        const beat = score.beats[scene.beatIndex]!;
+        for (const actor of actors) {
+          const op = beat.ops?.find((o) => o.actor === actor);
+          const [start, end] = op?.span ?? [0, 0];
+          const progress = op ? clamp01((scene.beatProgress - start) / (end - start)) : 0;
+          const active = op !== undefined && scene.beatProgress >= start && scene.beatProgress <= end;
+          const chamber = `[data-chamber="${actor}"]`;
+          put(`${actor} op`, `${scene.beatIndex}`, () => {
+            const el = find(chamber);
+            if (!el) return;
+            el.dataset.named = String(op !== undefined);
+            el.dataset.ok = String(op?.result?.ok ?? true);
+            el.querySelector('.chamber-label')!.textContent = op?.label ?? '';
+            el.querySelector('.chamber-result span')!.textContent = op?.result?.text ?? '';
+          });
+          put(`${actor} active`, active, () => find(chamber)?.setAttribute('data-active', String(active)));
+          put(`${actor} progress`, round(progress), () => find(`${chamber} .chamber-progress`)?.style.setProperty('transform', `scaleX(${round(progress)})`));
+          fade(`${actor} result`, `${chamber} .chamber-result`, op?.result ? clamp01((scene.beatProgress - end) / 0.06) : 0);
+        }
+      },
+    }),
+    [score, layout, chips, k, actors.length],
+  );
+
+  const laneLabel = (state: 'open' | 'sealed', what: string, how: string) => (
+    <p className={`lane-label ${state}`}>
+      <span className="lane-text">
+        <b>{what}</b>
+        {row ? `: ${how}` : how}
+      </span>
+    </p>
+  );
   const trustAt = layout.anchors['b.trust'];
   const mallory = layout.anchors['m.self'];
+  const [tapTls, tapApp] = [layout.anchors['tap.tls']!, layout.anchors['tap.app']!];
 
   return (
-    <svg className={`stage ${layout.orientation}`} viewBox={`0 0 ${layout.width} ${layout.height}`} role="img" aria-label={beat.caption}>
-      <defs>
-        <pattern id="tex-lattice" width="7" height="7" patternUnits="userSpaceOnUse">
-          <circle cx="3.5" cy="3.5" r="1.15" />
-        </pattern>
-        <pattern id="tex-hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-          <line x1="0" y1="0" x2="0" y2="7" />
-        </pattern>
-      </defs>
+    <div className={`stage-fit ${layout.orientation}`} ref={fit} style={{ aspectRatio: `${layout.width} / ${layout.height}` }}>
+      <div className={`stage ${layout.orientation}`} ref={root} style={{ width: layout.width, height: layout.height, ['--k' as string]: k }}>
+        <div className="panel-box browser" style={box(layout.panels.browser)}>
+          <p className="panel-title">
+            Browser <span>this computer</span>
+          </p>
+        </div>
+        <div className="panel-box server" style={box(layout.panels.server)}>
+          <p className="panel-title">
+            Server <span>payroll.example</span>
+          </p>
+        </div>
+        {attackerPanel && (
+          <div className="panel-box attacker" style={box(attackerPanel)}>
+            <p className="panel-title">
+              Mallory <span>{row ? 'an attacker copying everything that crosses the network' : 'copying the network'}</span>
+            </p>
+          </div>
+        )}
 
-      <Lanes layout={layout} sealed={wire.sealed ?? 0} tunnel={wire.tunnel ?? 0} tapped={tapped} />
-      <Panel rect={layout.panels.browser} title="Browser" subtitle="Alice’s computer" className="browser" scale={k} />
-      <Panel rect={layout.panels.server} title="Server" subtitle="payroll.example" className="server" scale={k} />
-      {layout.panels.attacker && (
-        <Panel rect={layout.panels.attacker} title="Mallory" subtitle={layout.orientation === 'row' ? 'an attacker copying everything that crosses the network' : 'copying the network'} className="attacker" scale={k} />
-      )}
+        {row && (
+          <p className="network-title" style={{ left: tls.x, width: tls.w }}>
+            Network
+          </p>
+        )}
+        <div className="lane tls" style={box(tls)}>
+          <i className="lane-fill" />
+          {laneLabel('open', 'TLS handshake', 'in the open, anyone can read it')}
+          {laneLabel('sealed', 'TLS handshake', 'encrypted from here on')}
+        </div>
+        <div className="lane app" style={box(app)}>
+          <i className="lane-fill" />
+          {laneLabel('open', 'Application data', 'no channel yet')}
+          {laneLabel('sealed', 'Application data', row ? 'inside the secure channel' : 'in the channel')}
+        </div>
+        {attackerPanel && (
+          <svg className="tap" width={layout.width} height={layout.height} viewBox={`0 0 ${layout.width} ${layout.height}`} aria-hidden="true">
+            {row ? (
+              <line x1={tapTls.x} y1={tls.y + tls.h / 2} x2={tapTls.x} y2={attackerPanel.y} />
+            ) : (
+              <path d={`M${tapTls.x} ${tapTls.y}H${app.x - 18}V${attackerPanel.y - 8}M${tapApp.x} ${tapApp.y}H${app.x - 18}`} />
+            )}
+            <circle cx={tapTls.x} cy={tapTls.y} r={5 * k} />
+            <circle cx={tapApp.x} cy={tapApp.y} r={5 * k} />
+          </svg>
+        )}
 
-      <Screen rect={layout.screen} channels={scene.props.screen?.channels ?? {}} scale={k} />
-      {(['b', 's', ...(tapped ? ['m'] : [])] as Actor[]).map((actor) => (
-        <Chamber key={actor} at={layout.anchors[`${actor}.op`]!} scale={k} op={opFor(actor)} beatProgress={scene.beatProgress} />
-      ))}
+        <div className="screen" style={box(layout.screen)}>
+          <p className="screen-site">payroll.example</p>
+          <div className="screen-layer screen-form">{screen.form}</div>
+          <div className="screen-layer screen-waiting">{screen.waiting}</div>
+          <div className="screen-layer screen-welcome">{screen.welcome}</div>
+        </div>
 
-      {trust && trustAt && (
-        <g className="trust" transform={`translate(${trustAt.x} ${trustAt.y}) scale(${k})`}>
-          <rect x={-CHIP_W / 2} y={-CHIP_H / 2} width={CHIP_W} height={CHIP_H} rx="4" />
-          <text className="label" x={-CHIP_W / 2 + 8} y="-6">
-            Authorities this
-          </text>
-          <text className="label" x={-CHIP_W / 2 + 8} y="7">
-            browser trusts
-          </text>
-          <path className="trust-check" d="M32 4l5 5 10-11" opacity={trust.channels.checked ?? 0} />
-        </g>
-      )}
-      {mallory && (
-        <g className="mallory" transform={`translate(${mallory.x} ${mallory.y}) scale(${k})`}>
-          <circle cx="0" cy="-12" r="11" />
-          <path d="M-22 26a22 20 0 0 1 44 0z" />
-        </g>
-      )}
+        {actors.map((actor) => {
+          const at = layout.anchors[`${actor}.op`]!;
+          return (
+            <div key={actor} className="chamber" data-chamber={actor} style={{ left: at.x - 64 * k, top: at.y - 34 * k, width: 128 * k, height: 68 * k }}>
+              <span className="chamber-label" />
+              <i className="chamber-progress" />
+              <span className="chamber-result">
+                <svg viewBox="-12 -12 24 24" aria-hidden="true">
+                  <path className="mark-ok" d="M-8 0l5 5 10-11" />
+                  <path className="mark-fail" d="M-7-7l14 14m0-14l-14 14" />
+                </svg>
+                <span />
+              </span>
+            </div>
+          );
+        })}
 
-      {ordered.map((prop) => {
-        const state = scene.props[prop.id]!;
-        const at = position(layout, state);
-        if (!at || state.opacity <= 0.01) return null;
-        return <Chip key={prop.id} prop={prop} state={state} at={at} scale={k} />;
-      })}
-    </svg>
+        {trustAt && (
+          <div className="trust" style={{ left: trustAt.x - (CHIP_W * k) / 2, top: trustAt.y - (CHIP_H * k) / 2, width: CHIP_W * k, height: CHIP_H * k }}>
+            <span>Authorities this browser trusts</span>
+            <svg className="trust-check" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 12l5 5 11-12" />
+            </svg>
+          </div>
+        )}
+        {mallory && (
+          <svg className="mallory" viewBox="-24 -25 48 52" style={{ left: mallory.x - 24 * k, top: mallory.y - 25 * k, width: 48 * k, height: 52 * k }} aria-hidden="true">
+            <circle cx="0" cy="-12" r="11" />
+            <path d="M-22 26a22 20 0 0 1 44 0z" />
+          </svg>
+        )}
+
+        {chips.map((prop) => (
+          <Chip key={prop.id} prop={prop} scale={k} />
+        ))}
+      </div>
+    </div>
   );
-}
+});

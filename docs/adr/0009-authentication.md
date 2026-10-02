@@ -1,6 +1,6 @@
 # 9. Sign-in through the project's own OIDC provider, with the API as a backend-for-frontend
 
-**Status:** accepted · 2026-10-02
+**Status:** superseded by [0014](0014-no-accounts.md) · 2026-10-02. Kept as the record of what was built first and why it was removed.
 
 ## Context
 

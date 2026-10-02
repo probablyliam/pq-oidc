@@ -669,7 +669,6 @@ export function assess(seen: Observations): Assessment {
     title: 'Internal dependencies cannot be observed from outside',
     detail:
       'Connections between your own services, databases, key storage, vendor APIs and the devices your users connect from all use cryptography too. None of it is visible to an external scan. Finding it is the first step of a migration.',
-    learn: { view: 'migrate', label: 'See why inventory comes first' },
   });
   layer(
     'dependencies',

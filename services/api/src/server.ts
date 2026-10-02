@@ -29,9 +29,6 @@ if (config.policy.labOrigins.length > 0) {
   // Loud on purpose: these origins bypass the address rules. They belong on a developer's machine only.
   log.warn('SCAN_LAB_ORIGINS is set: these origins are exempt from the scanner address and port rules', { labOrigins: config.policy.labOrigins });
 }
-if (!(await api.auth.providerAvailable())) {
-  log.warn('the identity provider is not reachable yet; sign-in will work once it is', { issuer: config.oidc.issuer });
-}
 
 // Kubernetes sends SIGTERM before stopping a pod: finish in-flight requests, then exit.
 function shutdown() {

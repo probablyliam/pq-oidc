@@ -1,6 +1,6 @@
 # 10. Tokens are analyzed in the browser; the server never receives them
 
-**Status:** accepted · 2026-10-02
+**Status:** accepted · 2026-10-02 · there is no longer a signed-in user or an "own token" (ADR 0014); the rest stands
 
 ## Context
 

@@ -21,28 +21,22 @@ const TYPES: Record<string, string> = {
 /**
  * The page may load scripts, styles, fonts and images from this origin only,
  * and may be framed by nobody. `connect-src` also allows https: because the
- * token page fetches an issuer's public keys straight from the issuer, and
- * names this deployment's own identity provider in case that one is plain
- * http on localhost.
+ * token page fetches an issuer's public keys straight from the issuer.
  */
-export function contentSecurityPolicy(identityProvider: string): string {
-  const provider = new URL(identityProvider);
-  return [
-    "default-src 'none'",
-    "script-src 'self'",
-    "style-src 'self'",
-    "img-src 'self' data:",
-    "font-src 'self'",
-    `connect-src 'self' https:${provider.protocol === 'http:' ? ` ${provider.origin}` : ''}`,
-    "base-uri 'none'",
-    "form-action 'self'",
-    "frame-ancestors 'none'",
-  ].join('; ');
-}
+export const CONTENT_SECURITY_POLICY = [
+  "default-src 'none'",
+  "script-src 'self'",
+  "style-src 'self'",
+  "img-src 'self' data:",
+  "font-src 'self'",
+  "connect-src 'self' https:",
+  "base-uri 'none'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join('; ');
 
-export function createStaticHandler(webDir: string, identityProvider: string) {
+export function createStaticHandler(webDir: string) {
   const root = resolve(webDir);
-  const csp = contentSecurityPolicy(identityProvider);
 
   /** Sends the file for `pathname` if there is one. Returns false if not, so the caller can answer 404. */
   return function serve(res: ServerResponse, pathname: string): boolean {
@@ -68,7 +62,7 @@ export function createStaticHandler(webDir: string, identityProvider: string) {
         'Cache-Control': relative.includes(`${sep}assets${sep}`) ? 'public, max-age=31536000, immutable' : 'no-cache',
         'X-Content-Type-Options': 'nosniff',
         'Referrer-Policy': 'no-referrer',
-        ...(html ? { 'Content-Security-Policy': csp } : {}),
+        ...(html ? { 'Content-Security-Policy': CONTENT_SECURITY_POLICY } : {}),
       });
       createReadStream(file).pipe(res);
       return true;

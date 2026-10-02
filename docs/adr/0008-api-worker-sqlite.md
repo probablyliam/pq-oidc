@@ -4,7 +4,7 @@
 
 ## Context
 
-A scan opens around fifteen connections with timeouts and can take tens of seconds, so it cannot run inside the request that asked for it. The code that runs a scan parses bytes from arbitrary servers. The code that serves the API holds sessions, ID tokens and every user's history.
+A scan opens around fifteen connections with timeouts and can take tens of seconds, so it cannot run inside the request that asked for it. The code that runs a scan parses bytes from arbitrary servers. The code that serves the API holds the database of results and the limits that protect third parties. (When this was written it also held sessions and ID tokens; see ADR 0014.)
 
 ## Decision
 
@@ -15,7 +15,7 @@ A scan opens around fifteen connections with timeouts and can take tens of secon
 
 ## Why the split
 
-In Kubernetes a NetworkPolicy applies to a pod. Putting the scanner in its own pod means the part with internet egress has no user data, and the part with user data has no internet egress. A compromised worker can report false results for jobs it holds; it cannot read sessions or other users' scans.
+In Kubernetes a NetworkPolicy applies to a pod. Putting the scanner in its own pod means the part with internet egress has no user data, and the part with user data has no internet egress. A compromised worker can report false results for jobs it holds; it cannot read the database or lift the limits.
 
 ## Alternatives
 

@@ -27,7 +27,8 @@
     "web:dev": "npm run dev -w apps/web",
     "web:build": "npm run build -w apps/web",
     "lab": "node --disable-warning=ExperimentalWarning scripts/lab.ts",
-    "dev": "node --disable-warning=ExperimentalWarning scripts/start-all.ts --dev"
+    "dev": "node --disable-warning=ExperimentalWarning scripts/start-all.ts --dev",
+    "oidc": "node --disable-warning=ExperimentalWarning scripts/start-oidc.ts"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

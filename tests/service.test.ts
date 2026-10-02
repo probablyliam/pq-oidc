@@ -1,35 +1,34 @@
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import type { Server } from 'node:http';
+import net from 'node:net';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApi, createLogger, Store } from '@pq-oidc/api';
 import type { ApiConfig } from '@pq-oidc/api';
-import { createProviderApp, generateSigningKeys } from '@pq-oidc/provider';
 import type { ScanReport } from '@pq-oidc/scan-core';
 import { labProfile, startLabServer } from '@pq-oidc/scan-core/testing';
 import type { LabServer } from '@pq-oidc/scan-core/testing';
-import { analyzeToken, checkSignature } from '@pq-oidc/token-kit';
 import { startWorker } from '@pq-oidc/worker';
-import { TestBrowser } from './support/browser.ts';
 
 /**
- * The service as a whole: the real OIDC provider, the API on its two ports,
- * a real worker and a lab TLS server, all in this process on random ports.
+ * The service as a whole: the API on its two ports, a real worker and a lab
+ * TLS server, all in this process on random ports. There are no accounts, so
+ * a "visitor" here is just an address.
  */
-const CLIENT_SECRET = 'test-client-secret-never-logged';
 const WORKER_TOKEN = 'test-worker-token-never-logged-0123456789';
 const LEASE_MS = 30_000;
 
 interface Service {
   publicUrl: string;
   internalUrl: string;
-  issuer: string;
   store: Store;
   logs: string[];
-  /** Moves the API's clock forward (sessions, leases, rate-limit windows). */
+  purge: () => void;
+  /** Moves the API's clock forward (leases, rate-limit windows, retention). */
   advance: (ms: number) => void;
   close: () => Promise<void>;
 }
@@ -40,45 +39,53 @@ async function listen(): Promise<{ server: Server; url: string }> {
   return { server, url: `http://127.0.0.1:${(server.address() as AddressInfo).port}` };
 }
 
-async function startService(overrides: { limits?: Partial<ApiConfig['limits']>; labOrigins?: string[]; webDir?: string } = {}): Promise<Service> {
-  const [provider, api, internal] = await Promise.all([listen(), listen(), listen()]);
-  const providerApp = createProviderApp({
-    issuer: provider.url,
-    jwks: await generateSigningKeys(),
-    clients: [
-      { clientId: 'scanner-web', clientSecret: CLIENT_SECRET, name: 'Scanner', redirectUri: `${api.url}/auth/callback`, postLogoutRedirectUri: `${api.url}/`, idTokenAlg: 'ML-DSA-65' },
-    ],
-  });
-  provider.server.on('request', providerApp.handler);
+interface Overrides {
+  limits?: Partial<ApiConfig['limits']>;
+  labOrigins?: string[];
+  webDir?: string;
+  reuseMs?: number;
+  databasePath?: string;
+  trustProxy?: boolean;
+}
 
+async function startService(overrides: Overrides = {}): Promise<Service> {
+  const [api, internal] = await Promise.all([listen(), listen()]);
   const logs: string[] = [];
   let skew = 0;
-  const store = new Store({ path: ':memory:', leaseMs: LEASE_MS });
+  const databasePath = overrides.databasePath ?? ':memory:';
+  const store = new Store({ path: databasePath, leaseMs: LEASE_MS });
   const config: ApiConfig = {
     publicUrl: api.url,
-    oidc: { issuer: provider.url, clientId: 'scanner-web', clientSecret: CLIENT_SECRET, idTokenAlgs: ['ML-DSA-65', 'ES256'] },
     workerToken: WORKER_TOKEN,
-    databasePath: ':memory:',
+    databasePath,
     policy: { allowedPorts: [443, 8443], labOrigins: overrides.labOrigins ?? [] },
-    limits: { scansPerWindow: 50, windowMs: 600_000, activePerUser: 50, perHostPerMinute: 50, maxQueueDepth: 100, ...overrides.limits },
-    sessionTtlMs: 8 * 3_600_000,
+    limits: { scansPerWindow: 50, windowMs: 600_000, activePerClient: 50, perHostPerMinute: 50, maxQueueDepth: 100, ...overrides.limits },
+    reuseMs: overrides.reuseMs ?? 0,
+    retentionMs: 24 * 3_600_000,
     webDir: overrides.webDir,
   };
-  const app = createApi({ config, store, log: createLogger({ service: 'api', level: 'debug', write: (line) => logs.push(line) }), now: () => Date.now() + skew });
+  const app = createApi({
+    config,
+    store,
+    log: createLogger({ service: 'api', level: 'debug', write: (line) => logs.push(line) }),
+    now: () => Date.now() + skew,
+    // Tests play several visitors from one machine by naming their address in X-Forwarded-For.
+    trustProxy: overrides.trustProxy ?? true,
+  });
   api.server.on('request', app.handler);
   internal.server.on('request', app.internalHandler);
 
   return {
     publicUrl: api.url,
     internalUrl: internal.url,
-    issuer: provider.url,
     store,
     logs,
+    purge: app.purge,
     advance: (ms) => (skew += ms),
     close: async () => {
       app.close();
       await Promise.all(
-        [provider, api, internal].map(({ server }) => {
+        [api, internal].map(({ server }) => {
           server.closeAllConnections();
           return new Promise<void>((resolve) => server.close(() => resolve()));
         }),
@@ -88,255 +95,100 @@ async function startService(overrides: { limits?: Partial<ApiConfig['limits']>; 
   };
 }
 
-/** A signed-in browser, and a way to call the API as it. */
-class Client {
-  readonly browser = new TestBrowser();
-  csrfToken = '';
-  private readonly service: Service;
+interface ScanBody {
+  scan?: { id: string; status: string; target: string; progress?: string; report?: unknown; error?: { code: string; message: string } };
+  reused?: boolean;
+  error?: { code: string; message: string; requestId: string };
+}
 
-  constructor(service: Service) {
-    this.service = service;
-  }
-
-  get sessionCookie(): string | undefined {
-    return this.browser.cookie('127.0.0.1', 'pq_session');
-  }
-
-  async signIn(username: string, returnTo?: string) {
-    const start = `${this.service.publicUrl}/auth/login${returnTo ? `?return_to=${encodeURIComponent(returnTo)}` : ''}`;
-    const loginPage = await this.browser.navigate(start);
-    const landed = await this.browser.submitLogin(loginPage, username, 'quantum-safe');
-    const session = await this.get('/api/v1/session');
-    this.csrfToken = ((await session.json()) as { csrfToken?: string }).csrfToken ?? '';
-    return landed;
-  }
-
-  private cookieHeader(): Record<string, string> {
-    return this.sessionCookie ? { cookie: `pq_session=${this.sessionCookie}` } : {};
-  }
-
-  get(path: string) {
-    return fetch(`${this.service.publicUrl}${path}`, { headers: this.cookieHeader() });
-  }
-
-  send(method: 'POST' | 'DELETE', path: string, body?: unknown, headers: Record<string, string> = {}) {
-    return fetch(`${this.service.publicUrl}${path}`, {
-      method,
-      headers: { ...this.cookieHeader(), 'content-type': 'application/json', 'x-csrf-token': this.csrfToken, ...headers },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-  }
-
-  async createScan(target: string, kind?: string): Promise<{ status: number; id: string; body: { error?: { code: string }; scan?: { id: string } } }> {
-    const response = await this.send('POST', '/api/v1/scans', { target, kind });
-    const body = (await response.json()) as { error?: { code: string }; scan?: { id: string } };
-    return { status: response.status, id: body.scan?.id ?? '', body };
-  }
+/** Someone using the service from one address. */
+function visitor(service: Service, address: string) {
+  return {
+    async scan(target: unknown, extra: { kind?: string; headers?: Record<string, string> } = {}): Promise<{ status: number; body: ScanBody; headers: Headers }> {
+      const response = await fetch(`${service.publicUrl}/api/v1/scans`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-forwarded-for': address, ...extra.headers },
+        body: JSON.stringify({ target, kind: extra.kind }),
+      });
+      return { status: response.status, body: (await response.json()) as ScanBody, headers: response.headers };
+    },
+    async read(id: string): Promise<{ status: number; body: ScanBody }> {
+      const response = await fetch(`${service.publicUrl}/api/v1/scans/${id}`, { headers: { 'x-forwarded-for': address } });
+      return { status: response.status, body: (await response.json()) as ScanBody };
+    },
+  };
 }
 
 const worker = (service: Service, path: string, body: unknown, token = WORKER_TOKEN) =>
   fetch(`${service.internalUrl}${path}`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
 
-const errorCode = async (response: Response) => ((await response.json()) as { error: { code: string } }).error.code;
-
 let service: Service;
-let alice: Client;
-let bob: Client;
-
 beforeAll(async () => {
   service = await startService();
-  alice = new Client(service);
-  bob = new Client(service);
-  await alice.signIn('alice');
-  await bob.signIn('bob');
 });
 afterAll(() => service.close());
 
-describe('sign-in', () => {
-  it('creates a session for the user the provider vouched for', async () => {
-    const session = (await (await alice.get('/api/v1/session')).json()) as { user: { name: string; email: string; sub: string } };
-    expect(session.user).toEqual({ name: 'Alice Nakamura', email: 'alice.nakamura@example.com', sub: 'alice' });
+describe('scanning needs no account', () => {
+  it('anyone can start a scan and read its result by ID', async () => {
+    const ana = visitor(service, '198.51.100.1');
+    const started = await ana.scan('https://example.com/login');
+    expect(started.status).toBe(202);
+    expect(started.body.scan).toMatchObject({ status: 'queued', target: 'https://example.com/login' });
+    expect(started.headers.get('location')).toBe(`/api/v1/scans/${started.body.scan!.id}`);
+    expect((await ana.read(started.body.scan!.id)).body.scan?.status).toBe('queued');
   });
 
-  it('receives an ML-DSA-65 ID token that verifies against the provider’s published keys', async () => {
-    const { idToken } = (await (await alice.get('/api/v1/session/id-token')).json()) as { idToken: string };
-    const analysis = analyzeToken(idToken);
-    expect(analysis.alg).toMatchObject({ alg: 'ML-DSA-65', quantum: 'no-known-attack' });
-    expect(analysis.payload).toMatchObject({ iss: service.issuer, aud: 'scanner-web', sub: 'alice' });
-    const jwks = (await (await fetch(`${service.issuer}/jwks`)).json()) as { keys: unknown[] };
-    expect(await checkSignature(idToken, jwks)).toMatchObject({ status: 'valid', key: { strength: 'ML-DSA-65' } });
+  it('a result is a link: someone else with the ID can read it, and nobody can guess one', async () => {
+    const { body } = await visitor(service, '198.51.100.1').scan('https://example.org/');
+    const id = body.scan!.id;
+    expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/); // a random UUID: 122 bits
+    expect((await visitor(service, '198.51.100.77').read(id)).status).toBe(200);
+    expect((await visitor(service, '198.51.100.77').read('00000000-0000-4000-8000-000000000000')).status).toBe(404);
   });
 
-  it('keeps tokens out of the browser: the only cookie is an opaque, HttpOnly session ID', async () => {
-    const fresh = new TestBrowser();
-    const loginPage = await fresh.navigate(`${service.publicUrl}/auth/login`, { stopWhen: (url) => url.pathname === '/auth/callback' });
-    const back = await fresh.submitLogin(loginPage, 'alice', 'quantum-safe', { stopWhen: (url) => url.pathname === '/auth/callback' });
-    const response = await fetch(back.url, { redirect: 'manual', headers: { cookie: `pq_login=${fresh.cookie('127.0.0.1', 'pq_login')}` } });
-    const session = response.headers.getSetCookie().find((c) => c.startsWith('pq_session='))!;
-    expect(session).toMatch(/; HttpOnly/);
-    expect(session).toMatch(/; SameSite=Lax/);
-    expect(session.split(';')[0]!.length).toBeLessThan(80); // a random ID, not a token
-    expect(response.headers.getSetCookie().join('\n')).not.toContain('eyJ');
-  });
-
-  it('cannot be finished twice, or without the browser that started it', async () => {
-    const fresh = new TestBrowser();
-    const stop = (url: URL) => url.pathname === '/auth/callback';
-    const loginPage = await fresh.navigate(`${service.publicUrl}/auth/login`, { stopWhen: stop });
-    const back = await fresh.submitLogin(loginPage, 'alice', 'quantum-safe', { stopWhen: stop });
-    const withCookie = { redirect: 'manual' as const, headers: { cookie: `pq_login=${fresh.cookie('127.0.0.1', 'pq_login')}` } };
-
-    // Someone who steals the callback URL but not the cookie gets nothing.
-    const stolen = await fetch(back.url, { redirect: 'manual' });
-    expect(stolen.headers.get('location')).toBe('/?signin_error=expired');
-    expect(stolen.headers.getSetCookie().some((c) => c.startsWith('pq_session=') && !c.includes('Max-Age=0'))).toBe(false);
-
-    const first = await fetch(back.url, withCookie);
-    expect(first.headers.get('location')).toBe('/');
-    const replay = await fetch(back.url, withCookie);
-    expect(replay.headers.get('location')).toBe('/?signin_error=expired');
-  });
-
-  it('rejects a callback whose state does not match', async () => {
-    const fresh = new TestBrowser();
-    const stop = (url: URL) => url.pathname === '/auth/callback';
-    const loginPage = await fresh.navigate(`${service.publicUrl}/auth/login`, { stopWhen: stop });
-    const back = new URL((await fresh.submitLogin(loginPage, 'alice', 'quantum-safe', { stopWhen: stop })).url);
-    back.searchParams.set('state', 'attacker-chosen');
-    const response = await fetch(back, { redirect: 'manual', headers: { cookie: `pq_login=${fresh.cookie('127.0.0.1', 'pq_login')}` } });
-    expect(response.headers.get('location')).toMatch(/^\/\?signin_error=/);
-    expect(response.headers.getSetCookie().join('\n')).not.toMatch(/pq_session=[^;]/);
-  });
-
-  it.each(['//evil.example/', '/\\evil.example', 'https://evil.example/', 'javascript:alert(1)'])('does not redirect to %s after sign-in', async (returnTo) => {
-    const carol = new Client(service);
-    const landed = await carol.signIn('alice', returnTo);
-    expect(new URL(landed.url).origin).toBe(service.publicUrl);
-    expect(new URL(landed.url).pathname).toBe('/');
-  });
-
-  it('returns to a same-site path', async () => {
-    const carol = new Client(service);
-    const landed = await carol.signIn('alice', '/#/scans/abc');
-    expect(landed.url).toBe(`${service.publicUrl}/#/scans/abc`);
-  });
-
-  it('ends the session on logout, and offers the provider’s logout URL', async () => {
-    const carol = new Client(service);
-    await carol.signIn('alice');
-    expect((await carol.send('POST', '/auth/logout', {}, { 'x-csrf-token': '' })).status).toBe(403);
-    const response = await carol.send('POST', '/auth/logout', {});
-    expect(response.status).toBe(200);
-    const { endSessionUrl } = (await response.json()) as { endSessionUrl: string };
-    expect(endSessionUrl).toContain(`${service.issuer}/session/end`);
-    expect(endSessionUrl).toContain('post_logout_redirect_uri=');
-    expect(await (await carol.get('/api/v1/session')).json()).toEqual({ user: null });
-    expect((await carol.get('/api/v1/scans')).status).toBe(401);
-  });
-
-  it('expires sessions', async () => {
-    const other = await startService();
-    try {
-      const dave = new Client(other);
-      await dave.signIn('alice');
-      expect((await dave.get('/api/v1/scans')).status).toBe(200);
-      other.advance(8 * 3_600_000 + 1000);
-      expect((await dave.get('/api/v1/scans')).status).toBe(401);
-    } finally {
-      await other.close();
+  it('sets no cookies and has no sign-in, session or listing endpoints', async () => {
+    const started = await visitor(service, '198.51.100.1').scan('https://example.net/');
+    expect(started.headers.getSetCookie()).toEqual([]);
+    for (const path of ['/auth/login', '/api/v1/session', '/api/v1/scans']) {
+      const response = await fetch(`${service.publicUrl}${path}`);
+      expect([404, 405], path).toContain(response.status);
+      expect(response.headers.getSetCookie()).toEqual([]);
     }
   });
-});
 
-describe('every API route requires a session', () => {
-  it.each([
-    ['GET', '/api/v1/scans'],
-    ['GET', '/api/v1/scans/00000000-0000-4000-8000-000000000000'],
-    ['GET', '/api/v1/session/id-token'],
-    ['POST', '/api/v1/scans'],
-    ['DELETE', '/api/v1/scans/00000000-0000-4000-8000-000000000000'],
-    ['POST', '/auth/logout'],
-  ])('%s %s without a session is 401', async (method, path) => {
-    const response = await fetch(`${service.publicUrl}${path}`, { method, headers: { 'content-type': 'application/json' }, body: method === 'GET' ? undefined : '{}' });
-    expect(response.status).toBe(401);
-    expect(await errorCode(response)).toBe('unauthenticated');
-  });
-
-  it('treats a made-up session cookie as no session', async () => {
-    const response = await fetch(`${service.publicUrl}/api/v1/scans`, { headers: { cookie: 'pq_session=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' } });
-    expect(response.status).toBe(401);
-  });
-
-  it('tells a visitor with no session that they are not signed in, and nothing else', async () => {
-    expect(await (await fetch(`${service.publicUrl}/api/v1/session`)).json()).toEqual({ user: null });
-  });
-
-  it('serves only public information without one', async () => {
+  it('says what it is and what it allows, and nothing secret', async () => {
     const meta = (await (await fetch(`${service.publicUrl}/api/v1/meta`)).json()) as Record<string, unknown>;
-    expect(meta).toMatchObject({ service: 'pq-oidc', signInUrl: '/auth/login' });
+    expect(meta).toMatchObject({ service: 'pq-oidc', allowedPorts: [443, 8443], retentionHours: 24 });
     expect(JSON.stringify(meta)).not.toMatch(/secret|token/i);
   });
 });
 
-describe('a user sees only their own scans', () => {
-  let scanId: string;
-  beforeAll(async () => {
-    scanId = (await alice.createScan('https://example.com/login')).id;
-  });
-
-  it('the owner can read it', async () => {
-    const response = await alice.get(`/api/v1/scans/${scanId}`);
-    expect(response.status).toBe(200);
-    expect(((await response.json()) as { scan: { target: string; status: string } }).scan).toMatchObject({ target: 'https://example.com/login', status: 'queued' });
-  });
-
-  it('another user gets the same answer as for a scan that does not exist', async () => {
-    const theirs = await bob.get(`/api/v1/scans/${scanId}`);
-    const missing = await bob.get('/api/v1/scans/00000000-0000-4000-8000-000000000000');
-    expect(theirs.status).toBe(404);
-    expect(await theirs.json()).toEqual({ error: { ...((await missing.json()) as { error: object }).error, requestId: expect.any(String) } });
-  });
-
-  it('another user cannot delete it, and does not see it listed', async () => {
-    expect((await bob.send('DELETE', `/api/v1/scans/${scanId}`)).status).toBe(404);
-    const list = (await (await bob.get('/api/v1/scans')).json()) as { scans: { id: string }[] };
-    expect(list.scans.map((s) => s.id)).not.toContain(scanId);
-    expect((await alice.get(`/api/v1/scans/${scanId}`)).status).toBe(200);
-  });
-
-  it('the owner can delete it', async () => {
-    const mine = (await alice.createScan('https://example.org/')).id;
-    expect((await alice.send('DELETE', `/api/v1/scans/${mine}`)).status).toBe(204);
-    expect((await alice.get(`/api/v1/scans/${mine}`)).status).toBe(404);
-  });
-});
-
-describe('cross-site requests are refused', () => {
-  const body = { target: 'https://example.net/' };
+describe('a page on another site cannot start scans from a visitor’s browser', () => {
+  const ana = () => visitor(service, '198.51.100.2');
 
   it.each([
-    ['no CSRF token', { 'x-csrf-token': '' }],
-    ['another session’s CSRF token', {}], // filled in below
     ['an Origin header from another site', { origin: 'https://evil.example' }],
     ['Sec-Fetch-Site: cross-site', { 'sec-fetch-site': 'cross-site' }],
-  ])('with %s', async (what, headers) => {
-    const response = await alice.send('POST', '/api/v1/scans', body, what.startsWith('another') ? { 'x-csrf-token': bob.csrfToken } : (headers as Record<string, string>));
-    expect(response.status).toBe(403);
-    expect(await errorCode(response)).toBe('csrf');
+    ['Sec-Fetch-Site: same-site (a sibling subdomain)', { 'sec-fetch-site': 'same-site' }],
+  ])('refuses a request with %s', async (_what, headers) => {
+    const result = await ana().scan('https://example.com/', { headers });
+    expect(result.status).toBe(403);
+    expect(result.body.error?.code).toBe('cross-site');
   });
 
-  it('with a form body, which is what a cross-site form can send', async () => {
-    const response = await fetch(`${service.publicUrl}/api/v1/scans`, {
-      method: 'POST',
-      headers: { cookie: `pq_session=${alice.sessionCookie}`, 'content-type': 'application/x-www-form-urlencoded', 'x-csrf-token': alice.csrfToken },
-      body: 'target=https://example.net/',
-    });
+  it('refuses a form body, which is what a cross-site form can send without asking', async () => {
+    const response = await fetch(`${service.publicUrl}/api/v1/scans`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: 'target=https://example.com/' });
     expect(response.status).toBe(415);
   });
 
-  it('accepts the same request from the application itself', async () => {
-    const response = await alice.send('POST', '/api/v1/scans', body, { origin: service.publicUrl, 'sec-fetch-site': 'same-origin' });
-    expect(response.status).toBe(202);
+  it('accepts the application’s own requests, and scripts that send no browser headers', async () => {
+    expect((await ana().scan('https://a.example.com/', { headers: { origin: service.publicUrl, 'sec-fetch-site': 'same-origin' } })).status).toBe(202);
+    expect((await ana().scan('https://b.example.com/')).status).toBe(202);
+  });
+
+  it('sends no CORS headers, so another origin could not read an answer anyway', async () => {
+    const response = await fetch(`${service.publicUrl}/api/v1/meta`, { headers: { origin: 'https://evil.example' } });
+    expect(response.headers.get('access-control-allow-origin')).toBeNull();
   });
 });
 
@@ -353,79 +205,154 @@ describe('targets are checked before anything is queued', () => {
     ['https://user:pass@example.com/', 'credentials-in-url'],
   ])('%s is refused as %s', async (target, code) => {
     const before = service.store.queueDepth();
-    const result = await alice.createScan(target);
+    const result = await visitor(service, '198.51.100.3').scan(target);
     expect(result.status).toBe(422);
     expect(result.body.error?.code).toBe(code);
     expect(service.store.queueDepth()).toBe(before);
   });
 
-  it('needs a target', async () => {
-    expect((await alice.send('POST', '/api/v1/scans', {})).status).toBe(400);
-    expect((await alice.send('POST', '/api/v1/scans', { target: 42 })).status).toBe(400);
-  });
-
-  it('refuses an oversized body', async () => {
-    const response = await alice.send('POST', '/api/v1/scans', { target: 'https://example.com/', padding: 'x'.repeat(20_000) });
-    expect(response.status).toBe(413);
+  it('needs a target, and refuses an oversized body', async () => {
+    const ana = visitor(service, '198.51.100.3');
+    expect((await ana.scan(undefined)).status).toBe(400);
+    expect((await ana.scan(42)).status).toBe(400);
+    const big = await fetch(`${service.publicUrl}/api/v1/scans`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ target: 'https://example.com/', padding: 'x'.repeat(20_000) }) });
+    expect(big.status).toBe(413);
   });
 });
 
-describe('rate limits', () => {
-  it('limits how many scans a user can start per window', async () => {
+describe('limits, since there are no accounts to hold anyone to', () => {
+  it('limits how many scans one address can start per window, without affecting anyone else', async () => {
     const limited = await startService({ limits: { scansPerWindow: 3 } });
     try {
-      const erin = new Client(limited);
-      await erin.signIn('alice');
-      for (let i = 0; i < 3; i++) expect((await erin.createScan(`https://site-${i}.example.com/`)).status).toBe(202);
-      const fourth = await erin.send('POST', '/api/v1/scans', { target: 'https://site-4.example.com/' });
+      const [ana, ben] = [visitor(limited, '203.0.113.1'), visitor(limited, '203.0.113.2')];
+      for (let i = 0; i < 3; i++) expect((await ana.scan(`https://site-${i}.example.com/`)).status).toBe(202);
+      const fourth = await ana.scan('https://site-4.example.com/');
       expect(fourth.status).toBe(429);
+      expect(fourth.body.error?.code).toBe('rate-limited');
       expect(fourth.headers.get('retry-after')).toBeTruthy();
-      expect(await errorCode(fourth)).toBe('rate-limited');
-      // The window moves on.
-      limited.advance(601_000);
-      expect((await erin.createScan('https://site-5.example.com/')).status).toBe(202);
+      expect((await ben.scan('https://site-4.example.com/')).status).toBe(202);
+      limited.advance(601_000); // the window moves on
+      expect((await ana.scan('https://site-5.example.com/')).status).toBe(202);
     } finally {
       await limited.close();
     }
   });
 
-  it('limits how many scans a user can have in progress', async () => {
-    const limited = await startService({ limits: { activePerUser: 2 } });
+  it('cannot be dodged by claiming to be someone else, unless the server is told a proxy sets that header', async () => {
+    const direct = await startService({ limits: { scansPerWindow: 2 }, trustProxy: false });
     try {
-      const erin = new Client(limited);
-      await erin.signIn('alice');
-      await erin.createScan('https://a.example.com/');
-      await erin.createScan('https://b.example.com/');
-      expect((await erin.createScan('https://c.example.com/')).body.error?.code).toBe('too-many-active');
+      expect((await visitor(direct, '203.0.113.10').scan('https://a.example.com/')).status).toBe(202);
+      expect((await visitor(direct, '203.0.113.11').scan('https://b.example.com/')).status).toBe(202);
+      expect((await visitor(direct, '203.0.113.12').scan('https://c.example.com/')).body.error?.code).toBe('rate-limited');
+    } finally {
+      await direct.close();
+    }
+  });
+
+  it('limits how many scans one address can have in progress', async () => {
+    const limited = await startService({ limits: { activePerClient: 2 } });
+    try {
+      const ana = visitor(limited, '203.0.113.1');
+      await ana.scan('https://a.example.com/');
+      await ana.scan('https://b.example.com/');
+      expect((await ana.scan('https://c.example.com/')).body.error?.code).toBe('too-many-active');
     } finally {
       await limited.close();
     }
   });
 
-  it('limits how often one host is scanned, whoever asks', async () => {
+  it('limits how often one host is scanned, whoever asks, so the service cannot be used to hammer it', async () => {
     const limited = await startService({ limits: { perHostPerMinute: 2 } });
     try {
-      const [erin, frank] = [new Client(limited), new Client(limited)];
-      await erin.signIn('alice');
-      await frank.signIn('bob');
-      expect((await erin.createScan('https://victim.example.com/a')).status).toBe(202);
-      expect((await frank.createScan('https://victim.example.com/b')).status).toBe(202);
-      expect((await erin.createScan('https://victim.example.com/c')).body.error?.code).toBe('host-busy');
-      expect((await frank.createScan('https://VICTIM.example.com./d')).body.error?.code).toBe('host-busy');
-      expect((await frank.createScan('https://other.example.com/')).status).toBe(202);
+      const [ana, ben] = [visitor(limited, '203.0.113.1'), visitor(limited, '203.0.113.2')];
+      expect((await ana.scan('https://victim.example.com/a')).status).toBe(202);
+      expect((await ben.scan('https://victim.example.com/b')).status).toBe(202);
+      expect((await ana.scan('https://victim.example.com/c')).body.error?.code).toBe('host-busy');
+      expect((await ben.scan('https://VICTIM.example.com./d')).body.error?.code).toBe('host-busy');
+      expect((await ben.scan('https://other.example.com/')).status).toBe(202);
+      // The limit is per service: another port on the same name is a different thing to protect.
+      expect((await ben.scan('https://victim.example.com:8443/')).status).toBe(202);
     } finally {
       await limited.close();
+    }
+  });
+
+  it('answers a repeat of a recent scan with the result that already exists', async () => {
+    const reusing = await startService({ reuseMs: 300_000, limits: { scansPerWindow: 2 } });
+    try {
+      const [ana, ben] = [visitor(reusing, '203.0.113.1'), visitor(reusing, '203.0.113.2')];
+      const first = await ana.scan('https://example.com/login');
+      const again = await ben.scan('https://EXAMPLE.com/login#top'); // the same address once normalised
+      expect(again.status).toBe(200);
+      expect(again.body).toMatchObject({ reused: true, scan: { id: first.body.scan!.id } });
+      // Reused answers cost nothing against the limit: Ana can ask for it as often as she likes.
+      for (let i = 0; i < 5; i++) expect((await ana.scan('https://example.com/login')).body.reused).toBe(true);
+      expect((await ana.scan('https://example.com/other')).status).toBe(202);
+      reusing.advance(301_000);
+      expect((await ben.scan('https://example.com/login')).status).toBe(202);
+    } finally {
+      await reusing.close();
+    }
+  });
+
+  it('does not reuse a scan that failed', async () => {
+    const reusing = await startService({ reuseMs: 300_000 });
+    try {
+      const ana = visitor(reusing, '203.0.113.1');
+      const { body } = await ana.scan('https://example.com/');
+      await worker(reusing, '/internal/v1/jobs/claim', { workerId: 'w1' });
+      await worker(reusing, `/internal/v1/jobs/${body.scan!.id}/result`, { workerId: 'w1', status: 'failed', error: { code: 'dns-failure', message: 'no such host' } });
+      expect((await ana.scan('https://example.com/')).status).toBe(202);
+    } finally {
+      await reusing.close();
+    }
+  });
+});
+
+describe('what is kept, and for how long', () => {
+  it('keeps a keyed hash of the visitor’s address, never the address', async () => {
+    const path = join(mkdtempSync(join(tmpdir(), 'pq-oidc-db-')), 'scans.sqlite');
+    const durable = await startService({ databasePath: path });
+    try {
+      await visitor(durable, '203.0.113.99').scan('https://example.com/');
+      await visitor(durable, '203.0.113.99').scan('https://example.org/');
+      await visitor(durable, '203.0.113.98').scan('https://example.net/');
+      const rows = new DatabaseSync(path, { readOnly: true }).prepare('SELECT * FROM scans').all() as Record<string, unknown>[];
+      expect(rows).toHaveLength(3);
+      expect(JSON.stringify(rows)).not.toContain('203.0.113');
+      const clients = rows.map((row) => String(row.client));
+      expect(clients.every((c) => /^[0-9a-f]{32}$/.test(c))).toBe(true);
+      expect(new Set(clients).size).toBe(2); // the same visitor hashes the same, different visitors differently
+      expect(Object.keys(rows[0]!)).not.toContain('user_id');
+    } finally {
+      await durable.close();
+    }
+  });
+
+  it('deletes results after a day, and not before', async () => {
+    const kept = await startService();
+    try {
+      const ana = visitor(kept, '203.0.113.1');
+      const finished = (await ana.scan('https://example.com/')).body.scan!.id;
+      await worker(kept, '/internal/v1/jobs/claim', { workerId: 'w1' });
+      await worker(kept, `/internal/v1/jobs/${finished}/result`, { workerId: 'w1', status: 'succeeded', result: { schema: 1 } });
+      kept.advance(23 * 3_600_000);
+      kept.purge();
+      expect((await ana.read(finished)).status).toBe(200);
+      kept.advance(2 * 3_600_000);
+      kept.purge();
+      expect((await ana.read(finished)).status).toBe(404);
+    } finally {
+      await kept.close();
     }
   });
 });
 
 describe('the worker protocol', () => {
   let queue: Service;
-  let owner: Client;
+  const owner = () => visitor(queue, '203.0.113.1');
   beforeAll(async () => {
     queue = await startService();
-    owner = new Client(queue);
-    await owner.signIn('alice');
   });
   afterAll(() => queue.close());
 
@@ -437,27 +364,27 @@ describe('the worker protocol', () => {
     expect((await fetch(`${queue.publicUrl}/metrics`)).status).toBe(404);
   });
 
-  it('hands out a job, shows its progress to the owner, and stores the result', async () => {
-    const { id } = await owner.createScan('https://example.com/');
+  it('hands out a job, shows its progress, and stores the result', async () => {
+    const id = (await owner().scan('https://example.com/')).body.scan!.id;
     const claim = (await (await worker(queue, '/internal/v1/jobs/claim', { workerId: 'w1' })).json()) as { job: { id: string; attempt: number; input: string } };
     expect(claim.job).toMatchObject({ id, attempt: 1, input: 'https://example.com/' });
     expect((await worker(queue, '/internal/v1/jobs/claim', { workerId: 'w2' })).status).toBe(204); // nothing else queued
 
     expect((await worker(queue, `/internal/v1/jobs/${id}/progress`, { workerId: 'w1', step: 'TLS handshake' })).status).toBe(204);
-    expect(((await (await owner.get(`/api/v1/scans/${id}`)).json()) as { scan: object }).scan).toMatchObject({ status: 'running', progress: 'TLS handshake' });
+    expect((await owner().read(id)).body.scan).toMatchObject({ status: 'running', progress: 'TLS handshake' });
 
     // Another worker cannot report on a job it does not hold.
     expect((await worker(queue, `/internal/v1/jobs/${id}/result`, { workerId: 'w2', status: 'succeeded', result: { layers: [] } })).status).toBe(409);
 
     const report = { schema: 1, layers: [{ id: 'key-establishment', headline: 'Classical: x25519' }], findings: [] };
     expect((await worker(queue, `/internal/v1/jobs/${id}/result`, { workerId: 'w1', status: 'succeeded', result: report })).status).toBe(204);
-    const scan = ((await (await owner.get(`/api/v1/scans/${id}`)).json()) as { scan: Record<string, unknown> }).scan;
-    expect(scan).toMatchObject({ status: 'succeeded', report, layers: report.layers });
+    const scan = (await owner().read(id)).body.scan!;
+    expect(scan).toMatchObject({ status: 'succeeded', report });
     expect(scan.progress).toBeUndefined();
   });
 
   it('retries a job whose worker went silent, once, then fails it', async () => {
-    const { id } = await owner.createScan('https://example.org/');
+    const id = (await owner().scan('https://example.org/')).body.scan!.id;
     expect(((await (await worker(queue, '/internal/v1/jobs/claim', { workerId: 'w1' })).json()) as { job: { attempt: number } }).job.attempt).toBe(1);
 
     queue.advance(LEASE_MS + 1000); // w1 never reports
@@ -469,20 +396,18 @@ describe('the worker protocol', () => {
 
     queue.advance(LEASE_MS + 1000); // w2 goes silent too
     expect((await worker(queue, '/internal/v1/jobs/claim', { workerId: 'w3' })).status).toBe(204);
-    const scan = ((await (await owner.get(`/api/v1/scans/${id}`)).json()) as { scan: { status: string; error: { code: string } } }).scan;
-    expect(scan).toMatchObject({ status: 'failed', error: { code: 'worker-lost' } });
+    expect((await owner().read(id)).body.scan).toMatchObject({ status: 'failed', error: { code: 'worker-lost' } });
   });
 
   it('a heartbeat keeps the lease', async () => {
-    const { id } = await owner.createScan('https://example.net/');
+    const id = (await owner().scan('https://example.net/')).body.scan!.id;
     await worker(queue, '/internal/v1/jobs/claim', { workerId: 'w1' });
     queue.advance(LEASE_MS - 5000);
     expect((await worker(queue, `/internal/v1/jobs/${id}/progress`, { workerId: 'w1', step: 'still going' })).status).toBe(204);
     queue.advance(LEASE_MS - 5000);
     expect((await worker(queue, '/internal/v1/jobs/claim', { workerId: 'w2' })).status).toBe(204);
     expect((await worker(queue, `/internal/v1/jobs/${id}/result`, { workerId: 'w1', status: 'failed', error: { code: 'dns-failure', message: 'Could not resolve example.net.' } })).status).toBe(204);
-    const scan = ((await (await owner.get(`/api/v1/scans/${id}`)).json()) as { scan: object }).scan;
-    expect(scan).toMatchObject({ status: 'failed', error: { code: 'dns-failure', message: 'Could not resolve example.net.' } });
+    expect((await owner().read(id)).body.scan).toMatchObject({ status: 'failed', error: { code: 'dns-failure', message: 'Could not resolve example.net.' } });
   });
 
   it('exposes metrics on the internal port, labelled by route pattern rather than by scan ID', async () => {
@@ -494,20 +419,18 @@ describe('the worker protocol', () => {
   });
 });
 
-describe('end to end: sign in, scan a lab server, read the report', () => {
+describe('end to end: scan a lab server through a real worker', () => {
   let lab: LabServer;
   let pqLab: LabServer;
   let full: Service;
-  let user: Client;
   let stopWorker: () => Promise<void>;
+  const ana = () => visitor(full, '203.0.113.1');
 
   beforeAll(async () => {
     lab = await startLabServer(labProfile('hybrid'));
     pqLab = await startLabServer(labProfile('pq'));
     const labOrigins = [lab.origin, pqLab.origin];
     full = await startService({ labOrigins });
-    user = new Client(full);
-    await user.signIn('alice');
     const running = startWorker({
       apiUrl: full.internalUrl,
       token: WORKER_TOKEN,
@@ -526,7 +449,7 @@ describe('end to end: sign in, scan a lab server, read the report', () => {
 
   async function finished(id: string) {
     for (let i = 0; i < 300; i++) {
-      const { scan } = (await (await user.get(`/api/v1/scans/${id}`)).json()) as { scan: { status: string; report?: ScanReport; error?: { code: string }; layers?: { headline: string }[] } };
+      const scan = (await ana().read(id)).body.scan!;
       if (scan.status === 'succeeded' || scan.status === 'failed') return scan;
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
@@ -534,47 +457,40 @@ describe('end to end: sign in, scan a lab server, read the report', () => {
   }
 
   it('produces a real report', async () => {
-    const { id, status } = await user.createScan(lab.origin);
-    expect(status).toBe(202);
-    const scan = await finished(id);
+    const started = await ana().scan(lab.origin);
+    expect(started.status).toBe(202);
+    const scan = await finished(started.body.scan!.id);
     expect(scan.status).toBe('succeeded');
-    expect(scan.report?.layers[0]).toMatchObject({ id: 'key-establishment', headline: 'Hybrid: X25519MLKEM768, with classical fallback' });
-    expect(scan.report?.findings.find((f) => f.id === 'kex.negotiated')?.kind).toBe('observation');
-
-    const list = (await (await user.get('/api/v1/scans')).json()) as { scans: { id: string; layers: { headline: string }[]; report?: unknown }[] };
-    expect(list.scans[0]).toMatchObject({ id, layers: expect.arrayContaining([expect.objectContaining({ headline: 'Classical: ECDSA P-256 certificate' })]) });
-    expect(list.scans[0]!.report).toBeUndefined(); // list views carry summaries, not full reports
+    const report = scan.report as ScanReport;
+    expect(report.layers[0]).toMatchObject({ id: 'key-establishment', headline: 'Hybrid: X25519MLKEM768, with classical fallback' });
+    expect(report.findings.find((f) => f.id === 'kex.negotiated')?.kind).toBe('observation');
   });
 
   it('fails a scan whose target resolves to an internal address, with the reason', async () => {
-    const { id } = await user.createScan('https://innocent.example.com/');
-    const scan = await finished(id);
+    const scan = await finished((await ana().scan('https://innocent.example.com/')).body.scan!.id);
     expect(scan).toMatchObject({ status: 'failed', error: { code: 'address-not-allowed' } });
   });
 
-  it('fetches an issuer’s public keys through the scanner, for a browser that could not', async () => {
-    const { id } = await user.createScan(pqLab.origin, 'issuer-keys');
-    const scan = (await finished(id)) as unknown as { status: string; report: { kind: string; found: boolean; jwks: { keys: { alg: string }[] } } };
+  it('fetches an issuer’s public keys, for a browser that was not allowed to', async () => {
+    const scan = await finished((await ana().scan(pqLab.origin, { kind: 'issuer-keys' })).body.scan!.id);
     expect(scan.status).toBe('succeeded');
-    expect(scan.report).toMatchObject({ kind: 'issuer-keys', found: true, issuerMatches: true });
-    expect(scan.report.jwks.keys[0]!.alg).toBe('ML-DSA-65');
-    // Key lookups are not listed as scans.
-    const list = (await (await user.get('/api/v1/scans')).json()) as { scans: { id: string }[] };
-    expect(list.scans.map((s) => s.id)).not.toContain(id);
+    const result = scan.report as { kind: string; found: boolean; issuerMatches: boolean; jwks: { keys: { alg: string }[] } };
+    expect(result).toMatchObject({ kind: 'issuer-keys', found: true, issuerMatches: true });
+    expect(result.jwks.keys[0]!.alg).toBe('ML-DSA-65');
   });
 });
 
-describe('secrets stay out of the logs', () => {
-  it('logs none of the credentials that passed through these tests', async () => {
-    const { idToken } = (await (await alice.get('/api/v1/session/id-token')).json()) as { idToken: string };
+describe('logs', () => {
+  it('carry no worker token and no visitor address', async () => {
+    await visitor(service, '198.51.100.250').scan('https://logged.example.com/');
     const logs = service.logs.join('\n');
-    expect(logs).toContain('signed in'); // the logger was in use
-    for (const secret of [alice.sessionCookie!, alice.csrfToken, bob.sessionCookie!, CLIENT_SECRET, WORKER_TOKEN, idToken, idToken.split('.')[2]!.slice(0, 40)]) {
-      expect(logs).not.toContain(secret);
-    }
+    expect(logs).toContain('scan queued'); // the logger was in use
+    expect(logs).toContain('logged.example.com');
+    expect(logs).not.toContain(WORKER_TOKEN);
+    expect(logs).not.toContain('198.51.100.250');
   });
 
-  it('carries a request ID on every line, taken from the caller only when it is harmless', async () => {
+  it('carry a request ID on every line, taken from the caller only when it is harmless', async () => {
     const good = await fetch(`${service.publicUrl}/api/v1/meta`, { headers: { 'x-request-id': 'trace-abc12345' } });
     expect(good.headers.get('x-request-id')).toBe('trace-abc12345');
     const bad = await fetch(`${service.publicUrl}/api/v1/meta`, { headers: { 'x-request-id': 'x"} injected {"level":"error' } });
@@ -606,7 +522,6 @@ describe('serving the web app', () => {
     async (path) => {
       // fetch() would normalise "..", so the request line is written by hand.
       const { port } = new URL(web.publicUrl);
-      const net = await import('node:net');
       const status = await new Promise<number>((resolve) => {
         const socket = net.connect(Number(port), '127.0.0.1', () => socket.write(`GET ${path} HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n`));
         socket.once('data', (data: Buffer) => {

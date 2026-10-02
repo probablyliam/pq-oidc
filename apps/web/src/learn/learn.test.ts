@@ -4,7 +4,7 @@ import type { Beat, Score } from './engine.ts';
 import { knownAnchors, layoutFor } from './layout.ts';
 import { buildScore } from './score.ts';
 import type { LoginScore } from './score.ts';
-import { LOGIN_REQUEST, MODES, runAttack, runSession } from './session.ts';
+import { cleanLogin, DEFAULT_LOGIN, LOGIN_REQUEST, loginRequest, MODES, passwordIn, runAttack, runSession } from './session.ts';
 import type { AttackOutcome, Mode, Session } from './session.ts';
 
 const MODE_IDS: Mode[] = ['classical', 'hybrid', 'pq'];
@@ -36,7 +36,7 @@ describe('the login that runs behind the stage', () => {
     expect(s.tokenValid).toBe(true);
     // A TLS application-data record: type 0x17, version 0x0303, then ciphertext that does not contain the password.
     expect([...s.loginRecord.subarray(0, 3)]).toEqual([0x17, 0x03, 0x03]);
-    expect(new TextDecoder().decode(s.loginRecord)).not.toContain('correct-horse');
+    expect(new TextDecoder().decode(s.loginRecord)).not.toContain(DEFAULT_LOGIN.password);
   });
 
   it('uses ML-KEM only in the hybrid and post-quantum modes, in the order X25519MLKEM768 defines', () => {
@@ -96,8 +96,59 @@ describe('every score is well formed', () => {
     }
   });
 
-  it('is much slower than the nine-second walkthrough it replaces', () => {
-    expect(buildScore(sessions.classical).duration).toBeGreaterThan(120);
+  it('an attacker who is only watching shares every beat of the login with one who goes on to attack', () => {
+    for (const mode of MODE_IDS) {
+      const watched = buildScore(sessions[mode], undefined, true);
+      const attacked = buildScore(sessions[mode], attacks[mode].quantum);
+      expect(scoreProblems(watched, knownAnchors(true))).toEqual([]);
+      // She is on the stage and recording, and that is all: the timeline ends with the login.
+      expect(watched.props.some((p) => p.id === 'mLogin')).toBe(true);
+      expect(watched.props.some((p) => p.id === 'mPriv')).toBe(false);
+      expect(watched.beats.at(-1)!.id).toBe('welcome');
+      expect(attacked.beats.slice(0, watched.beats.length)).toEqual(watched.beats);
+      // So swapping one score for the other at the end of the login changes nothing already on the stage.
+      const [a, b] = [sceneAt(watched, watched.duration), sceneAt(attacked, watched.duration)];
+      for (const id of Object.keys(a.props)) expect(b.props[id], id).toEqual(a.props[id]);
+    }
+  });
+});
+
+describe('the login is the one the visitor typed', () => {
+  const typed = { username: 'bob', password: 'tr0ub4 &=dor' };
+  let session: Session;
+  let quantum: AttackOutcome;
+  beforeAll(async () => {
+    session = await runSession('classical', typed);
+    quantum = await runAttack(session, 'quantum');
+  });
+
+  it('is what gets encrypted, sent and decrypted', () => {
+    expect(session.loginDecrypted).toBe(loginRequest(typed));
+    expect(passwordIn(session.loginDecrypted)).toBe(typed.password);
+    expect(new TextDecoder().decode(session.loginRecord)).not.toContain('tr0ub4');
+  });
+
+  it('is what the stage shows, and what a quantum attacker ends up reading', () => {
+    const score = buildScore(session, quantum);
+    expect(score.props.find((p) => p.id === 'cred')!.look!.plain).toBe(`password=${typed.password}`);
+    // Her copy shows only what her own decryption of the recording gave back.
+    expect(passwordIn(quantum.decryptedLogin!)).toBe(typed.password);
+    expect(score.props.find((p) => p.id === 'mLogin')!.look!.plain).toBe(`password=${typed.password}`);
+    expect(score.beats.find((b) => b.id === 'welcome')!.caption).toBe('Signed in as bob.');
+    expect(score.beats.find((b) => b.id === 'present-forgery')!.caption).toMatch(/Mallory is in as bob/);
+  });
+
+  it('shows the attacker nothing when her decryption fails', async () => {
+    const hybrid = await runSession('hybrid', typed);
+    const outcome = await runAttack(hybrid, 'quantum');
+    expect(outcome.decryptedLogin).toBeUndefined();
+    expect(buildScore(hybrid, outcome).props.find((p) => p.id === 'mLogin')!.look!.plain).toBe('');
+    expect(JSON.stringify(buildScore(hybrid, outcome).props.filter((p) => p.id.startsWith('m')))).not.toContain('tr0ub4');
+  });
+
+  it('falls back to the example for empty fields and cuts long ones to what a chip can show', () => {
+    expect(cleanLogin({ username: '  ', password: '' })).toEqual(DEFAULT_LOGIN);
+    expect(cleanLogin({ username: ' christopher ', password: 'a-very-long-password' })).toEqual({ username: 'christop', password: 'a-very-long' });
   });
 });
 
@@ -107,13 +158,13 @@ describe('the stage is a function of time', () => {
     score = buildScore(sessions.hybrid, attacks.hybrid.quantum);
   });
 
-  it('starts with only what exists before the login, and ends with Alice signed in', () => {
+  it('starts with only what exists before the login, and ends signed in', () => {
     const start = sceneAt(score, 0);
     expect(start.props.cred!.opacity).toBe(0);
     expect(start.props.cPub!.opacity).toBe(0);
     expect(start.props.certKey).toMatchObject({ opacity: 1, to: 's.slot1' });
     expect(start.props.tokenKey).toMatchObject({ opacity: 1, to: 's.slot3' });
-    expect(start.props.screen!.channels).toMatchObject({ typed: 0, welcome: 0 });
+    expect(start.props.screen!.channels).toMatchObject({ waiting: 0, welcome: 0 });
     const loggedIn = sceneAt(score, score.landmarks.find((l) => l.id === 'harvest')!.t);
     expect(loggedIn.props.screen!.channels.welcome).toBe(1);
   });
@@ -220,7 +271,7 @@ describe('the attacker in the same environment', () => {
     const score = buildScore(sessions.classical, attacks.classical.quantum);
     expect(end(score).props.mLogin!.channels.cipher).toBe(0);
     expect(end(score).props.mPriv!.opacity).toBe(1);
-    expect(beatOf(score, 'present-forgery').caption).toMatch(/Mallory is in as Alice/);
+    expect(beatOf(score, 'present-forgery').caption).toMatch(/Mallory is in as alice/);
     // The quantum step is marked as a simulation; what she does with the result is marked as real.
     expect(score.beats.find((b) => b.id === 'recover-private')!.mark).toBe('simulation');
     expect(score.beats.find((b) => b.id === 'decrypt-recording')!.mark).toBe('real');
@@ -231,7 +282,7 @@ describe('the attacker in the same environment', () => {
     const score = buildScore(sessions.hybrid, attacks.hybrid.quantum);
     expect(end(score).props.mLogin!.channels.cipher).toBe(1);
     expect(beatOf(score, 'decrypt-recording').caption).toMatch(/stays noise/);
-    expect(beatOf(score, 'present-forgery').caption).toMatch(/Mallory is in as Alice/);
+    expect(beatOf(score, 'present-forgery').caption).toMatch(/Mallory is in as alice/);
     expect(beatOf(score, 'verdict').caption).toMatch(/A quantum-safe connection is not a quantum-safe login/);
   });
 

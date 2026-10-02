@@ -1,6 +1,6 @@
 /**
  * The HTTP plumbing the API needs and no more: a router, JSON in and out with
- * a size cap, cookies, and one error type that decides what a client is told.
+ * a size cap, and one error type that decides what a client is told.
  * The existing services use node:http directly; this keeps to that.
  */
 import { randomUUID } from 'node:crypto';
@@ -22,40 +22,38 @@ export class HttpError extends Error {
   }
 }
 
-export interface Context<S = unknown> {
+export interface Context {
   req: IncomingMessage;
   res: ServerResponse;
   url: URL;
   params: Record<string, string>;
   requestId: string;
   log: Logger;
-  /** Set by the route's guard. */
-  session: S;
 }
 
-export type Handler<S> = (ctx: Context<S>) => Promise<void> | void;
+export type Handler = (ctx: Context) => Promise<void> | void;
 
-interface Route<S> {
+interface Route {
   method: string;
   /** For metrics: the pattern, not the path, so scan IDs do not become label values. */
   pattern: string;
   regex: RegExp;
   names: string[];
-  handler: Handler<S>;
+  handler: Handler;
 }
 
-export class Router<S = unknown> {
-  private readonly routes: Route<S>[] = [];
+export class Router {
+  private readonly routes: Route[] = [];
 
   /** Registers a route. `pattern` may contain `:name` segments, e.g. /api/v1/scans/:id. */
-  on(method: 'GET' | 'POST' | 'DELETE', pattern: string, handler: Handler<S>): this {
+  on(method: 'GET' | 'POST', pattern: string, handler: Handler): this {
     const names: string[] = [];
     const regex = new RegExp(`^${pattern.replace(/:([a-z]+)/gi, (_, name: string) => (names.push(name), '([^/]+)'))}$`);
     this.routes.push({ method, pattern, regex, names, handler });
     return this;
   }
 
-  match(method: string, pathname: string): { route: Route<S>; params: Record<string, string> } | 'wrong-method' | undefined {
+  match(method: string, pathname: string): { route: Route; params: Record<string, string> } | 'wrong-method' | undefined {
     let pathMatched = false;
     for (const route of this.routes) {
       const found = route.regex.exec(pathname);
@@ -94,10 +92,6 @@ export function sendError(res: ServerResponse, error: HttpError, requestId: stri
   sendJson(res, error.status, { error: { code: error.code, message: error.message, requestId } }, error.headers);
 }
 
-export function redirect(res: ServerResponse, location: string, headers: Record<string, string | string[]> = {}) {
-  res.writeHead(303, { Location: location, ...API_HEADERS, ...headers }).end();
-}
-
 /**
  * Reads a JSON object from the request body. The content type must be JSON,
  * which a cross-site form cannot send, and the body is capped.
@@ -123,55 +117,8 @@ export async function readJson(req: IncomingMessage, maxBytes: number): Promise<
   return value as Record<string, unknown>;
 }
 
-export function readCookies(req: IncomingMessage): Map<string, string> {
-  const cookies = new Map<string, string>();
-  for (const part of (req.headers.cookie ?? '').split(';')) {
-    const index = part.indexOf('=');
-    if (index > 0) cookies.set(part.slice(0, index).trim(), part.slice(index + 1).trim());
-  }
-  return cookies;
-}
-
-export interface CookieOptions {
-  secure: boolean;
-  maxAgeSeconds: number;
-  path?: string;
-}
-
-/**
- * HttpOnly: page scripts cannot read it. SameSite=Lax: sent when the identity
- * provider redirects the browser back, but not on cross-site subrequests.
- */
-export function serializeCookie(name: string, value: string, { secure, maxAgeSeconds, path = '/' }: CookieOptions): string {
-  return [`${name}=${value}`, `Path=${path}`, 'HttpOnly', 'SameSite=Lax', `Max-Age=${maxAgeSeconds}`, ...(secure ? ['Secure'] : [])].join('; ');
-}
-
 /** The client's address, for rate limiting. Trusts X-Forwarded-For only when told the server is behind a proxy. */
 export function clientAddress(req: IncomingMessage, trustProxy: boolean): string {
   const forwarded = trustProxy ? String(req.headers['x-forwarded-for'] ?? '').split(',')[0]?.trim() : '';
   return forwarded || req.socket.remoteAddress || 'unknown';
-}
-
-/** A fixed-window counter in memory, for endpoints that have no user yet (sign-in). */
-export class WindowLimiter {
-  private readonly hits = new Map<string, { windowStart: number; count: number }>();
-  private readonly limit: number;
-  private readonly windowMs: number;
-
-  constructor(limit: number, windowMs: number) {
-    this.limit = limit;
-    this.windowMs = windowMs;
-  }
-
-  /** Counts one hit. Returns the seconds to wait if the caller is over the limit, otherwise 0. */
-  hit(key: string, now: number): number {
-    if (this.hits.size > 10_000) this.hits.clear(); // a bound on memory; forgetting counts is the safe failure here
-    const entry = this.hits.get(key);
-    if (!entry || now - entry.windowStart >= this.windowMs) {
-      this.hits.set(key, { windowStart: now, count: 1 });
-      return 0;
-    }
-    entry.count++;
-    return entry.count > this.limit ? Math.ceil((entry.windowStart + this.windowMs - now) / 1000) : 0;
-  }
 }

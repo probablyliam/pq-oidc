@@ -27,7 +27,7 @@ export type Tone = 'good' | 'caution' | 'bad' | 'neutral';
 /** Where in the learning pages a finding is explained. */
 export type LearnLink =
   | { view: 'login'; landmark: Landmark; mode: LearnMode; attacker?: 'classical' | 'quantum'; label: string }
-  | { view: 'migrate' | 'token'; label: string };
+  | { view: 'token'; label: string };
 
 export type Landmark = 'login' | 'key-establishment' | 'secure-channel' | 'authentication' | 'success' | 'harvest' | 'forgery';
 export type LearnMode = 'classical' | 'hybrid' | 'pq';

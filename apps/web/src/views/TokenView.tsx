@@ -2,14 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { DEFAULT_POLICY, parseTarget } from '@pq-oidc/scan-core/policy';
 import { ALGORITHMS } from '@pq-oidc/token-kit/algorithms';
 import type { SigningAlg } from '@pq-oidc/token-kit/algorithms';
-import { analyzeToken, describeSignature } from '@pq-oidc/token-kit/analyze';
+import { analyzeToken, describeSignature, tokenVerdict } from '@pq-oidc/token-kit/analyze';
 import type { TokenAnalysis } from '@pq-oidc/token-kit/analyze';
 import { SIZE_LIMITS } from '@pq-oidc/token-kit/limits';
 import { projectToken } from '@pq-oidc/token-kit/projection';
 import { checkSignature } from '@pq-oidc/token-kit/signature';
 import type { SignatureCheck } from '@pq-oidc/token-kit/signature';
 import { api } from '../api.ts';
-import type { Meta, SessionInfo } from '../api.ts';
+import type { Meta } from '../api.ts';
 import { Finding } from '../components/Finding.tsx';
 import { Legend } from '../components/Report.tsx';
 import { ATTACKS } from '../crypto/attacks.ts';
@@ -53,7 +53,7 @@ async function fetchKeysDirectly(issuer: string): Promise<KeySource> {
 
 /** A fictional issuer and a token it signed, plus the classic ways of tampering with one. */
 async function buildExample(id: string): Promise<{ token: string; source: KeySource }> {
-  const providerKey = await generateKey('RS256', 'example-key-1');
+  const providerKey = await generateKey(id === 'pq' ? 'ML-DSA-65' : 'RS256', 'example-key-1');
   const now = Math.floor(Date.now() / 1000);
   const context: AttackContext = {
     providerKey,
@@ -61,16 +61,16 @@ async function buildExample(id: string): Promise<{ token: string; source: KeySou
     audience: 'payroll',
     claims: { iss: 'https://login.example-corp.com', aud: 'payroll', sub: 'alice', name: 'Alice Nakamura', email: 'alice.nakamura@example-corp.com', iat: now, exp: now + 3600 },
   };
-  const attack = ATTACKS.find((a) => a.id === id) ?? ATTACKS[0]!;
+  const attack = ATTACKS.find((a) => a.id === (id === 'pq' ? 'honest' : id)) ?? ATTACKS[0]!;
   return { token: await attack.build(context), source: { label: 'the example issuer’s key set (made on this page)', jwks: { keys: [providerKey.publicJwk] } } };
 }
 
 const EXAMPLES: [id: string, label: string][] = [
-  ['honest', 'a genuine RS256 token'],
-  ['edit-claims', 'claims edited after signing'],
-  ['alg-none', 'signature removed (alg none)'],
-  ['alg-confusion', 'algorithm confusion (HS256 with the public key)'],
-  ['embedded-key', 'brings its own key'],
+  ['honest', 'a typical token (RS256)'],
+  ['pq', 'a post-quantum token (ML-DSA-65)'],
+  ['edit-claims', 'edited after signing'],
+  ['alg-none', 'signature removed'],
+  ['alg-confusion', 'algorithm confusion'],
   ['expired', 'expired'],
 ];
 
@@ -81,7 +81,7 @@ function Facts({ analysis }: { analysis: TokenAnalysis }) {
     <dl className="three-facts">
       <div className={encrypted ? 'no' : 'yes'}>
         <dt>Encoded</dt>
-        <dd>{encrypted ? 'Only the header is readable.' : 'Yes. The header and payload are base64url text. Anyone holding the token can read them; no key is involved.'}</dd>
+        <dd>{encrypted ? 'Only the header is readable.' : 'Yes. Anyone holding the token can read it; no key is involved.'}</dd>
       </div>
       <div className={signed ? 'yes' : 'no'}>
         <dt>Signed</dt>
@@ -143,8 +143,8 @@ function Sizes({ token, analysis }: { token: string; analysis: TokenAnalysis }) 
   const pq = rows.find((r) => r.alg === 'ML-DSA-65');
   if (!pq || analysis.format !== 'jws') return null;
   return (
-    <section className="sizes panel">
-      <h3>What the signature algorithm does to this token’s size</h3>
+    <section className="sizes">
+      <h4>What the signature algorithm does to this token’s size</h4>
       <p>
         {analysis.alg?.quantum === 'no-known-attack'
           ? `This token already carries a post-quantum signature: ${fmt.format(token.length)} bytes, most of them signature. `
@@ -182,14 +182,16 @@ function Sizes({ token, analysis }: { token: string; analysis: TokenAnalysis }) 
   );
 }
 
-export function TokenView({ meta, session }: { meta: Meta | null; session: SessionInfo | null }) {
+export function TokenView({ meta }: { meta: Meta | null }) {
   const [token, setToken] = useState('');
   const [keys, setKeys] = useState<KeyState>({ status: 'idle' });
+  const [exampleId, setExampleId] = useState<string>();
   const analysis = useMemo(() => (token.trim() ? analyzeToken(token) : undefined), [token]);
 
   function replaceToken(next: string) {
     setToken(next);
     setKeys({ status: 'idle' });
+    setExampleId(undefined);
   }
 
   async function applyKeys(source: KeySource, value = token) {
@@ -199,15 +201,14 @@ export function TokenView({ meta, session }: { meta: Meta | null; session: Sessi
   async function loadExample(id: string) {
     const example = await buildExample(id);
     setToken(example.token);
+    setExampleId(id);
     await applyKeys(example.source, example.token);
   }
 
   // Start with something to look at.
   useEffect(() => void loadExample('honest'), []);
 
-  const iss = analysis?.payload?.iss;
-  // This deployment's own identity provider may be plain http on localhost; any other issuer must be https.
-  const issuer = analysis?.issuerUrl ?? (typeof iss === 'string' && iss === meta?.identityProvider ? iss : undefined);
+  const issuer = analysis?.issuerUrl;
   const issuerHost = issuer ? new URL(issuer).host : undefined;
 
   async function fetchDirectly() {
@@ -215,7 +216,7 @@ export function TokenView({ meta, session }: { meta: Meta | null; session: Sessi
     setKeys({ status: 'fetching' });
     try {
       // The same rules the scanner applies: no internal names or addresses, whatever the token says.
-      if (issuer !== meta?.identityProvider) parseTarget(issuer, { allowedPorts: [...DEFAULT_POLICY.allowedPorts], labOrigins: meta?.labOrigins ?? [] });
+      parseTarget(issuer, { allowedPorts: [...DEFAULT_POLICY.allowedPorts], labOrigins: meta?.labOrigins ?? [] });
       await applyKeys(await fetchKeysDirectly(issuer));
     } catch (error) {
       setKeys({ status: 'blocked', reason: error instanceof Error && error.name === 'TargetRejected' ? error.message : 'Your browser was not allowed to read that issuer’s key document. Many issuers do not let web pages fetch it.' });
@@ -236,103 +237,110 @@ export function TokenView({ meta, session }: { meta: Meta | null; session: Sessi
     }
   }
 
-  async function loadMyToken() {
-    const idToken = await api.idToken().catch(() => null);
-    if (idToken) replaceToken(idToken);
-  }
-
-  const signature = analysis?.format === 'jws' ? describeSignature(analysis, keys.status === 'ready' ? keys.check : undefined, keys.status === 'ready' ? keys.source.label : undefined) : undefined;
+  const check = keys.status === 'ready' ? keys.check : undefined;
+  const verdict = analysis ? tokenVerdict(analysis, check) : undefined;
+  const signature = analysis?.format === 'jws' ? describeSignature(analysis, check, keys.status === 'ready' ? keys.source.label : undefined) : undefined;
   const findings = analysis ? [...analysis.findings, ...(signature ? [signature] : [])] : [];
   const ORDER = { observation: 0, inference: 1, undetermined: 2 };
+  // What is wrong with the token today, before any quantum computer: the bad findings, in plain titles.
+  const alsoNoticed = findings.filter((f) => f.tone === 'bad' && f.id !== 'signature.check').map((f) => f.title);
 
   return (
-    <section className="sheet token-page">
-      <h1>What does this token say, and who signed it?</h1>
-      <p className="sub">Paste a JWT. It is read here in your browser and is never uploaded, stored or logged.</p>
+    <>
+      <section className="band">
+        <h1>Is this token quantum-safe?</h1>
+        <p className="sub">Paste a JWT. It is read here in your browser and never sent anywhere.</p>
+        <form className="token-input" onSubmit={(event) => event.preventDefault()}>
+          <label htmlFor="jwt" className="sr-only">
+            Token
+          </label>
+          <textarea id="jwt" value={token} onChange={(event) => replaceToken(event.target.value.trim())} spellCheck={false} placeholder="eyJhbGciOi…" rows={4} />
+          <p className="examples">
+            <span>Try:</span>
+            {EXAMPLES.map(([id, label]) => (
+              <button key={id} type="button" className="link" aria-pressed={exampleId === id} onClick={() => void loadExample(id)}>
+                {label}
+              </button>
+            ))}
+          </p>
+        </form>
+      </section>
 
-      <div className="token-input">
-        <label htmlFor="jwt">Token</label>
-        <textarea id="jwt" value={token} onChange={(event) => replaceToken(event.target.value.trim())} spellCheck={false} placeholder="eyJhbGciOi…" rows={5} />
-        <p className="examples">
-          <span>Try:</span>
-          {session && (
-            <button type="button" className="link" onClick={() => void loadMyToken()}>
-              the token from my own sign-in
-            </button>
-          )}
-          {EXAMPLES.map(([id, label]) => (
-            <button key={id} type="button" className="link" onClick={() => void loadExample(id)}>
-              {label}
-            </button>
-          ))}
-        </p>
-      </div>
-
-      {analysis && (
-        <div className="token-report">
-          <Facts analysis={analysis} />
-          {analysis.format === 'jws' && <Anatomy token={token} analysis={analysis} />}
-
-          {analysis.format === 'jws' && keys.status !== 'ready' && (
-            <div className="panel verify">
-              {issuer ? (
-                <>
-                  <p>
-                    To check the signature, this page needs the public keys of <b>{issuerHost}</b>, the issuer the token names. Only the issuer’s address is
-                    used; the token stays here.
-                  </p>
-                  <p className="list-actions">
-                    <button type="button" className="primary" disabled={keys.status === 'fetching'} onClick={() => void fetchDirectly()}>
-                      {keys.status === 'fetching' ? 'Fetching…' : `Fetch keys from ${issuerHost} and check`}
-                    </button>
-                  </p>
-                </>
-              ) : (
-                <p>The token names no https issuer, so there is nowhere to fetch public keys from. Its signature cannot be checked here.</p>
-              )}
-              {keys.status === 'blocked' && (
-                <div className="notice caution">
-                  <p>{keys.reason}</p>
-                  {meta && session ? (
-                    <p className="list-actions">
-                      <button type="button" onClick={() => void fetchThroughScanner()}>
-                        Fetch them through the scanner instead
+      {analysis && verdict && (
+        <section className="sheet">
+          <article className="report token-report">
+            <header className={`verdict verdict-${verdict.status}`}>
+              <p className="verdict-host">{exampleId ? 'An example token made on this page' : issuerHost ? `Issued by ${issuerHost}` : 'Pasted token'}</p>
+              <h2>{verdict.headline}</h2>
+              <p className="verdict-why">{verdict.explanation}</p>
+              {analysis.format === 'jws' && keys.status !== 'ready' && (
+                <div className="verdict-action">
+                  {issuer ? (
+                    <>
+                      <button type="button" className="primary" disabled={keys.status === 'fetching'} onClick={() => void fetchDirectly()}>
+                        {keys.status === 'fetching' ? 'Checking…' : `Check the signature against ${issuerHost}`}
                       </button>
-                      <span className="fine">Sends the issuer’s address to the scan service. Not the token.</span>
-                    </p>
-                  ) : meta ? (
-                    <p>
-                      <a href={api.signInUrl(`/${href('token')}`)}>Sign in</a> and the scanner can fetch them for you.
-                    </p>
+                      <span className="fine">Fetches the issuer’s public keys. The token stays in your browser.</span>
+                    </>
                   ) : (
-                    <p className="fine">With the project running locally, the scanner can fetch them instead.</p>
+                    <span className="fine">The signature cannot be checked: the token names no https issuer to fetch public keys from.</span>
+                  )}
+                  {keys.status === 'blocked' && (
+                    <p className="notice caution">
+                      {keys.reason}
+                      {meta && (
+                        <>
+                          {' '}
+                          <button type="button" className="link" onClick={() => void fetchThroughScanner()}>
+                            Let the scanner fetch them instead
+                          </button>{' '}
+                          (sends the issuer’s address to the scan service, not the token).
+                        </>
+                      )}
+                    </p>
                   )}
                 </div>
               )}
-            </div>
-          )}
-          {keys.status === 'ready' && keys.source.declaredIssuer !== undefined && (
-            <p className="notice caution">
-              The key document declares the issuer “{keys.source.declaredIssuer}”, which is not the “iss” in this token. A verifier should refuse that mismatch.
-            </p>
-          )}
+              {keys.status === 'ready' && keys.source.declaredIssuer !== undefined && (
+                <p className="notice caution">The key document declares the issuer “{keys.source.declaredIssuer}”, which is not the “iss” in this token. A verifier should refuse that mismatch.</p>
+              )}
+            </header>
 
-          <Legend />
-          <ul className="findings panel">
-            {[...findings]
-              .sort((a, b) => ORDER[a.kind] - ORDER[b.kind])
-              .map((finding) => (
-                <Finding key={finding.id} finding={finding} />
-              ))}
-          </ul>
-          <p>
-            <a className="learn-link" href={href('learn', { at: 'success', mode: analysis.alg?.quantum === 'no-known-attack' ? 'pq' : 'classical' })}>
-              See where a token is signed and checked during a login
-            </a>
-          </p>
-          <Sizes token={token} analysis={analysis} />
-        </div>
+            <Facts analysis={analysis} />
+
+            {alsoNoticed.length > 0 && (
+              <section className="also">
+                <h3>Also noticed</h3>
+                <ul>
+                  {alsoNoticed.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+                <p className="fine">These are problems today, with or without quantum computers.</p>
+              </section>
+            )}
+
+            <details className="technical">
+              <summary>Technical details</summary>
+              {analysis.format === 'jws' && <Anatomy token={token} analysis={analysis} />}
+              <Legend />
+              <ul className="findings">
+                {[...findings]
+                  .sort((a, b) => ORDER[a.kind] - ORDER[b.kind])
+                  .map((finding) => (
+                    <Finding key={finding.id} finding={finding} />
+                  ))}
+              </ul>
+              <Sizes token={token} analysis={analysis} />
+              <p>
+                <a className="learn-link" href={href('learn', { at: 'success', mode: analysis.alg?.quantum === 'no-known-attack' ? 'pq' : 'classical' })}>
+                  See where a token is signed and checked during a login
+                </a>
+              </p>
+            </details>
+          </article>
+        </section>
       )}
-    </section>
+    </>
   );
 }

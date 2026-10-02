@@ -10,7 +10,7 @@ The site's "check" ran entirely in the browser and read two public JSON document
 
 Add a backend that performs the scan, and keep the single-page app able to run without it.
 
-- With the backend (`npm start`, Compose, Kubernetes): sign in, scan a URL, keep history, compare.
+- With the backend (`npm start`, Compose, Kubernetes): paste an address, get a result. No account (ADR 0014).
 - Without it (GitHub Pages): the learning sections and token analysis work fully in the browser; the scan view shows recorded reports from real scans, dated and labelled as recordings, and says how to run the scanner.
 
 The app asks `GET /api/v1/meta` once at start; no answer means static mode.
