@@ -6,6 +6,7 @@ import { measureJwt } from '@pq-oidc/token-kit/measure';
 import { projectToken } from '@pq-oidc/token-kit/projection';
 import type { Projection } from '@pq-oidc/token-kit/projection';
 import { generateKey, parseJwt, resignJwt, signJwt } from '../crypto/jws.ts';
+import type { Mode } from '../lab/crypto.ts';
 import { ByteMap } from './ByteMap.tsx';
 
 const ALGS: SigningAlg[] = ['ES256', 'RS256', 'ML-DSA-44', 'ML-DSA-65', 'ML-DSA-87'];
@@ -50,7 +51,7 @@ function Fit({ used, limit }: { used: number; limit: number }) {
   );
 }
 
-export function TokenCheck() {
+export function TokenCheck({ onSeeInLab }: { onSeeInLab: (mode: Mode) => void }) {
   const [token, setToken] = useState('');
   const [isExample, setIsExample] = useState(true);
   const [proof, setProof] = useState<{ token: string; ms: number; projected: number }>();
@@ -132,6 +133,38 @@ export function TokenCheck() {
 
         {measurement && pq65 && (
           <div className="token-report">
+            <div className="anatomy">
+              <div className="part-h">
+                <b>Header</b>
+                <span>how it was signed</span>
+                <pre>{JSON.stringify(parsed?.header, null, 1)}</pre>
+              </div>
+              <div className="part-p">
+                <b>Payload</b>
+                <span>who the user is</span>
+                <pre>{JSON.stringify(parsed?.payload, null, 1)}</pre>
+              </div>
+              <div className="part-s">
+                <b>Signature</b>
+                <span>
+                  {measurement.alg}, {fmt.format(measurement.signatureBytes)} bytes
+                </span>
+                <pre>{token.split('.')[2]}</pre>
+              </div>
+            </div>
+            <p className="small">
+              The payload is encoded, not encrypted: anyone holding this token can read it, as you just did. Only the
+              signature stops it being changed. {measurement.alg} is chosen by the login service and has nothing to do
+              with the HTTPS connection the token travels over.{' '}
+              <button
+                type="button"
+                className="link"
+                onClick={() => onSeeInLab(ALGORITHMS[measurement.alg as SigningAlg]?.quantumSafe ? 'pq' : 'classical')}
+              >
+                See where the signature is made and checked
+              </button>
+            </p>
+
             <div className={`verdict-banner ${pq65.cookieBytes > COOKIE.bytes ? 'not-ready' : 'partial'}`}>
               <b>
                 {measurement.alg} today: {fmt.format(measurement.totalBytes)} bytes. With ML-DSA-65:{' '}

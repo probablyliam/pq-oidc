@@ -22,22 +22,24 @@ It checks the login signature only. It doesn't test the encrypted connection to 
 
 <table>
 <tr>
-<td width="50%"><img src="docs/media/login-walkthrough.png" alt="Three machines: Alice's computer, the login service holding a secret key that never leaves it, and the Payroll app. The login service is signing a token; a five-step timeline sits underneath."></td>
-<td width="50%"><img src="docs/media/attack.png" alt="The same machines with an attacker's computer: her quantum computer has worked out the secret key, she forged a token, and the app's check shows every bar matching."></td>
+<td width="50%"><img src="docs/media/login-walkthrough.png" alt="Three fixed panels: Browser, Network and Server. The server is signing a login token with its private key and the token is crossing the encrypted channel; a nine-step player sits underneath."></td>
+<td width="50%"><img src="docs/media/attack.png" alt="The same panels with an attacker underneath: she holds the recovered shared secret and the server's private key, and the server has accepted her forged token."></td>
 </tr>
 <tr>
-<td><b>What the result means.</b> Log in, then step through what happens between the three machines: what travels, what gets signed, and what never leaves the login service.</td>
-<td><b>The attack.</b> Choose the signature and the attacker's computer, then step through her attempt, including the secret key being worked out and the app's check lining the signature up.</td>
+<td><b>What actually happens when you log in?</b> Press Log in and watch nine steps play: key agreement, the server proving who it is, encryption, the password check and the signed token. Pause, step, replay, or switch between classical, hybrid and post-quantum.</td>
+<td><b>Now try to break it.</b> Give the attacker a classical or a quantum computer. The table fills in as you try each combination: a hybrid connection stops her reading the recorded login but not forging one.</td>
 </tr>
 <tr>
 <td width="50%"><img src="docs/media/catch-bytes.png" alt="One square per byte: the token with the quantum-proof signature is about 4,800 bytes and doesn't fit in a cookie, followed by three reasons the switch is slow."></td>
-<td width="50%"><img src="docs/media/switch-game.png" alt="A grid of four apps under one login service after switching everything at once: three apps have locked their users out, each with the reason."></td>
+<td width="50%"><img src="docs/media/migrate.png" alt="Six parts of a company's login path after upgrading everything at once: four of its ten cryptographic dependencies are broken, each with the reason."></td>
 </tr>
 <tr>
 <td><b>Why hasn’t everyone switched?</b> The quantum-proof signature is about fifty times bigger, and every app has to change first.</td>
-<td><b>Why not just flip a switch?</b> Try it on a small company and three of four apps lock people out. Then do it in the right order.</td>
+<td><b>Migrate a real system.</b> Six parts, ten places that use cryptography, and nothing can change until you have looked at it. Upgrade everything at once and four things break; two are never yours to fix.</td>
 </tr>
 </table>
+
+**What is real on the page.** The key agreement (ECDH P-256, ML-KEM-768), encryption (HKDF, AES-256-GCM), signing and verification (ECDSA, ML-DSA-65) all run in your browser, and the values shown are from that run. The handshake is a simplified sketch of TLS 1.3, not an implementation of it. The quantum attack is conceptual: no machine can run it today, so the page hands the attacker the private values such a machine would compute, and everything she then does with them (decrypting the recording, signing a token, the server checking it) is real. Each step says which of the three it is.
 
 ## Check your own login service
 
@@ -84,7 +86,7 @@ Beyond that:
 - **Two independent verifiers.** The TypeScript verifier and a separate [Python verifier](interop/python) (built on `pyca/cryptography`) must agree on every honest token and reject six kinds of forgery with identical codes (`npm run interop`).
 - **A real browser.** Chrome silently dropped the 4,895-byte cookie holding the new token; the end-to-end tests reproduce that behaviour.
 - **A real cluster.** CI deploys the service to Kubernetes, signs in through both apps, then switches an unprepared app too early and expects its sign-in to fail.
-- **70 automated tests**, including the classic token attacks and protocol abuse (see [Security](#security)).
+- **82 automated tests**, including the classic token attacks and protocol abuse (see [Security](#security)).
 
 ## Has this been done before?
 
@@ -164,7 +166,7 @@ sequenceDiagram
 - **Apps** ([`packages/rp`](packages/rp)): `openid-client` runs the protocol. The ID token signature is then verified explicitly with an algorithm allowlist, which is what makes an unprepared app refuse ML-DSA and what stops `alg: none` and algorithm confusion.
 - **Shared toolkit** ([`packages/token-kit`](packages/token-kit)): measurement, exact size projection, verification, and the readiness analysis used by the CLI and the site.
 - **Python verifier** ([`interop/python`](interop/python)): about 150 lines, because no Python JWT library supports RFC 9964 yet.
-- **Site** ([`apps/lab`](apps/lab)): static React. ML-DSA runs in the browser through `@noble/post-quantum`; tests prove its tokens interoperate with Node's native ML-DSA both ways.
+- **Site** ([`apps/lab`](apps/lab)): static React. ML-DSA runs in the browser through `@noble/post-quantum`; tests prove its tokens interoperate with Node's native ML-DSA both ways. The login lab is a list of events ([`lab/events.ts`](apps/lab/src/lab/events.ts)) built from one real run ([`lab/crypto.ts`](apps/lab/src/lab/crypto.ts)); the migration exercise is a pure model ([`sim/system.ts`](apps/lab/src/sim/system.ts)). Both are tested.
 
 No build step for the server code: Node.js 24 runs the TypeScript sources directly.
 
@@ -191,7 +193,7 @@ CI also runs CodeQL, `npm audit`, and Dependabot.
 ## Development
 
 ```bash
-npm test            # 70 tests
+npm test            # 82 tests
 npm run lint && npm run typecheck
 npm run prove       # the evidence above (needs the Python venv)
 npm run interop     # Python <-> Node, both directions

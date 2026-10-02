@@ -1,41 +1,45 @@
 /*
- * A readiness tool first, with the explanation underneath it.
+ * A readiness tool first (the yellow band), then a lab that shows what the
+ * result means (the drafting-paper area underneath).
  *
- *   1. The check: one input, one report.
- *   2. What the result means: a login you perform, and what happens behind it.
- *   3. The catch, 4. Make the switch, 5. Use it on your own systems.
- *
- * Colour carries meaning and nothing else:
- *   bad   red     can be forged / got in / locked out
- *   good  green   can't be forged / kept out / protected
- *   sig   blue    signature bytes, links, and the thing to press next
- *   mark  yellow  a highlighter for one phrase
- * Type: Atkinson Hyperlegible, designed to be unmistakable to read.
+ * Every kind of object has one look everywhere on the page:
+ *   private key    solid green      never leaves its owner
+ *   public value   blue outline     anyone may see it
+ *   shared secret  solid yellow     the same on both sides, never sent
+ *   encrypted      dark, hatched    unreadable without the secret
+ *   signed         green bars       made with a private key
+ *   attacker       red              anything Mallory holds or makes
+ * Status colours: green protected, amber quantum-breakable, red broken.
  */
 :root {
   --paper: #ffffff;
-  --wash: #f2f3f5;
-  --ink: #14171c;
-  --ink-soft: #586170;
-  --rule: #d3d8de;
-  --bad: #c2341d;
+  --wash: #f1f3f6;
+  --sheet: #f5f7fa;
+  --grid: #e3e8ee;
+  --ink: #111a2b;
+  --ink-soft: #566176;
+  --rule: #c9d1dc;
+  --bad: #bf3220;
   --bad-wash: #fbe9e5;
   --good: #0e6b4e;
   --good-wash: #e2f3ec;
   --mid: #8a5a00;
   --mid-wash: #fbf1d8;
-  --sig: #2b59c3;
+  --sig: #2253c4;
   --sig-wash: #e6ecfa;
-  --mark: #ffe873;
+  --mark: #ffd60a;
+  --mark-wash: #fff6c7;
 
   /* Byte map colours (read by the canvas). */
   --part-header: #9aa4b1;
-  --part-payload: #14171c;
-  --part-signature: #2b59c3;
+  --part-payload: #111a2b;
+  --part-signature: #2253c4;
 
-  --text: 'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif;
-  --mono: 'Atkinson Hyperlegible Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  --text: 'Barlow', 'Segoe UI', system-ui, sans-serif;
+  --head: 'Barlow Semi Condensed', 'Barlow', 'Segoe UI', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
   --page: 72rem;
+  --gutter: max(20px, calc((100% - var(--page)) / 2));
 
   color-scheme: light;
 }
@@ -45,35 +49,34 @@
 }
 html {
   scroll-behavior: smooth;
-  scroll-padding-top: 76px;
+  scroll-padding-top: 64px;
 }
 body {
   margin: 0;
   background: var(--paper);
   color: var(--ink);
-  font: 1.0625rem/1.55 var(--text);
+  font: 1.0625rem/1.5 var(--text);
   -webkit-font-smoothing: antialiased;
 }
 h1,
 h2,
 h3 {
   margin: 0;
-  line-height: 1.15;
-  letter-spacing: -0.015em;
+  font-family: var(--head);
+  line-height: 1.12;
   text-wrap: balance;
 }
 h1 {
-  font-size: clamp(1.9rem, 4.4vw, 2.6rem);
-  font-weight: 800;
+  font-size: clamp(2.2rem, 5vw, 3.3rem);
+  font-weight: 700;
 }
 h2 {
-  font-size: clamp(1.5rem, 3.2vw, 1.95rem);
-  font-weight: 800;
+  font-size: clamp(1.7rem, 3.4vw, 2.3rem);
+  font-weight: 700;
 }
 h3 {
-  font-size: 1.05rem;
+  font-size: 1.15rem;
   font-weight: 700;
-  letter-spacing: 0;
 }
 p {
   margin: 0;
@@ -85,7 +88,7 @@ a {
 code,
 pre {
   font-family: var(--mono);
-  font-size: 0.88em;
+  font-size: 0.85em;
 }
 mark {
   background: linear-gradient(transparent 52%, var(--mark) 52%);
@@ -103,7 +106,7 @@ button {
   color: var(--ink);
   background: var(--paper);
   border: 2px solid var(--ink);
-  border-radius: 6px;
+  border-radius: 3px;
   padding: 8px 14px;
   cursor: pointer;
 }
@@ -119,8 +122,16 @@ button.primary:hover:not(:disabled),
 button[aria-pressed='true']:hover:not(:disabled) {
   background: var(--ink);
 }
+button.danger {
+  background: var(--bad);
+  border-color: var(--bad);
+  color: var(--paper);
+}
+button.danger:hover:not(:disabled) {
+  background: var(--bad);
+}
 button:disabled {
-  opacity: 0.4;
+  opacity: 0.45;
   cursor: default;
 }
 button.link {
@@ -130,6 +141,7 @@ button.link {
   background: none;
   color: var(--sig);
   font-weight: 600;
+  text-align: left;
   text-decoration: underline;
   text-underline-offset: 3px;
 }
@@ -140,53 +152,71 @@ button.link:hover:not(:disabled) {
   font-size: 0.9rem;
   color: var(--ink-soft);
 }
+.seg {
+  display: inline-flex;
+}
+.seg button {
+  border-radius: 0;
+  padding: 7px 13px;
+}
+.seg button + button {
+  border-left-width: 0;
+}
 
 /* ---------- Frame ---------- */
 .topbar {
   position: sticky;
   top: 0;
   z-index: 5;
-  background: var(--paper);
-  border-bottom: 1px solid var(--rule);
+  background: var(--ink);
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 16px;
-  padding: 12px max(20px, calc((100% - var(--page)) / 2));
+  padding: 11px var(--gutter);
 }
 .topbar .logo {
   white-space: nowrap;
-  font-weight: 800;
-  color: var(--ink);
+  font: 700 1.15rem var(--head);
+  color: var(--paper);
   text-decoration: none;
 }
 .topbar nav {
   display: flex;
-  gap: 18px;
+  gap: 20px;
   overflow-x: auto;
   font-size: 0.95rem;
   white-space: nowrap;
 }
 .topbar nav a {
-  color: var(--ink-soft);
+  color: #c3ccd9;
   text-decoration: none;
 }
 .topbar nav a:hover {
-  color: var(--ink);
-}
-main {
-  max-width: var(--page);
-  margin-inline: auto;
-  padding-inline: 20px;
+  color: var(--paper);
 }
 .tool-top,
 .block {
   display: grid;
   gap: 18px;
-  padding-block: 44px;
+  padding: 44px var(--gutter);
 }
-.block {
-  border-top: 1px solid var(--rule);
+/* The tool sits on a yellow band; everything under it is the lab. */
+.tool-top {
+  background: var(--mark);
+  padding-bottom: 52px;
+}
+.tool-top .sub {
+  color: var(--ink);
+}
+.learn {
+  background-color: var(--sheet);
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+  border-top: 3px solid var(--ink);
+}
+.block + .block {
+  border-top: 2px solid var(--ink);
 }
 .sub {
   font-size: 1.15rem;
@@ -197,10 +227,8 @@ main {
   max-width: 44rem;
 }
 footer.site {
-  max-width: var(--page);
-  margin: 0 auto;
-  padding: 24px 20px 56px;
-  border-top: 1px solid var(--rule);
+  padding: 24px var(--gutter) 56px;
+  border-top: 2px solid var(--ink);
   color: var(--ink-soft);
   font-size: 0.92rem;
 }
@@ -208,7 +236,7 @@ footer.site {
 /* ---------- 1. The tool ---------- */
 .tool-panel {
   border: 2px solid var(--ink);
-  border-radius: 10px;
+  border-radius: 3px;
   overflow: hidden;
 }
 .tabs {
@@ -248,7 +276,7 @@ footer.site {
   font: 1.05rem var(--mono);
   padding: 11px 13px;
   border: 2px solid var(--ink);
-  border-radius: 6px;
+  border-radius: 3px;
   background: var(--paper);
   color: var(--ink);
 }
@@ -404,7 +432,7 @@ pre.json {
   margin: 10px 0 0;
   padding: 12px;
   background: var(--wash);
-  border-radius: 6px;
+  border-radius: 3px;
   max-height: 260px;
   overflow: auto;
   font-size: 0.8rem;
@@ -414,803 +442,642 @@ pre.json {
   color: var(--ink);
 }
 
-/* ---------- 2. What the result means ----------
-   Fixed colours: green = the login service's secret key and anything signed
-   with it; blue = the public key; red = anything the attacker makes. */
-.colour-key {
+.tool-panel {
+  background: var(--paper);
+}
+.evidence {
   margin: 0;
-  padding: 0;
-  list-style: none;
   display: grid;
-  gap: 6px;
-  font-size: 0.95rem;
-  color: var(--ink-soft);
-}
-.keytag {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 2px 9px 2px 6px;
-  border-radius: 999px;
-  font-size: 0.85rem;
-  font-weight: 700;
-  white-space: nowrap;
-}
-.keytag svg {
-  width: 28px;
-  height: 14px;
-  stroke: currentColor;
-  fill: none;
-}
-.keytag.secret {
-  color: var(--good);
-  background: var(--good-wash);
-}
-.keytag.secret svg circle {
-  fill: currentColor;
-}
-.keytag.public {
-  color: var(--sig);
-  background: var(--sig-wash);
-}
-.keytag.attacker {
-  color: var(--bad);
-  background: var(--bad-wash);
-}
-.person {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-.person i {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  font-style: normal;
-  font-size: 0.82rem;
-  color: var(--paper);
-  background: var(--ink);
-}
-.person.mallory {
-  color: var(--bad);
-}
-.person.mallory i {
-  background: var(--bad);
-}
-.sysbox {
-  border: 2px solid var(--ink);
-  border-radius: 6px;
-  padding: 3px 9px;
-  font-size: 0.88rem;
-  font-weight: 700;
-  white-space: nowrap;
-}
-.minitoken {
-  display: inline-grid;
-  border: 2px solid var(--ink);
-  border-radius: 6px;
-  padding: 5px 8px;
-  font-size: 0.78rem;
-  line-height: 1.3;
-}
-.minitoken.forged {
-  border-color: var(--bad);
-  border-style: dashed;
-}
-.minitoken .strip {
-  margin-top: 3px;
-  padding: 1px 6px;
-  border-radius: 3px;
-  color: var(--paper);
-  font-weight: 700;
-}
-.strip.secret {
-  background: var(--good);
-}
-.strip.attacker {
-  background: var(--bad);
-}
-.arrow {
-  color: var(--ink-soft);
-  font-size: 0.84rem;
-}
-.arrow::after {
-  content: ' →';
-}
-.act {
-  border: 2px solid var(--ink);
-  border-radius: 10px;
-  padding: 18px;
-  display: grid;
-  gap: 16px;
-}
-.act.attack {
-  border-color: var(--bad);
-  border-top-width: 10px;
-}
-.act-title {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
   gap: 8px;
-  font-size: 1.15rem;
+  font-size: 0.97rem;
 }
-.act-plan {
-  max-width: 44rem;
-}
-.scene {
+.evidence > div {
   display: grid;
-  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
-  gap: 18px;
-  align-items: start;
+  grid-template-columns: 10.5rem minmax(0, 1fr);
+  gap: 12px;
 }
-.act.attack .scene {
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+.evidence dt {
+  font-weight: 700;
+}
+.evidence dd {
+  margin: 0;
+  max-width: 46rem;
+}
+@media (max-width: 640px) {
+  .evidence > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+}
+.anatomy {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 10px;
+}
+.anatomy > div {
+  display: grid;
+  align-content: start;
+  border-top: 6px solid var(--part-payload);
+  min-width: 0;
+}
+.anatomy .part-h {
+  border-top-color: var(--part-header);
+}
+.anatomy .part-s {
+  border-top-color: var(--part-signature);
+}
+.anatomy b {
+  padding-top: 6px;
+}
+.anatomy span {
+  font-size: 0.88rem;
+  color: var(--ink-soft);
+}
+.anatomy pre {
+  margin: 6px 0 0;
+  padding: 10px;
+  max-height: 170px;
+  overflow: auto;
+  background: var(--wash);
+  border-radius: 3px;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 @media (max-width: 760px) {
-  .scene,
-  .act.attack .scene {
+  .anatomy {
     grid-template-columns: minmax(0, 1fr);
   }
 }
-.browser {
-  border: 2px solid var(--ink);
-  border-radius: 10px;
-  overflow: hidden;
-}
-.browser-bar {
-  display: flex;
-  gap: 10px;
+
+/* ---------- The lab: objects ---------- */
+.thing {
+  display: inline-flex;
   align-items: center;
-  padding: 8px 12px;
+  gap: 7px;
+  padding: 4px 9px 4px 7px;
+  border: 2px solid var(--ink-soft);
+  border-radius: 3px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 0.84rem;
+  line-height: 1.2;
+  text-align: left;
+  max-width: 100%;
+}
+.thing svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.thing b {
+  display: block;
+  font-weight: 600;
+}
+.thing small {
+  display: block;
+  font: 0.7rem var(--mono);
+  opacity: 0.8;
+  overflow-wrap: anywhere;
+}
+.thing.data {
+  border-color: var(--rule);
   background: var(--wash);
-  border-bottom: 2px solid var(--ink);
+}
+.thing.private-key {
+  background: var(--good);
+  border-color: var(--good);
+  color: var(--paper);
+}
+.thing.public-key,
+.thing.key-share {
+  border-color: var(--sig);
+  color: var(--sig);
+}
+.thing.shared-secret {
+  background: var(--mark);
+  border-color: var(--ink);
+}
+.thing.encrypted {
+  border-color: var(--ink);
+  color: var(--paper);
+  background: repeating-linear-gradient(135deg, var(--ink) 0 7px, #2c3850 7px 14px);
+}
+.thing.signature,
+.thing.token {
+  border-color: var(--ink);
+  box-shadow: inset 0 -5px 0 var(--good);
+  padding-bottom: 8px;
+}
+.thing.signature svg {
+  stroke: var(--good);
+}
+.thing.nothing {
+  border-style: dashed;
+  color: var(--ink-soft);
+}
+/* Anything the attacker holds or makes is red, whatever it is. */
+.thing.hostile {
+  border-color: var(--bad);
+  color: var(--bad);
+  background: var(--bad-wash);
+  box-shadow: none;
+}
+.thing.hostile.private-key,
+.thing.hostile.shared-secret {
+  background: var(--bad);
+  color: var(--paper);
+}
+.thing.hostile.token {
+  box-shadow: inset 0 -5px 0 var(--bad);
+}
+
+/* ---------- The lab: actors and the network ---------- */
+.mode-picker,
+.setup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 22px;
+}
+.mode-facts {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 22px;
+  font-size: 0.95rem;
+}
+.mode-facts dt {
+  color: var(--ink-soft);
   font-size: 0.85rem;
 }
-.browser-who {
+.mode-facts dd {
+  margin: 0;
+  font-weight: 600;
+}
+.mode-facts dd span {
   font-weight: 700;
-  white-space: nowrap;
+  margin-left: 6px;
 }
-.browser-url {
-  flex: 1;
-  min-width: 0;
-  background: var(--paper);
-  border: 1px solid var(--rule);
-  border-radius: 999px;
-  padding: 2px 12px;
-  font-family: var(--mono);
-  font-size: 0.8rem;
-  color: var(--ink-soft);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.mode-facts .weak dd span {
+  color: var(--mid);
 }
-.browser.intruder {
-  border-color: var(--bad);
+.mode-facts .safe dd span {
+  color: var(--good);
 }
-.browser.intruder .browser-bar {
-  border-bottom-color: var(--bad);
-  background: var(--bad-wash);
-}
-.browser.intruder .browser-who {
-  color: var(--bad);
-}
-.browser-page {
-  padding: 20px;
+.lab {
   display: grid;
-  align-content: center;
-  min-height: 200px;
+  gap: 16px;
 }
-.login-form,
-.app-home,
-.app-denied {
+.flow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(200px, 0.75fr) minmax(0, 1fr);
+  gap: 18px 0;
+}
+.actor {
+  position: relative;
+  z-index: 1;
   display: grid;
   gap: 12px;
+  align-content: start;
+  min-height: 25rem;
+  padding: 14px;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  transition: box-shadow 0.3s ease;
+}
+.actor.working {
+  box-shadow: 0 0 0 5px var(--mark);
+}
+.actor > header {
+  display: grid;
+  line-height: 1.25;
+}
+.actor > header b {
+  font: 700 1.15rem var(--head);
+}
+.actor > header span {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+/* In the attack the login is already over, so Alice's two machines need less room. */
+.with-attacker .actor:not(.actor-attacker) {
+  min-height: 18rem;
+}
+.actor-attacker {
+  grid-column: 1 / -1;
+  min-height: 10.5rem;
+  border-color: var(--bad);
+  grid-template-columns: 12rem minmax(0, 1.3fr) minmax(0, 1fr);
+  align-items: start;
+}
+.actor-attacker > header b {
+  color: var(--bad);
+}
+.actor-attacker .held {
+  grid-column: 3;
+  grid-row: 1;
+}
+.actor-attacker .operation {
+  grid-column: 2;
+  grid-row: 1;
+}
+.screen {
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  padding: 14px;
+  background: var(--wash);
+}
+.login-form,
+.app-home {
+  display: grid;
+  gap: 9px;
   justify-items: start;
 }
 .login-form label {
   display: grid;
-  gap: 4px;
+  gap: 3px;
   width: 100%;
-  font-size: 0.92rem;
+  font-size: 0.9rem;
   font-weight: 600;
 }
 .login-form input {
   font: 1rem var(--text);
-  padding: 9px 11px;
+  padding: 8px 10px;
   border: 2px solid var(--ink);
-  border-radius: 6px;
+  border-radius: 3px;
   width: 100%;
   background: var(--paper);
   color: var(--ink);
 }
 .login-form button {
   width: 100%;
-  padding-block: 10px;
-}
-.app-home ul {
-  margin: 0;
-  padding-left: 18px;
-}
-.app-home.breached h3 {
-  color: var(--bad);
-}
-.breach {
-  background: var(--bad);
-  color: var(--paper);
-  font-weight: 700;
-  padding: 6px 10px;
-  border-radius: 6px;
-}
-.waiting-note {
-  color: var(--ink-soft);
-}
-.strip-frames {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  gap: 8px;
-}
-.frame {
-  display: grid;
-  grid-template-columns: 28px minmax(0, 1fr);
-  gap: 6px 10px;
-  align-items: center;
-  border: 2px solid var(--rule);
-  border-radius: 8px;
-  padding: 10px 12px;
-  opacity: 0.3;
-  transition:
-    opacity 0.5s ease,
-    border-color 0.5s ease;
-}
-.frame.shown {
-  opacity: 1;
-  border-color: var(--ink);
-}
-.act.attack .frame.shown {
-  border-color: var(--bad);
-}
-.frame-n {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  font-size: 0.85rem;
-  font-weight: 700;
-  background: var(--wash);
-}
-.frame.shown .frame-n {
-  background: var(--ink);
-  color: var(--paper);
-}
-.act.attack .frame.shown .frame-n {
-  background: var(--bad);
-}
-.frame-pic {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  min-height: 46px;
-}
-.frame p {
-  grid-column: 2;
-  font-size: 0.95rem;
-}
-.verdict {
-  font-weight: 800;
-}
-.verdict.yes {
-  color: var(--good);
-}
-.verdict.no {
-  color: var(--ink-soft);
-}
-.verdict.breach {
-  color: var(--bad);
-}
-.cracker {
-  font: 0.82rem var(--mono);
-  letter-spacing: 0.03em;
-  padding: 4px 9px;
-  border-radius: 4px;
-  background: var(--ink);
-  color: #8d96a5;
-  overflow-wrap: anywhere;
-}
-.cracker .locked {
-  color: #7fe3ab;
-  font-weight: 600;
-}
-.cracker.failed {
-  opacity: 0.55;
-}
-.setup {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 14px 22px;
-}
-.switch-row {
-  display: grid;
-  gap: 5px;
-  font-size: 0.95rem;
-}
-.seg {
-  display: inline-flex;
-}
-.seg button {
-  font-size: 0.9rem;
-  border-radius: 0;
-  padding: 7px 11px;
-}
-.seg button:first-child {
-  border-radius: 6px 0 0 6px;
-  border-right-width: 0;
-}
-.seg button:last-child {
-  border-radius: 0 6px 6px 0;
-}
-button.danger {
-  background: var(--bad);
-  border-color: var(--bad);
-  color: var(--paper);
-}
-button.danger:hover:not(:disabled) {
-  background: var(--bad);
-}
-.attack-side {
-  display: grid;
-  gap: 14px;
-  align-content: start;
-}
-table.outcomes {
-  border-collapse: separate;
-  border-spacing: 4px;
-  font-size: 0.88rem;
-  width: 100%;
-}
-table.outcomes caption {
-  text-align: left;
-  font-weight: 700;
-  font-size: 1rem;
-  padding-bottom: 4px;
-}
-table.outcomes th {
-  font-weight: 600;
-  text-align: left;
-  color: var(--ink-soft);
-  padding: 4px 6px;
-}
-table.outcomes td {
-  padding: 10px 6px;
-  border-radius: 6px;
-  text-align: center;
-  font-weight: 700;
-}
-table.outcomes td.unknown {
-  border: 2px dashed var(--rule);
-  color: var(--ink-soft);
-}
-table.outcomes td.out {
-  background: var(--good-wash);
-  color: var(--good);
-}
-table.outcomes td.in {
-  background: var(--bad);
-  color: var(--paper);
-}
-
-/* ---------- The machines diagram ---------- */
-.stage {
-  position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  column-gap: 250px;
-  row-gap: 18px;
-  align-items: center;
-}
-.wires {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-}
-.wires line {
-  stroke: var(--rule);
-  stroke-width: 3;
-  stroke-dasharray: 2 9;
-  stroke-linecap: round;
-}
-.machine {
-  position: relative;
-  z-index: 1;
-  border: 2px solid var(--ink);
-  border-radius: 10px;
-  background: var(--paper);
-  padding: 14px;
-  display: grid;
-  gap: 10px;
-  transition: box-shadow 0.4s ease;
-}
-.machine.busy {
-  box-shadow: 0 0 0 5px var(--mark);
-}
-.stage.attack .m-left {
-  border-color: var(--bad);
-}
-.m-left {
-  grid-row: 1 / span 2;
-}
-/* Where things arrive and leave: just outside each machine, on the wire. */
-.dock {
-  position: absolute;
-  width: 2px;
-  height: 2px;
-  top: 50%;
-}
-.m-left .dock {
-  right: -78px;
-}
-.m-service .dock,
-.m-app .dock {
-  left: -78px;
-}
-.packet {
-  position: absolute;
-  z-index: 3;
-  transform: translate(-50%, -50%);
-  transition:
-    left 1.5s ease-in-out,
-    top 1.5s ease-in-out;
-  background: var(--paper);
-  border-radius: 8px;
-  box-shadow: 0 0 0 6px var(--paper);
-}
-.secretword {
-  display: inline-block;
-  font: 600 0.85rem var(--mono);
-  padding: 4px 10px;
-  border-radius: 6px;
-  background: var(--ink);
-  color: var(--paper);
-  letter-spacing: 0.02em;
-}
-.machine-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.machine-head svg {
-  width: 28px;
-  height: 28px;
-  flex: none;
-  fill: none;
-  stroke: var(--ink);
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.stage.attack .m-left .machine-head svg {
-  stroke: var(--bad);
-}
-.stage.attack .m-left .machine-head b {
-  color: var(--bad);
-}
-.machine-head div {
-  display: grid;
-  line-height: 1.25;
-}
-.machine-head span {
-  font-size: 0.85rem;
-  color: var(--ink-soft);
-}
-.holds {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 10px;
-  border: 1px solid var(--rule);
-  border-radius: 6px;
-  padding: 7px 10px;
-  font-size: 0.85rem;
-  color: var(--ink-soft);
-}
-.holds.locked {
-  /* The vault: what is in here never crosses a wire. */
-  border: 2px solid var(--good);
-  background: repeating-linear-gradient(135deg, var(--good-wash) 0 8px, var(--paper) 8px 16px);
-  color: var(--good);
-  font-weight: 600;
-}
-.screen {
-  border: 2px solid var(--ink);
-  border-radius: 8px;
-  padding: 14px;
-  background: var(--wash);
-}
-.screen .login-form,
-.screen .app-home {
-  gap: 9px;
-}
-.check {
-  font-weight: 800;
-  font-size: 0.95rem;
-}
-.check.fits {
-  color: var(--good);
-}
-.check.fooled {
-  color: var(--bad);
-}
-.steps-list {
-  margin: 0;
-  padding-left: 24px;
-  display: grid;
-  gap: 4px;
-  max-width: 46rem;
-}
-.steps-list li {
-  color: var(--rule);
-  transition: color 0.4s ease;
-}
-.steps-list li.done {
-  color: var(--ink-soft);
-}
-.steps-list li.now {
-  color: var(--ink);
-  font-weight: 700;
-}
-.bench {
-  display: grid;
-  gap: 8px;
-}
-.bench-row {
-  display: grid;
-  gap: 4px;
-  justify-items: start;
-  border: 1px solid var(--rule);
-  border-radius: 6px;
-  padding: 8px 10px;
-  opacity: 0.45;
-  transition: opacity 0.4s ease;
-}
-.bench-row.on {
-  opacity: 1;
-}
-.bench-row > span:first-child {
-  font-size: 0.82rem;
-  color: var(--ink-soft);
-}
-.bench-row em {
-  font-style: normal;
-  font-size: 0.9rem;
-  color: var(--ink-soft);
-}
-.bench-row strong.got-in {
-  color: var(--bad);
-}
-.attack-foot {
-  display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
-  gap: 22px;
-  align-items: start;
-}
-@media (max-width: 860px) {
-  .attack-foot {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  /* Stack the machines with the person's computer in the middle, so both wires stay short. */
-  .stage {
-    grid-template-columns: minmax(0, 1fr);
-    row-gap: 64px;
-  }
-  .m-service {
-    order: 1;
-  }
-  .m-left {
-    order: 2;
-    grid-row: auto;
-  }
-  .m-app {
-    order: 3;
-  }
-  .dock {
-    left: auto;
-    right: 70px;
-  }
-  .m-service .dock {
-    left: auto;
-    top: auto;
-    bottom: -32px;
-  }
-  .m-app .dock {
-    left: auto;
-    top: -32px;
-  }
-  .m-left .dock {
-    right: 70px;
-    top: 22px;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .packet,
-  .machine,
-  .steps-list li,
-  .bench-row {
-    transition: none;
-  }
-}
-
-/* ---------- Signatures as bars, signing and checking ---------- */
-.bars {
-  display: inline-flex;
-  align-items: flex-end;
-  gap: 2px;
-  height: 18px;
-}
-.bars i {
-  width: 5px;
-  border-radius: 1px;
-  background: currentColor;
-}
-.bars i.hi {
-  height: 18px;
-}
-.bars i.lo {
-  height: 8px;
-}
-.bars.secret {
-  color: var(--good);
-}
-.bars.attacker {
-  color: var(--bad);
-}
-.bars.public {
-  color: var(--sig);
-}
-.bars i.match {
-  background: var(--good);
-}
-.bars i.miss {
-  background: var(--bad);
-}
-.minitoken .bars {
-  margin-top: 4px;
-}
-.unsigned {
-  margin-top: 4px;
-  border: 1px dashed var(--ink-soft);
-  border-radius: 3px;
-  padding: 0 5px;
-  color: var(--ink-soft);
-  font-size: 0.72rem;
-}
-.bench-op {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  padding: 8px;
-  border-radius: 6px;
-  background: var(--wash);
-}
-.bench-op .op {
-  font-weight: 800;
-  font-size: 1.1rem;
-}
-.bench-op .minitoken {
-  padding: 4px 6px;
-  font-size: 0.72rem;
-}
-.bench-op .keytag {
-  font-size: 0.78rem;
-  padding: 2px 7px 2px 5px;
-}
-.bench-op .keytag svg {
-  width: 22px;
-}
-.bench-check {
-  display: grid;
-  gap: 6px;
-  padding: 10px;
-  border-radius: 6px;
-  background: var(--wash);
-}
-.bench-check div {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-  gap: 10px;
-  font-size: 0.85rem;
-  color: var(--ink-soft);
+  padding-block: 9px;
 }
 .success {
   color: var(--good);
   font-size: 1.25rem;
 }
-
-/* ---------- The step-through timeline ---------- */
-.timeline {
-  display: grid;
-  gap: 12px;
+.actor-note {
+  font-size: 0.9rem;
+  color: var(--ink-soft);
 }
-.timeline ol {
+.held {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  align-self: end;
+  padding-top: 10px;
+  border-top: 1px solid var(--rule);
+}
+.held-label {
+  flex: 1 1 100%;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}
+.operation {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+  padding: 10px;
+  background: var(--mark-wash);
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+}
+.op-inputs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.op-verb {
+  font: 700 0.95rem var(--head);
+  padding: 2px 10px;
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: 3px;
+}
+.op-verb::before {
+  content: '↓ ';
+}
+.op-output {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.op-result {
+  font-weight: 700;
+  font-size: 1.3rem;
+  color: var(--good);
+}
+.operation.failed .op-result,
+.operation:has(.op-output .hostile) .op-result {
+  color: var(--bad);
+}
+.actor-attacker .operation {
+  background: var(--bad-wash);
+  border-color: var(--bad);
+}
+.actor-attacker .op-verb {
+  background: var(--bad);
+}
+.actor-attacker .operation.failed .op-result {
+  color: var(--good);
+}
+.actor-attacker .operation.passed .op-result {
+  color: var(--bad);
+}
+
+.net {
+  position: relative;
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  gap: 2px;
+  padding-top: 14px;
+  text-align: center;
+}
+.net-name {
+  font: 700 1.15rem var(--head);
+}
+.net-state {
+  font-size: 0.85rem;
+  color: var(--bad);
+  font-weight: 600;
+}
+.net.secured .net-state {
+  color: var(--good);
+}
+.wire {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 0;
+  border-top: 3px dashed var(--ink-soft);
+  transform: translateY(-50%);
+}
+/* Once the channel is encrypted the wire becomes a closed tunnel, drawn like every other encrypted thing. */
+.net.secured .wire {
+  height: 16px;
+  border: 0;
+  background: repeating-linear-gradient(135deg, var(--ink) 0 7px, #2c3850 7px 14px);
+}
+.packet {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  transition:
+    left 0.85s ease-in-out,
+    top 0.85s ease-in-out;
+  width: max-content;
+  max-width: 13rem;
+}
+.packet.lane-1 {
+  top: calc(50% + 54px);
+}
+.packet.at-browser {
+  left: 22%;
+}
+.packet.at-server {
+  left: 78%;
+}
+.packet.at-attacker {
+  left: 50%;
+  top: calc(100% + 30px);
+}
+
+.narration {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 19rem;
+  gap: 24px;
+  align-items: start;
+  padding: 16px;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+}
+.narration-text {
+  display: grid;
+  gap: 6px;
+  min-height: 8.5rem;
+  align-content: start;
+}
+.step-count {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+.narration h3 {
+  font-size: 1.5rem;
+}
+.narration h3.good {
+  color: var(--good);
+}
+.narration h3.bad {
+  color: var(--bad);
+}
+.narration details p {
+  max-width: 44rem;
+  margin-top: 4px;
+}
+.narration details details {
+  margin-top: 8px;
+  font-size: 0.93rem;
+}
+.idle-hint {
+  color: var(--ink-soft);
+}
+.authenticity {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 2px 8px;
+  border-left: 4px solid var(--good);
+  background: var(--wash);
+  font-size: 0.85rem;
+}
+.authenticity.representative {
+  border-left-color: var(--ink-soft);
+}
+.authenticity.conceptual {
+  border-left-color: var(--bad);
+}
+.layers {
   margin: 0;
   padding: 0;
   list-style: none;
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+}
+.layers li {
+  display: grid;
+  padding: 6px 10px;
+  border: 1px solid var(--rule);
+  border-left: 6px solid var(--rule);
+  border-radius: 3px;
+  color: var(--ink-soft);
+  line-height: 1.25;
+}
+.layers li b {
+  font-size: 0.92rem;
+}
+.layers li span {
+  font-size: 0.8rem;
+}
+.layers li[aria-current] {
+  border-color: var(--ink);
+  background: var(--mark-wash);
+  color: var(--ink);
+}
+.player {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+}
+.player-buttons {
+  display: flex;
   gap: 6px;
 }
-.timeline ol button {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  text-align: left;
+.player-buttons button {
   font-size: 0.9rem;
-  padding: 8px 10px;
+  padding: 6px 12px;
+}
+.dots {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  gap: 4px;
+}
+.dots button {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  font-size: 0.85rem;
   border-color: var(--rule);
   color: var(--ink-soft);
 }
-.timeline ol button span {
-  flex: none;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: var(--wash);
-  font-size: 0.82rem;
-}
-.timeline ol button[aria-current='step'] {
+.dots button[aria-current] {
   border-color: var(--ink);
   background: var(--ink);
   color: var(--paper);
 }
-.timeline ol button[aria-current='step'] span {
+
+table.results {
+  width: 100%;
+  max-width: 50rem;
+  border-collapse: collapse;
   background: var(--paper);
-  color: var(--ink);
+  font-size: 0.93rem;
 }
-.act.attack .timeline ol button[aria-current='step'] {
-  border-color: var(--bad);
-  background: var(--bad);
+table.results caption {
+  text-align: left;
+  font: 700 1.15rem var(--head);
+  padding-bottom: 6px;
 }
-.act.attack .timeline ol button[aria-current='step'] span {
+table.results th,
+table.results td {
+  text-align: left;
+  padding: 8px 12px;
+  border: 1px solid var(--rule);
+  vertical-align: top;
+}
+table.results thead th {
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+table.results tr.current th {
+  box-shadow: inset 6px 0 0 var(--mark);
+}
+table.results td span {
+  display: block;
+  font-weight: 600;
+}
+table.results .good {
+  color: var(--good);
+}
+table.results .bad {
   color: var(--bad);
 }
-.timeline-now {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 16px;
-  align-items: center;
+table.results .untried {
+  color: var(--ink-soft);
+  font-weight: 400;
 }
-.timeline-now p {
-  font-size: 1.1rem;
-  max-width: 48rem;
+.next-question {
+  max-width: 50rem;
+  padding: 12px 14px;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-left-width: 8px;
+  border-radius: 3px;
+  font-size: 1.05rem;
 }
-.timeline-nav {
-  display: flex;
-  gap: 8px;
-}
-.act > table.outcomes {
-  max-width: 34rem;
-}
-@media (max-width: 760px) {
-  .timeline ol {
+
+@media (max-width: 820px) {
+  .flow {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+  .actor {
+    min-height: 0;
+  }
+  .net {
+    height: 150px;
+    padding-top: 6px;
+    justify-items: start;
+  }
+  .wire,
+  .net.secured .wire {
+    left: 50%;
+    right: auto;
+    top: 0;
+    bottom: 0;
+    height: auto;
+    width: 0;
+    border: 0;
+    border-left: 3px dashed var(--ink-soft);
+    background: none;
+    transform: none;
+  }
+  .net.secured .wire {
+    border-left: 12px solid var(--ink);
+    margin-left: -6px;
+  }
+  .packet.at-browser,
+  .packet.at-server,
+  .packet.at-attacker,
+  .packet.lane-1 {
+    left: 50%;
+  }
+  .packet.at-browser {
+    top: 30%;
+  }
+  .packet.at-server,
+  .packet.at-attacker {
+    top: 80%;
+  }
+  .packet.lane-1.at-browser,
+  .packet.lane-1.at-server {
+    top: 55%;
+  }
+  .actor-attacker {
+    margin-top: 18px;
     grid-template-columns: minmax(0, 1fr);
   }
-  .timeline-now {
+  .actor-attacker .held,
+  .actor-attacker .operation {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .narration {
     grid-template-columns: minmax(0, 1fr);
   }
 }
@@ -1283,236 +1150,263 @@ table.outcomes td.in {
   border: 1.5px solid var(--bad);
 }
 
-/* ---------- 4. The switch ---------- */
-.score {
+/* ---------- Migrate a real system ---------- */
+.migrate-bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px 18px;
+  gap: 12px 20px;
 }
-.pips {
+.meter {
   display: flex;
-  gap: 6px;
+  gap: 4px;
 }
-.pips i {
+.meter i {
   width: 22px;
   height: 22px;
-  border-radius: 50%;
   border: 2px solid var(--ink);
+  background: var(--paper);
 }
-.pips i.safe {
+.meter i.protected {
   background: var(--good);
   border-color: var(--good);
 }
-.pips i.locked {
+.meter i.legacy {
+  background: var(--mid);
+  border-color: var(--mid);
+}
+.meter i.broken {
   background: var(--bad);
   border-color: var(--bad);
 }
-.score .locked {
-  color: var(--bad);
+.meter i.blocked {
+  border-color: var(--ink-soft);
+  background: repeating-linear-gradient(135deg, var(--ink-soft) 0 3px, var(--paper) 3px 7px);
 }
-.score .won {
-  color: var(--good);
+.meter i.unknown {
+  border: 2px dashed var(--ink-soft);
 }
-.score-actions {
+.meter-key {
+  margin: 0;
+  padding: 0;
+  list-style: none;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 2px 14px;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--ink-soft);
 }
-.board {
+.meter-key .protected {
+  color: var(--good);
+}
+.meter-key .legacy {
+  color: var(--mid);
+}
+.meter-key .broken {
+  color: var(--bad);
+}
+.migrate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-left: auto;
+}
+.outage {
+  padding: 10px 14px;
+  background: var(--bad);
+  color: var(--paper);
+  font-weight: 600;
+  border-radius: 3px;
+}
+.system {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
 }
-@media (max-width: 640px) {
-  .board {
-    grid-template-columns: minmax(0, 1fr);
-  }
+.path {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px 34px;
 }
-.card {
-  border: 2px solid var(--ink);
-  border-radius: 10px;
-  padding: 16px;
+.node {
+  position: relative;
   display: grid;
   gap: 10px;
   align-content: start;
-  min-width: 0;
+  padding: 14px;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-top-width: 8px;
+  border-radius: 3px;
 }
-.card.service {
-  grid-column: 1 / -1;
-  background: var(--wash);
+.node.unknown {
+  border-top-color: var(--rule);
 }
-.card-state {
+.node.protected {
+  border-top-color: var(--good);
+}
+.node.legacy {
+  border-top-color: var(--mid);
+}
+.node.broken {
+  border-top-color: var(--bad);
+}
+.node.blocked {
+  border-top-color: var(--ink-soft);
+}
+/* Arrows along the path a login takes. */
+.path:not(.behind) .node + .node::before {
+  content: '';
+  position: absolute;
+  left: -32px;
+  top: 14px;
+  width: 26px;
+  height: 14px;
+  background: var(--ink);
+  clip-path: polygon(0 38%, 62% 38%, 62% 0, 100% 50%, 62% 100%, 62% 62%, 0 62%);
+}
+.path:not(.behind) .node:last-child::after,
+.behind .node::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  height: 26px;
+  border-left: 2px solid var(--ink);
+}
+.path:not(.behind) .node:last-child::after {
+  top: 100%;
+}
+.behind .node::before {
+  bottom: calc(100% + 8px);
+  height: 18px;
+}
+.relies {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-block: 14px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+.relies::before,
+.relies::after {
+  content: '';
+  flex: 1;
+  border-top: 2px solid var(--ink);
+}
+.node > header {
+  display: grid;
+  line-height: 1.25;
+}
+.node > header b {
+  font: 700 1.15rem var(--head);
+}
+.node > header span {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+.deps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+.deps li {
+  display: grid;
+  padding-left: 10px;
+  border-left: 4px solid var(--rule);
+  font-size: 0.92rem;
+  line-height: 1.3;
+}
+.dep-what {
+  color: var(--ink-soft);
+  font-size: 0.84rem;
+}
+.dep-status {
+  font-size: 0.84rem;
   font-weight: 700;
   color: var(--ink-soft);
 }
-.card.safe {
-  border-color: var(--good);
-  background: var(--good-wash);
+.deps li p {
+  font-size: 0.88rem;
+  margin-top: 2px;
 }
-.card.safe .card-state {
+.deps li.protected {
+  border-left-color: var(--good);
+}
+.deps li.protected .dep-status {
   color: var(--good);
 }
-.card.locked {
-  border-color: var(--bad);
+.deps li.legacy {
+  border-left-color: var(--mid);
+}
+.deps li.legacy .dep-status {
+  color: var(--mid);
+}
+.deps li.broken {
+  border-left-color: var(--bad);
   background: var(--bad-wash);
+  padding-block: 4px;
 }
-.card.locked .card-state,
-.card-why {
+.deps li.broken .dep-status,
+.deps li.broken p {
   color: var(--bad);
 }
-.card-why {
-  font-size: 0.93rem;
+.deps li.blocked {
+  border-left-style: dotted;
+  border-left-color: var(--ink-soft);
 }
-/* ---------- The switch: one row per app, three columns, old is grey and new is blue ---------- */
-.switch-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 10px;
-}
-.switch-score {
-  margin-left: 6px;
-}
-.switch-score .locked {
-  color: var(--bad);
-}
-.grid-board {
-  display: grid;
-  gap: 12px;
-}
-.service-row {
-  display: grid;
-  grid-template-columns: 9rem auto minmax(0, 1fr) minmax(0, 1fr);
-  gap: 10px;
-  align-items: center;
-  border: 2px solid var(--ink);
-  border-radius: 10px;
-  padding: 12px 14px;
-  background: var(--wash);
-}
-.service-row .dep,
-.depends {
-  font-size: 0.9rem;
-  color: var(--ink-soft);
-}
-.depends {
-  padding-left: 14px;
-  border-left: 3px dotted var(--rule);
-  margin-left: 4.5rem;
-}
-.matrix {
+.node-actions {
   display: grid;
   gap: 6px;
 }
-.matrix-head,
-.matrix-row {
-  display: grid;
-  grid-template-columns: 7rem repeat(3, minmax(0, 1fr)) minmax(0, 1.25fr);
-  gap: 8px;
-  align-items: stretch;
-}
-.matrix-head {
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: var(--ink-soft);
-  padding-inline: 12px;
-}
-.matrix-row {
-  border: 2px solid var(--rule);
-  border-radius: 10px;
-  padding: 10px 12px;
-  align-items: center;
-}
-.matrix-row.safe {
-  border-color: var(--good);
-  background: var(--good-wash);
-}
-.matrix-row.locked {
-  border-color: var(--bad);
-  background: var(--bad-wash);
-}
-/* A part. Grey with a dashed edge is the old part; solid blue is the new one. */
-.cell {
-  display: grid;
-  gap: 1px;
+.node-actions button {
+  font-size: 0.9rem;
+  padding: 7px 10px;
   text-align: left;
-  padding: 8px 10px;
-  border: 2px dashed var(--ink-soft);
-  background: var(--paper);
-  color: var(--ink-soft);
+}
+.node-actions button small {
+  display: block;
   font-weight: 400;
 }
-.cell b {
-  color: var(--ink);
-  font-size: 0.93rem;
-}
-.cell span {
-  font-size: 0.82rem;
-}
-.cell.old:not(:disabled) span,
-.cell.empty:not(:disabled) span {
-  color: var(--sig);
-  font-weight: 700;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-.cell.new {
-  border: 2px solid var(--sig);
-  background: var(--sig-wash);
-  color: var(--sig);
-}
-.cell.new:hover:not(:disabled) {
-  background: var(--sig-wash);
-}
-.cell.gone b {
-  text-decoration: line-through;
-}
-.cell:disabled {
-  opacity: 1;
-  cursor: default;
-}
-.result {
+.migrated {
   display: grid;
-  gap: 2px;
-  font-size: 0.88rem;
-}
-.result b {
-  color: var(--ink-soft);
-}
-.matrix-row.safe .result b {
-  color: var(--good);
-}
-.matrix-row.locked .result {
-  color: var(--bad);
-}
-.matrix-row.locked .result b {
-  color: var(--bad);
-}
-.switch-done {
+  gap: 12px;
+  margin-top: 8px;
+  padding: 20px;
   background: var(--good-wash);
+  border: 2px solid var(--good);
+  border-radius: 3px;
+}
+.migrated h3 {
+  font-size: clamp(1.4rem, 3vw, 1.9rem);
   color: var(--good);
-  font-weight: 600;
-  padding: 12px 14px;
-  border-radius: 8px;
+}
+.migrated ul {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 4px;
   max-width: 52rem;
 }
 @media (max-width: 820px) {
-  .service-row {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  .path {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 30px;
   }
-  .service-row > b,
-  .service-row .dep {
-    grid-column: 1 / -1;
+  .path:not(.behind) .node + .node::before {
+    left: 20px;
+    top: -30px;
+    transform: rotate(90deg);
   }
-  .depends {
-    margin-left: 0;
-  }
-  .matrix-head {
+  .path:not(.behind) .node:last-child::after,
+  .behind .node::before {
     display: none;
   }
-  .matrix-row {
-    grid-template-columns: minmax(0, 1fr);
+  .migrate-actions {
+    margin-left: 0;
   }
 }
 
@@ -1533,7 +1427,7 @@ pre.cmd {
   padding: 14px 16px;
   background: var(--ink);
   color: var(--paper);
-  border-radius: 6px;
+  border-radius: 3px;
   font-size: 0.84rem;
   line-height: 1.6;
   white-space: pre-wrap;
@@ -1545,7 +1439,7 @@ a.cta {
   color: var(--paper);
   background: var(--ink);
   padding: 9px 15px;
-  border-radius: 6px;
+  border-radius: 3px;
   text-decoration: none;
 }
 
@@ -1580,11 +1474,11 @@ button.btn {
   font-size: 0.9rem;
   padding: 6px 11px;
 }
-.token {
+textarea.token {
   font: 0.8rem/1.5 var(--mono);
   word-break: break-all;
   background: var(--wash);
-  border-radius: 6px;
+  border-radius: 3px;
   padding: 12px;
   max-height: 170px;
   overflow: auto;
@@ -1599,19 +1493,9 @@ textarea.token {
   color: var(--ink);
   resize: vertical;
 }
-.token .h {
-  color: var(--ink-soft);
-}
-.token .p {
-  color: var(--ink);
-  font-weight: 600;
-}
-.token .s {
-  color: var(--sig);
-}
 .verdict-banner {
   padding: 14px 16px;
-  border-radius: 6px;
+  border-radius: 3px;
   background: var(--wash);
   display: grid;
   gap: 6px;
@@ -1771,7 +1655,8 @@ table.data th {
   html {
     scroll-behavior: auto;
   }
-  .frame {
+  .packet,
+  .actor {
     transition: none;
   }
 }

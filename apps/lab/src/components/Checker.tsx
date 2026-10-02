@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { analyzeProvider, discoveryUrl } from '@pq-oidc/token-kit/readiness';
 import type { KeySummary, ProviderReport } from '@pq-oidc/token-kit/readiness';
+import type { Mode } from '../lab/crypto.ts';
 import { TokenCheck } from './TokenCheck.tsx';
 
 /**
@@ -118,11 +119,13 @@ function KeyRow({ k }: { k: KeySummary }) {
   );
 }
 
-function Report({ result }: { result: Done }) {
+function Report({ result, onSeeInLab }: { result: Done; onSeeInLab: (mode: Mode) => void }) {
   const [copied, setCopied] = useState(false);
   const { report } = result;
   const verdict = VERDICT[report.verdict];
   const signingKeys = report.keys.filter((k) => k.use !== 'enc');
+  const kinds = [...new Set(signingKeys.map((k) => k.strength))].join(' and ');
+  const weak = report.verdict !== 'ready';
 
   async function copyLink() {
     try {
@@ -167,12 +170,41 @@ function Report({ result }: { result: Done }) {
         </div>
       </section>
 
-      <footer>
+      <section>
+        <h3>What this check can and can’t see</h3>
+        <dl className="evidence">
+          <div>
+            <dt>Observed</dt>
+            <dd>
+              The public keys this service signs login tokens with, read at{' '}
+              {result.checkedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} from its own{' '}
+              <a href={result.discoveryUrl}>settings</a> and <a href={result.jwksUrl}>keys</a> documents.
+            </dd>
+          </div>
+          <div>
+            <dt>Inferred</dt>
+            <dd>
+              {weak
+                ? 'That a large quantum computer could work out the private key behind each breakable public key, and then sign logins as this service.'
+                : 'That no known quantum attack recovers the private keys behind these public keys.'}
+            </dd>
+          </div>
+          <div>
+            <dt>Not visible from here</dt>
+            <dd>
+              How the HTTPS connection to this service agrees its keys. That is a separate layer, and a web page can’t
+              inspect it. A quantum-safe connection does not make these signatures quantum-safe, or the reverse.
+            </dd>
+          </div>
+        </dl>
         <p>
-          Read {result.checkedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} from the service’s own
-          public documents: <a href={result.discoveryUrl}>settings</a> and <a href={result.jwksUrl}>keys</a>. Open them
-          to check this report yourself.
+          <button type="button" className="link" onClick={() => onSeeInLab(weak ? 'classical' : 'pq')}>
+            See what {weak ? `a quantum-breakable signature (${kinds})` : 'a quantum-safe signature'} does in a login
+          </button>
         </p>
+      </section>
+
+      <footer>
         <div className="report-actions">
           {result.issuer.startsWith('https://') && (
             <button type="button" onClick={copyLink}>
@@ -203,7 +235,7 @@ function Report({ result }: { result: Done }) {
   );
 }
 
-export function Checker() {
+export function Checker({ onSeeInLab }: { onSeeInLab: (mode: Mode) => void }) {
   const [mode, setMode] = useState<'service' | 'token'>('service');
   const [input, setInput] = useState(EXAMPLES[0]!.issuer);
   const [result, setResult] = useState<Result>({ state: 'loading', issuer: EXAMPLES[0]!.issuer });
@@ -285,11 +317,11 @@ export function Checker() {
                   </header>
                 </article>
               )}
-              {result.state === 'done' && <Report result={result} />}
+              {result.state === 'done' && <Report result={result} onSeeInLab={onSeeInLab} />}
             </div>
           </>
         ) : (
-          <TokenCheck />
+          <TokenCheck onSeeInLab={onSeeInLab} />
         )}
       </div>
     </section>
