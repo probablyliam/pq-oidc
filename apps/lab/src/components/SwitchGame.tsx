@@ -1,32 +1,87 @@
 import { useEffect, useRef, useState } from 'react';
+import type { DragEvent, KeyboardEvent } from 'react';
 import { appStatus, INITIAL_STATE, safeSteps, summarize } from '../sim/migration.ts';
 import type { SimApp, SimState } from '../sim/migration.ts';
 
+/**
+ * The migration as swapping parts. The login service and each app are built
+ * from parts; the new parts sit in a tray. Drag one onto a matching slot (or
+ * tap the part, then the slot). Fit the new signature before an app is ready
+ * and its users are locked out: the order is the lesson.
+ */
 const STEP_DELAY_MS = 800;
 
-/**
- * The migration as a small game: one goal, and buttons named after what they
- * do. Switching an app before it is ready locks its users out, which is the
- * lesson; the player finds the safe order by trying.
- */
+type Part = 'pq-key' | 'reader' | 'storage' | 'pq-signature';
+type Slot = { where: 'service' } | { where: 'app'; id: string; slot: 'reader' | 'storage' | 'signature' };
+
+const PARTS: { id: Part; name: string; does: string }[] = [
+  { id: 'pq-key', name: 'Quantum-proof key', does: 'for the login service' },
+  { id: 'reader', name: 'Updated reader', does: 'lets an app check the new signature' },
+  { id: 'storage', name: 'Server-side storage', does: 'keeps the token out of a cookie' },
+  { id: 'pq-signature', name: 'Quantum-proof signature', does: 'replaces today’s signature on an app' },
+];
+
+/** Which part a slot takes, if it still holds the old one. */
+function accepts(slot: Slot, state: SimState): Part | undefined {
+  if (slot.where === 'service') return state.publishedKeys['ML-DSA-65'] ? undefined : 'pq-key';
+  const app = state.apps.find((a) => a.id === slot.id);
+  if (!app) return undefined;
+  if (slot.slot === 'reader') return app.libraryUpgraded ? undefined : 'reader';
+  if (slot.slot === 'storage') return app.tokenInCookie ? 'storage' : undefined;
+  return app.alg === 'ES256' ? 'pq-signature' : undefined;
+}
+
+function fit(slot: Slot, state: SimState): SimState {
+  if (slot.where === 'service') return { ...state, publishedKeys: { ...state.publishedKeys, 'ML-DSA-65': true } };
+  const change: Partial<SimApp> =
+    slot.slot === 'reader' ? { libraryUpgraded: true } : slot.slot === 'storage' ? { tokenInCookie: false } : { alg: 'ML-DSA-65' };
+  return { ...state, apps: state.apps.map((a) => (a.id === slot.id ? { ...a, ...change } : a)) };
+}
+
 export function SwitchGame() {
   const [state, setState] = useState<SimState>(INITIAL_STATE);
+  const [held, setHeld] = useState<Part>();
   const [playing, setPlaying] = useState(false);
   const timers = useRef<number[]>([]);
   const summary = summarize(state);
 
   useEffect(() => () => timers.current.forEach(window.clearTimeout), []);
 
-  const updateApp = (id: string, change: Partial<SimApp>) =>
-    setState((s) => ({ ...s, apps: s.apps.map((a) => (a.id === id ? { ...a, ...change } : a)) }));
-  const setKey = (alg: 'ES256' | 'ML-DSA-65', on: boolean) =>
-    setState((s) => ({ ...s, publishedKeys: { ...s.publishedKeys, [alg]: on } }));
+  function place(slot: Slot, part: Part | undefined) {
+    if (playing || !part || accepts(slot, state) !== part) return;
+    setState((s) => fit(slot, s));
+    setHeld(undefined);
+  }
+
+  /** Props for anything a part can be dropped on or tapped into. */
+  function slotProps(slot: Slot) {
+    const wanted = accepts(slot, state);
+    const open = wanted !== undefined && held === wanted;
+    return {
+      className: `slot ${wanted ? 'old' : 'new'} ${open ? 'open' : ''}`,
+      onDragOver: (e: DragEvent) => {
+        if (open) e.preventDefault();
+      },
+      onDrop: (e: DragEvent) => {
+        e.preventDefault();
+        place(slot, e.dataTransfer.getData('text/plain') as Part);
+      },
+      onClick: () => place(slot, held),
+      onKeyDown: (e: KeyboardEvent) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          place(slot, held);
+        }
+      },
+    };
+  }
 
   function showMe() {
     timers.current.forEach(window.clearTimeout);
-    const steps = safeSteps(INITIAL_STATE);
+    setHeld(undefined);
     setState(INITIAL_STATE);
     setPlaying(true);
+    const steps = safeSteps(INITIAL_STATE);
     timers.current = steps.map((next, i) =>
       window.setTimeout(
         () => {
@@ -41,21 +96,23 @@ export function SwitchGame() {
   function startOver() {
     timers.current.forEach(window.clearTimeout);
     setPlaying(false);
+    setHeld(undefined);
     setState(INITIAL_STATE);
   }
 
   const hasNew = state.publishedKeys['ML-DSA-65'];
   const hasOld = state.publishedKeys.ES256;
+  const setOldKey = (on: boolean) => setState((s) => ({ ...s, publishedKeys: { ...s.publishedKeys, ES256: on } }));
+  const switchBack = (id: string) =>
+    setState((s) => ({ ...s, apps: s.apps.map((a) => (a.id === id ? { ...a, alg: 'ES256' as const } : a)) }));
 
   return (
     <section className="block" id="switch">
       <h2>Your turn: make the switch</h2>
-      <p className="sub">
-        Protect all four apps and retire the old key, without locking anyone out.
-      </p>
+      <p className="sub">Fit the new parts so all four apps are protected, without locking anyone out.</p>
 
       <div className="score" aria-live="polite">
-        <div className="pips" role="img" aria-label={`${summary.quantumSafe} of ${summary.total} apps protected, ${summary.broken} locked out`}>
+        <div className="pips" role="img" aria-label={`${summary.quantumSafe} of 4 apps protected, ${summary.broken} locked out`}>
           {state.apps.map((app) => {
             const status = appStatus(app, state);
             return <i key={app.id} className={status.ok ? (status.quantumSafe ? 'safe' : '') : 'locked'} />;
@@ -64,7 +121,7 @@ export function SwitchGame() {
         <p>
           <b>{summary.quantumSafe} of 4 protected</b>
           {summary.broken > 0 && <b className="locked">, {summary.broken} locked out</b>}
-          {summary.done && <b className="won">. Done: no login here can be forged with a quantum computer.</b>}
+          {summary.done && <b className="won">. Done.</b>}
         </p>
         <div className="score-actions">
           <button type="button" onClick={showMe} disabled={playing}>
@@ -76,23 +133,49 @@ export function SwitchGame() {
         </div>
       </div>
 
+      <div className="tray">
+        <p className="tray-label">New parts. Drag one onto a slot, or tap it and then tap the slot.</p>
+        <div className="parts">
+          {PARTS.map((part) => (
+            <button
+              key={part.id}
+              type="button"
+              className="part"
+              draggable={!playing}
+              aria-pressed={held === part.id}
+              disabled={playing}
+              onDragStart={(e) => {
+                e.dataTransfer.setData('text/plain', part.id);
+                e.dataTransfer.effectAllowed = 'copy';
+                setHeld(part.id);
+              }}
+              onDragEnd={() => setHeld(undefined)}
+              onClick={() => setHeld((h) => (h === part.id ? undefined : part.id))}
+            >
+              <b>{part.name}</b>
+              <span>{part.does}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="board">
         <article className="card service">
           <h3>Login service</h3>
-          <ul className="has">
-            <li className={hasOld ? 'on' : 'off'}>Old key {hasOld ? 'in use' : 'retired'}</li>
-            <li className={hasNew ? 'on' : 'off'}>{hasNew ? 'Quantum-proof key added' : 'No quantum-proof key yet'}</li>
-          </ul>
-          <div className="card-actions">
-            {!hasNew ? (
-              <button type="button" className="primary" disabled={playing} onClick={() => setKey('ML-DSA-65', true)}>
-                Add the quantum-proof key
-              </button>
-            ) : (
-              <button type="button" disabled={playing} onClick={() => setKey('ES256', !hasOld)}>
-                {hasOld ? 'Retire the old key' : 'Bring the old key back'}
-              </button>
-            )}
+          <div className="slots">
+            <div className={`slot fixed ${hasOld ? 'old' : 'gone'}`}>
+              <span className="slot-role">Signs with</span>
+              <b>{hasOld ? 'Old key' : 'Old key, retired'}</b>
+              {hasNew && (
+                <button type="button" className="mini" disabled={playing} onClick={() => setOldKey(!hasOld)}>
+                  {hasOld ? 'Retire it' : 'Bring it back'}
+                </button>
+              )}
+            </div>
+            <div {...slotProps({ where: 'service' })} role="button" tabIndex={0}>
+              <span className="slot-role">And with</span>
+              <b>{hasNew ? 'Quantum-proof key' : 'Empty: needs the quantum-proof key'}</b>
+            </div>
           </div>
         </article>
 
@@ -107,33 +190,32 @@ export function SwitchGame() {
                 {status.ok ? (status.quantumSafe ? 'Protected' : 'Working, but logins can be forged') : 'Users locked out'}
               </p>
               {!status.ok && <p className="card-why">{status.message}</p>}
-              <ul className="has">
-                <li className={app.libraryUpgraded ? 'on' : 'off'}>
-                  {app.libraryUpgraded ? 'Can read the new signature' : 'Can’t read the new signature yet'}
-                </li>
-                <li className={app.tokenInCookie ? 'off' : 'on'}>
-                  {app.tokenInCookie ? 'Keeps the login token in a cookie' : 'Keeps the token out of cookies'}
-                </li>
-              </ul>
-              <div className="card-actions">
-                {!app.libraryUpgraded && (
-                  <button type="button" disabled={playing} onClick={() => updateApp(app.id, { libraryUpgraded: true })}>
-                    Update the app
-                  </button>
-                )}
-                {app.tokenInCookie && (
-                  <button type="button" disabled={playing} onClick={() => updateApp(app.id, { tokenInCookie: false })}>
-                    Stop using the cookie
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className={switched ? '' : 'primary'}
-                  disabled={playing}
-                  onClick={() => updateApp(app.id, { alg: switched ? 'ES256' : 'ML-DSA-65' })}
-                >
-                  {switched ? 'Switch back' : 'Switch to the new signature'}
-                </button>
+              <div className="slots">
+                <div {...slotProps({ where: 'app', id: app.id, slot: 'reader' })} role="button" tabIndex={0}>
+                  <span className="slot-role">Checks signatures with</span>
+                  <b>{app.libraryUpgraded ? 'Updated reader' : 'Old reader'}</b>
+                </div>
+                <div {...slotProps({ where: 'app', id: app.id, slot: 'storage' })} role="button" tabIndex={0}>
+                  <span className="slot-role">Keeps the token in</span>
+                  <b>{app.tokenInCookie ? 'A browser cookie' : 'Server-side storage'}</b>
+                </div>
+                <div {...slotProps({ where: 'app', id: app.id, slot: 'signature' })} role="button" tabIndex={0}>
+                  <span className="slot-role">Receives</span>
+                  <b>{switched ? 'Quantum-proof signature' : 'Today’s signature'}</b>
+                  {switched && (
+                    <button
+                      type="button"
+                      className="mini"
+                      disabled={playing}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        switchBack(app.id);
+                      }}
+                    >
+                      Put the old one back
+                    </button>
+                  )}
+                </div>
               </div>
             </article>
           );

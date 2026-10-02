@@ -292,13 +292,6 @@ export function Checker() {
           <TokenCheck />
         )}
       </div>
-
-      <p className="scope">
-        This checks the signature on your login, the part that proves who you are. It doesn’t check the encrypted
-        connection; connection checkers such as{' '}
-        <a href="https://www.digicert.com/pqc-checker">DigiCert’s</a> do that. A service can pass one and fail the
-        other.
-      </p>
     </section>
   );
 }

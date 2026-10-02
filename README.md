@@ -16,26 +16,26 @@ When you sign in with Google or a work account, a login service gives the app a 
 
 This tool reads the keys a login service publishes and tells you whether its signatures are the breakable kind.
 
-**How it differs from TLS checkers** such as [DigiCert's PQC checker](https://www.digicert.com/pqc-checker): those test the *encrypted connection* to a website (protection against recording traffic now and decrypting it later). This tests the *login signature* (protection against someone forging a login). They are separate layers, and a service can pass one and fail the other: Google's connections already use quantum-safe key exchange, while its login signatures are still RSA.
+It checks the login signature only. It doesn't test the encrypted connection to a site, and it doesn't test your apps, only the login service they rely on.
 
 ## The page, top to bottom
 
 <table>
 <tr>
-<td width="50%"><img src="docs/media/scene-break-in.png" alt="A mock login next to a behind-the-scenes view: with a quantum computer and today's signature, the attacker gets in as Alice."></td>
+<td width="50%"><img src="docs/media/login-walkthrough.png" alt="A login form beside four frames showing what happens behind it: password checked, token signed with the secret key, token carried to the app, signature checked with the public key."></td>
+<td width="50%"><img src="docs/media/attack.png" alt="An attacker's four steps: copy the public key, work out the secret key with a quantum computer, sign a fake token, and get in as Alice."></td>
+</tr>
+<tr>
+<td><b>What the result means.</b> Log in with a familiar form and see what happens behind it, frame by frame.</td>
+<td><b>The attack.</b> An attacker tries to get in without the password. You choose the signature and her computer, and watch whether the secret key can be worked out.</td>
+</tr>
+<tr>
 <td width="50%"><img src="docs/media/catch-bytes.png" alt="One square per byte: the token with the quantum-proof signature is 4,844 bytes and doesn't fit in a cookie."></td>
+<td width="50%"><img src="docs/media/switch-game.png" alt="A parts tray above the login service and four apps; Payroll got the new signature too early and its users are locked out."></td>
 </tr>
 <tr>
-<td><b>What the result means.</b> Log in with a familiar form, watch what happens behind it, then try to break in with and without a quantum computer.</td>
 <td><b>The catch.</b> The quantum-proof signature is about fifty times longer, and the token stops fitting in a cookie.</td>
-</tr>
-<tr>
-<td width="50%"><img src="docs/media/switch-game.png" alt="A game board: the login service and four apps; Payroll was switched too early and its users are locked out."></td>
-<td width="50%"><img src="docs/media/pq-app-signed-in.png" alt="The real PQ-Ready App after sign-in, reporting that the browser dropped the oversized cookie."></td>
-</tr>
-<tr>
-<td><b>Make the switch.</b> Protect four apps without locking anyone out. Switch one too early and you see why order matters.</td>
-<td><b>The real thing.</b> The login service in this repo, signing in for real with a quantum-proof token.</td>
+<td><b>Make the switch.</b> Drag new parts into the login service and four apps. Fit one too early and its users are locked out.</td>
 </tr>
 </table>
 
