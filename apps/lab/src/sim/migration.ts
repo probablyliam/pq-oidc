@@ -30,26 +30,28 @@ export type AppStatus =
   | { ok: true; quantumSafe: boolean }
   | { ok: false; problem: 'no-key' | 'library' | 'cookie'; message: string };
 
+const KEY_NAME: Record<Alg, string> = { ES256: 'old', 'ML-DSA-65': 'new' };
+
 export function appStatus(app: SimApp, state: SimState): AppStatus {
   if (!state.publishedKeys[app.alg]) {
     return {
       ok: false,
       problem: 'no-key',
-      message: `The provider doesn't publish a ${app.alg} key, so it can't sign tokens for this app.`,
+      message: `The login service doesn’t have the ${KEY_NAME[app.alg]} key, so it can’t sign this app’s logins.`,
     };
   }
   if (app.alg === 'ML-DSA-65' && !app.libraryUpgraded) {
     return {
       ok: false,
       problem: 'library',
-      message: "The app's library rejects ML-DSA-65 tokens: “this app only accepts ES256”.",
+      message: 'This app can’t read the new signature yet, so it turns everyone away.',
     };
   }
   if (app.alg === 'ML-DSA-65' && app.tokenInCookie) {
     return {
       ok: false,
       problem: 'cookie',
-      message: 'The ~4.9 KB token no longer fits in a cookie. The browser drops it and users get logged out.',
+      message: 'The new token is too big for this app’s cookie. The browser drops it and users are signed straight back out.',
     };
   }
   return { ok: true, quantumSafe: app.alg === 'ML-DSA-65' };
@@ -78,24 +80,24 @@ function nextStep(state: SimState, statuses: { app: SimApp; status: AppStatus }[
   const broken = statuses.find((s) => !s.status.ok);
   if (broken && !broken.status.ok) {
     const fix = {
-      'no-key': `Publish the ${broken.app.alg} key, or move ${broken.app.name} to a key that is published.`,
-      library: `Switch ${broken.app.name} back to ES256, upgrade its library, then try again.`,
-      cookie: `Switch ${broken.app.name} back to ES256 and move it to server-side sessions first.`,
+      'no-key': `turn the ${KEY_NAME[broken.app.alg]} key back on, or move the app to a key the service still has.`,
+      library: 'switch it back to the old signature, update it, then try again.',
+      cookie: 'switch it back to the old signature and move its token out of the cookie first.',
     }[broken.status.problem];
-    return `Fix ${broken.app.name}: ${fix}`;
+    return `${broken.app.name} is locked out. To fix it, ${fix}`;
   }
   if (!state.publishedKeys['ML-DSA-65']) {
-    return 'Phase 1: publish the ML-DSA-65 key next to the ES256 key. Nothing changes for apps yet.';
+    return 'Start by adding the new key to the login service. The apps keep using the old one for now.';
   }
-  const notReady = state.apps.find((a) => a.alg === 'ES256' && (!a.libraryUpgraded || a.tokenInCookie));
   const ready = state.apps.find((a) => a.alg === 'ES256' && a.libraryUpgraded && !a.tokenInCookie);
-  if (ready) return `Phase 2: ${ready.name} is ready. Switch it to ML-DSA-65.`;
+  if (ready) return `${ready.name} is ready. Switch it to the new signature.`;
+  const notReady = state.apps.find((a) => a.alg === 'ES256');
   if (notReady) {
-    const todo = !notReady.libraryUpgraded ? 'upgrade its library' : 'move it to server-side sessions';
-    return `Phase 2: prepare ${notReady.name} first: ${todo}.`;
+    const todo = !notReady.libraryUpgraded ? 'update it so it can read the new signature' : 'move its token out of the cookie';
+    return `Get ${notReady.name} ready first: ${todo}.`;
   }
-  if (state.publishedKeys.ES256) return 'Phase 3: every app is on ML-DSA-65. Retire the ES256 key.';
-  return 'Migration complete: every login is signed with a post-quantum key.';
+  if (state.publishedKeys.ES256) return 'Every app is on the new signature. Retire the old key.';
+  return 'Done. No login here can be forged with a quantum computer.';
 }
 
 export const INITIAL_STATE: SimState = {

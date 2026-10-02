@@ -64,6 +64,17 @@ describe('analyzeProvider on a post-quantum provider', () => {
   });
 });
 
+describe('shared-secret algorithms', () => {
+  it('does not call HS256 quantum-breakable (Auth0 lists it next to RS256)', () => {
+    const { discovery, jwks, jwksBytes } = fixture('auth0-sample');
+    const report = analyzeProvider(discovery, jwks, jwksBytes);
+    expect(report.vulnerableAlgs).toEqual(['RS256', 'PS256']);
+    const detail = report.checks.find((c) => c.id === 'pq-algs')?.detail ?? '';
+    expect(detail).toContain('(RS256, PS256) can be forged');
+    expect(detail).toContain("HS256, a shared-secret method that quantum computers don't break");
+  });
+});
+
 describe('machine-identity issuers', () => {
   it('skips browser-flow checks when there is no authorization endpoint', () => {
     const report = analyzeProvider({ issuer: 'https://ci.example', id_token_signing_alg_values_supported: ['RS256'] }, { keys: [] }, 12);

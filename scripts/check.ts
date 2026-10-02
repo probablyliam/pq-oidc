@@ -25,9 +25,26 @@ const ICON: Record<CheckStatus, string> = { pass: '✓', warn: '!', fail: '✗',
 const fmt = (n: number) => n.toLocaleString('en-US');
 
 if (/^https?:\/\//.test(input)) {
+  await checkIssuer(input);
+} else {
+  checkToken(input);
+}
+
+async function checkIssuer(input: string) {
   const discoveryResponse = await fetch(discoveryUrl(input));
-  if (!discoveryResponse.ok) throw new Error(`Discovery failed: HTTP ${discoveryResponse.status}`);
-  const discovery = (await discoveryResponse.json()) as Record<string, unknown>;
+  if (!discoveryResponse.ok) {
+    console.error(`No discovery document at ${discoveryUrl(input)} (HTTP ${discoveryResponse.status}). Is this an OpenID Connect issuer URL?`);
+    process.exitCode = 1;
+    return;
+  }
+  let discovery: Record<string, unknown>;
+  try {
+    discovery = (await discoveryResponse.json()) as Record<string, unknown>;
+  } catch {
+    console.error(`${discoveryUrl(input)} did not return a discovery document. Is this an OpenID Connect issuer URL?`);
+    process.exitCode = 1;
+    return;
+  }
   const jwksText = await (await fetch(String(discovery.jwks_uri))).text();
   const report = analyzeProvider(discovery, JSON.parse(jwksText) as Record<string, unknown>, jwksText.length);
 
@@ -39,7 +56,9 @@ if (/^https?:\/\//.test(input)) {
     console.log(`    ${(k.kid ?? '(no kid)').slice(0, 24).padEnd(26)}${k.strength.padEnd(16)}${k.quantumSafe ? 'quantum-safe' : 'quantum-vulnerable'}`);
   }
   console.log(`\n  JWKS today: ${fmt(report.jwksBytes)} B · with one ML-DSA-65 key added: ~${fmt(report.jwksBytesWithMlDsa65)} B\n`);
-} else {
+}
+
+function checkToken(input: string) {
   const m = measureJwt(input.trim());
   console.log(`\nToken: ${m.alg}, ${fmt(m.totalBytes)} B (claims ${fmt(m.encodedPayloadBytes)} B, signature ${fmt(m.encodedSignatureBytes)} B)\n`);
   const algs: SigningAlg[] = ['ES256', 'RS256', 'ML-DSA-44', 'ML-DSA-65', 'ML-DSA-87'];

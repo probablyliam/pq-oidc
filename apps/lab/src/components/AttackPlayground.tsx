@@ -92,16 +92,11 @@ export function AttackPlayground() {
   const honest = attack.id === 'honest' && !edited;
 
   return (
-    <section className="chapter wrap" id="attack">
-      <div className="chapter-head">
-        <h2>Try to forge a post-quantum token</h2>
-        <p>
-          A stronger signature is useless if the app checks it badly. Pick an attack. Each one is built with real
-          cryptography and checked by two verifiers: a naive one with mistakes real libraries have shipped, and the one
-          the pq-oidc demo apps use.
-        </p>
-      </div>
-
+    <div className="tool">
+      <p>
+        A stronger signature is useless if the app checks it badly. Each attack below is built with real cryptography
+        and checked twice: by a careless verifier with mistakes real libraries have shipped, and by the one pq-oidc uses.
+      </p>
       <div className="attack-layout">
         <div className="attack-list" role="group" aria-label="Attacks">
           {ATTACKS.map((a) => (
@@ -171,6 +166,6 @@ export function AttackPlayground() {
           </p>
         </div>
       </div>
-    </section>
+    </div>
   );
 }

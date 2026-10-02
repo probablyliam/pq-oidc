@@ -3,6 +3,7 @@ import { appStatus, INITIAL_STATE, safeSteps, summarize } from '../sim/migration
 import type { Alg, SimApp, SimState } from '../sim/migration.ts';
 
 const STEP_DELAY_MS = 850;
+const SIGNATURE_LABEL: Record<Alg, string> = { ES256: 'Old signature', 'ML-DSA-65': 'New signature' };
 
 export function MigrationSimulator() {
   const [state, setState] = useState<SimState>(INITIAL_STATE);
@@ -42,142 +43,103 @@ export function MigrationSimulator() {
     setState(INITIAL_STATE);
   }
 
-  const pct = (n: number) => `${(n / summary.total) * 100}%`;
-
   return (
-    <section className="chapter wrap" id="migrate">
-      <div className="chapter-head">
-        <h2>Move four apps to post-quantum signatures without logging anyone out</h2>
-        <p>
-          You run the identity provider. Each app below gets its ID tokens signed with the algorithm you pick. Some
-          apps aren’t ready: their library can’t verify ML-DSA yet, or they keep the token in a cookie. Switch an app
-          too early and its users can’t sign in. Try it, or watch the safe order.
-        </p>
-      </div>
+    <section className="step wide" id="switch">
+      <h2>How do you switch without locking people out?</h2>
+      <p className="lead">
+        One app at a time. You run the login service for these four apps. Some aren’t ready: they can’t read the new
+        signature yet, or they keep the token in a cookie. Switch one too early and its users can’t sign in.
+      </p>
 
-      <div className="migration">
-        <div className="panel sim-summary">
-          <div className="progress">
-            <div className="progress-track" aria-hidden="true">
-              <span className="safe" style={{ width: pct(summary.quantumSafe) }} />
-              <span className="broken" style={{ width: pct(summary.broken) }} />
-            </div>
-            <div className="small" aria-live="polite">
-              <b>
-                {summary.quantumSafe} of {summary.total}
-              </b>{' '}
-              apps quantum-safe ·{' '}
-              {summary.broken > 0 ? (
-                <b style={{ color: 'var(--bad)' }}>{summary.broken} broken</b>
-              ) : (
-                <span>nothing broken</span>
-              )}
-            </div>
-            <p className="next-step small">{summary.nextStep}</p>
-          </div>
-          <div className="actions" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button className="btn" type="button" onClick={playSafeOrder} disabled={playing}>
-              {playing ? 'Migrating…' : 'Show me the safe order'}
+      <div className="sim">
+        <div className="sim-status" aria-live="polite">
+          <p className="sim-count">
+            <b>
+              {summary.quantumSafe} of {summary.total}
+            </b>{' '}
+            apps protected
+            {summary.broken > 0 && (
+              <>
+                , <b className="locked">{summary.broken} locked out</b>
+              </>
+            )}
+          </p>
+          <p className="sim-next">{summary.nextStep}</p>
+          <div className="sim-actions">
+            <button type="button" className="primary" onClick={playSafeOrder} disabled={playing}>
+              {playing ? 'Switching…' : 'Show me the safe order'}
             </button>
-            <button className="btn ghost" type="button" onClick={reset}>
-              Reset
+            <button type="button" onClick={reset}>
+              Start over
             </button>
           </div>
         </div>
 
-        <div className="sim-grid">
-          <div className="provider-card">
-            <div>
-              <span className="eyebrow">Identity provider</span>
-              <h3>Published signing keys</h3>
-              <p className="small muted">Apps can only get tokens signed with a key that is published in the JWKS.</p>
-            </div>
-            <div className="key-row">
-              <span className="badge classical">ES256 · classical</span>
-              <label className="switch">
-                <input
-                  type="checkbox"
-                  checked={state.publishedKeys.ES256}
-                  onChange={() => toggleKey('ES256')}
-                  disabled={playing}
-                  aria-label="Publish the ES256 key"
-                />
-              </label>
-            </div>
-            <div className="key-row">
-              <span className="badge pq">ML-DSA-65 · post-quantum</span>
-              <label className="switch">
-                <input
-                  type="checkbox"
-                  checked={state.publishedKeys['ML-DSA-65']}
-                  onChange={() => toggleKey('ML-DSA-65')}
-                  disabled={playing}
-                  aria-label="Publish the ML-DSA-65 key"
-                />
-              </label>
-            </div>
-            {summary.done && (
-              <div className="callout good small">
-                <b>Done.</b> Every login is signed with ML-DSA-65 and the classical key is retired.
-              </div>
-            )}
+        <div className="sim-board">
+          <div className="sim-service">
+            <h3>Your login service</h3>
+            <p>Keys it can sign with:</p>
+            <label className="toggle">
+              <input type="checkbox" checked={state.publishedKeys.ES256} onChange={() => toggleKey('ES256')} disabled={playing} />
+              Old key
+            </label>
+            <label className="toggle">
+              <input
+                type="checkbox"
+                checked={state.publishedKeys['ML-DSA-65']}
+                onChange={() => toggleKey('ML-DSA-65')}
+                disabled={playing}
+              />
+              New key
+            </label>
           </div>
 
-          <div className="apps">
-            {state.apps.map((app) => {
-              const status = appStatus(app, state);
-              const cls = status.ok ? (status.quantumSafe ? 'safe' : '') : 'broken';
-              return (
-                <article key={app.id} className={`app-card ${cls}`}>
-                  <header>
-                    <h3>{app.name}</h3>
-                    {status.ok ? (
-                      status.quantumSafe ? (
-                        <span className="badge pq">quantum-safe</span>
-                      ) : (
-                        <span className="badge neutral">working</span>
-                      )
-                    ) : (
-                      <span className="badge bad">can’t sign in</span>
-                    )}
-                  </header>
-                  <div className="segmented" role="group" aria-label={`${app.name} signing algorithm`}>
-                    {(['ES256', 'ML-DSA-65'] as const).map((alg) => (
-                      <button
-                        key={alg}
-                        type="button"
-                        className={alg === 'ES256' ? 'classical' : 'pq'}
-                        aria-pressed={app.alg === alg}
-                        disabled={playing}
-                        onClick={() => updateApp(app.id, { alg })}
-                      >
-                        {alg}
-                      </button>
-                    ))}
-                  </div>
-                  <label className="switch">
-                    <input
-                      type="checkbox"
-                      checked={app.libraryUpgraded}
+          {state.apps.map((app) => {
+            const status = appStatus(app, state);
+            const tone = status.ok ? (status.quantumSafe ? 'safe' : 'plain') : 'locked';
+            return (
+              <article key={app.id} className={`sim-app ${tone}`}>
+                <header>
+                  <h3>{app.name}</h3>
+                  <span className="state">
+                    {status.ok ? (status.quantumSafe ? 'Protected' : 'Working, forgeable') : 'Users locked out'}
+                  </span>
+                </header>
+                <div className="pick" role="group" aria-label={`${app.name} signature`}>
+                  {(['ES256', 'ML-DSA-65'] as const).map((alg) => (
+                    <button
+                      key={alg}
+                      type="button"
+                      aria-pressed={app.alg === alg}
                       disabled={playing}
-                      onChange={(e) => updateApp(app.id, { libraryUpgraded: e.target.checked })}
-                    />
-                    Library supports ML-DSA
-                  </label>
-                  <label className="switch">
-                    <input
-                      type="checkbox"
-                      checked={!app.tokenInCookie}
-                      disabled={playing}
-                      onChange={(e) => updateApp(app.id, { tokenInCookie: !e.target.checked })}
-                    />
-                    Server-side sessions
-                  </label>
-                  {!status.ok && <p className="problem">{status.message}</p>}
-                </article>
-              );
-            })}
-          </div>
+                      onClick={() => updateApp(app.id, { alg })}
+                    >
+                      {SIGNATURE_LABEL[alg]}
+                    </button>
+                  ))}
+                </div>
+                <label className="toggle">
+                  <input
+                    type="checkbox"
+                    checked={app.libraryUpgraded}
+                    disabled={playing}
+                    onChange={(e) => updateApp(app.id, { libraryUpgraded: e.target.checked })}
+                  />
+                  Can read the new signature
+                </label>
+                <label className="toggle">
+                  <input
+                    type="checkbox"
+                    checked={!app.tokenInCookie}
+                    disabled={playing}
+                    onChange={(e) => updateApp(app.id, { tokenInCookie: !e.target.checked })}
+                  />
+                  Keeps the token out of cookies
+                </label>
+                {!status.ok && <p className="problem">{status.message}</p>}
+              </article>
+            );
+          })}
         </div>
       </div>
     </section>

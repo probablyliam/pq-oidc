@@ -32,6 +32,8 @@ export interface ProviderReport {
   keys: KeySummary[];
   verdict: 'ready' | 'partial' | 'not-ready';
   jwksBytes: number;
+  /** ID token algorithms a quantum computer breaks (RSA and elliptic-curve signatures). */
+  vulnerableAlgs: string[];
   /** JWKS size after publishing one ML-DSA-65 key next to the existing keys. */
   jwksBytesWithMlDsa65: number;
   checks: Check[];
@@ -42,6 +44,20 @@ type Json = Record<string, unknown>;
 /** Post-quantum signature algorithms with registered or proposed JOSE names. */
 export function isQuantumSafeAlg(alg: unknown): boolean {
   return typeof alg === 'string' && /^(ML-DSA|SLH-DSA|FN-DSA)/i.test(alg);
+}
+
+/**
+ * Shared-secret (HMAC) algorithms. Shor's algorithm does not apply to them, so a
+ * quantum computer can't forge them, but they aren't public-key signatures:
+ * every app that verifies the token holds the secret and could mint one too.
+ */
+export function isSymmetricAlg(alg: unknown): boolean {
+  return typeof alg === 'string' && /^HS\d+$/.test(alg);
+}
+
+/** Public-key signature algorithms that Shor's algorithm breaks (RSA and elliptic curves). */
+export function isQuantumVulnerableAlg(alg: unknown): boolean {
+  return typeof alg === 'string' && alg.toLowerCase() !== 'none' && !isQuantumSafeAlg(alg) && !isSymmetricAlg(alg);
 }
 
 const EC_CURVES: Record<string, string> = { 'P-256': 'P-256', 'P-384': 'P-384', 'P-521': 'P-521' };
@@ -86,6 +102,8 @@ export function analyzeProvider(discovery: Json, jwks: Json, jwksBytes: number):
   const signingKeys = keys.filter((k) => k.use !== 'enc');
 
   const pqAlgs = idTokenAlgs.filter(isQuantumSafeAlg);
+  const vulnerableAlgs = idTokenAlgs.filter(isQuantumVulnerableAlg);
+  const symmetricAlgs = idTokenAlgs.filter(isSymmetricAlg);
   const pqKeys = signingKeys.filter((k) => k.quantumSafe);
   const verdict: ProviderReport['verdict'] =
     pqAlgs.length > 0 && pqKeys.length > 0
@@ -102,7 +120,14 @@ export function analyzeProvider(discovery: Json, jwks: Json, jwksBytes: number):
           id: 'pq-algs',
           status: 'fail',
           label: 'No post-quantum ID token signatures',
-          detail: `Signs ID tokens with ${idTokenAlgs.join(', ') || 'unknown algorithms'}, all breakable by a large quantum computer.`,
+          detail:
+            vulnerableAlgs.length > 0
+              ? `Its public-key signatures (${vulnerableAlgs.join(', ')}) can be forged with a large quantum computer.${
+                  symmetricAlgs.length > 0
+                    ? ` It also lists ${symmetricAlgs.join(', ')}, a shared-secret method that quantum computers don't break but that only works when the app holds the provider's secret.`
+                    : ''
+                }`
+              : `Lists ${idTokenAlgs.join(', ') || 'no algorithms'}; none is a post-quantum signature.`,
         },
   );
   checks.push(
@@ -171,6 +196,7 @@ export function analyzeProvider(discovery: Json, jwks: Json, jwksBytes: number):
   return {
     issuer: String(discovery.issuer ?? ''),
     idTokenAlgs,
+    vulnerableAlgs,
     keys,
     verdict,
     jwksBytes,

@@ -37,7 +37,7 @@ describe('appStatus', () => {
 describe('the migration as a whole', () => {
   it('starts with everything working and nothing quantum-safe', () => {
     expect(summarize(INITIAL_STATE)).toMatchObject({ working: 4, broken: 0, quantumSafe: 0, done: false });
-    expect(summarize(INITIAL_STATE).nextStep).toContain('Phase 1');
+    expect(summarize(INITIAL_STATE).nextStep).toContain('adding the new key');
   });
 
   it('follows a safe order in which no app ever breaks', () => {
@@ -45,6 +45,6 @@ describe('the migration as a whole', () => {
     for (const state of steps) expect(summarize(state).broken).toBe(0);
     const end = summarize(steps.at(-1)!);
     expect(end).toMatchObject({ quantumSafe: 4, done: true });
-    expect(end.nextStep).toContain('complete');
+    expect(end.nextStep).toContain('Done.');
   });
 });

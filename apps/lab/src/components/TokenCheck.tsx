@@ -89,17 +89,11 @@ export function TokenCheck() {
   const claimCount = parsed ? Object.keys(parsed.payload).length : 0;
 
   return (
-    <section className="chapter wrap" id="token">
-      <div className="chapter-head">
-        <h2>What happens to your tokens?</h2>
-        <p>
-          Paste an ID token or JWT access token from your own system. It’s decoded here, in your browser, and never
-          uploaded. You’ll see exactly how big it becomes with each post-quantum signature, and which limits in a
-          normal web stack it breaks.
-        </p>
-      </div>
-
-      <div className="panel tool">
+    <div className="tool">
+      <p>
+        Paste a login token from your own system. It is decoded in your browser and never uploaded. You’ll see how
+        big it gets with each new signature and which limits it breaks.
+      </p>
         <div className="tool-input">
           <label htmlFor="jwt">JWT</label>
           <textarea
@@ -265,6 +259,5 @@ export function TokenCheck() {
           </div>
         )}
       </div>
-    </section>
   );
 }

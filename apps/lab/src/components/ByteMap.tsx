@@ -56,7 +56,7 @@ export function ByteMap({ token, columns, limit, label }: ByteMapProps) {
     const total = token.length;
     // Whole-pixel squares avoid moiré; the map may end a few pixels short of the full width.
     const cell = Math.max(2, Math.floor(width / columns));
-    const gap = cell > 5 ? 1 : 0;
+    const gap = cell >= 4 ? 1 : 0;
     const rows = Math.ceil(total / columns);
     const drawWidth = cell * columns;
     const height = rows * cell;

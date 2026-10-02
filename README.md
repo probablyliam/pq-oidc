@@ -1,71 +1,100 @@
-# pq-oidc
-
-**A working OpenID Connect provider that moves login tokens to post-quantum signatures (ML-DSA, RFC 9964) one app at a time, plus browser and command-line tools that check whether *your* identity provider and tokens are ready.**
+# Could a quantum computer log in as you?
 
 [![CI](https://github.com/probablyliam/pq-oidc/actions/workflows/ci.yml/badge.svg)](https://github.com/probablyliam/pq-oidc/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/probablyliam/pq-oidc/actions/workflows/codeql.yml/badge.svg)](https://github.com/probablyliam/pq-oidc/actions/workflows/codeql.yml)
-[![Token Lab](https://img.shields.io/badge/live-Token%20Lab-2f54eb)](https://probablyliam.github.io/pq-oidc/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-### ▶ [Open the Token Lab](https://probablyliam.github.io/pq-oidc/): check a real provider or paste a token. Everything runs in your browser.
+**pq-oidc** answers that question for any login service, shows how the forgery would work, and is a working login service that makes the fix: it moves apps to quantum-proof signatures one at a time.
 
-<p align="center"><img src="docs/media/lab-hero.png" width="720" alt="The same ID token signed with ES256 (516 bytes) and ML-DSA-65 (4,847 bytes), drawn one square per byte. The post-quantum token runs past the 4,096-byte cookie limit."></p>
+### ▶ [Try it: probablyliam.github.io/pq-oidc](https://probablyliam.github.io/pq-oidc/)
 
-## In plain English
+<p align="center"><img src="docs/media/site-question.png" width="720" alt="The site asks 'Could a quantum computer log in as you?' and answers 'Yes.' for Google, because Google signs logins with RSA keys."></p>
 
-When you click "Sign in with Google" or sign in to a work app, a login service hands the app a signed **ID token** that says who you are. The app checks the signature before letting you in.
+## The idea in five sentences
 
-Today's signatures rely on math that a large quantum computer could solve, which would let an attacker forge a login for anyone. There is now a replacement: **ML-DSA**, standardised by NIST (FIPS 204) and approved for login tokens in May 2026 (RFC 9964).
+1. When you sign in with Google or a work account, a login service gives the app a short signed message, a **token**, saying who you are.
+2. The app trusts the token because of its **signature**, which today is made with RSA or elliptic-curve keys.
+3. A large enough quantum computer could work out those secret keys from the public ones, and then sign in as anyone.
+4. A replacement signature exists (**ML-DSA**, standardised in 2024), but it is about fifty times longer, which breaks things: the token no longer fits in a browser cookie, and apps must be updated before they can read it.
+5. So the switch has to happen one app at a time, and this project is a login service that does exactly that.
 
-Switching isn't just a setting. Apps that haven't upgraded reject the new tokens, and the new tokens are about **nine times bigger**, too big for the browser cookies many apps keep them in. This project is a login service that makes the switch safely, one app at a time, and a set of tools that shows you what the switch would do to *your* systems.
-
-## What you can do with it
-
-| | |
-|---|---|
-| **Check any identity provider** | Enter an issuer URL (Okta, Auth0, Entra ID, Keycloak, Google…). It reads the provider's public keys and reports whether its tokens could be forged with a quantum computer, plus OAuth 2.1 hygiene (PKCE, implicit flow, `alg: none`). Results have shareable links. [In the browser](https://probablyliam.github.io/pq-oidc/#provider) or `npm run check -- <issuer>`. |
-| **Check your own tokens** | Paste a JWT. It calculates, byte for byte, how big it becomes with each ML-DSA parameter set and which real limits it breaks (browser cookies, nginx headers, Node.js headers), then re-signs it with ML-DSA-65 in your browser to prove the numbers. Nothing is uploaded. |
-| **Run a post-quantum provider** | `npm start` runs the provider and two apps: one receives ES256 tokens, one receives ML-DSA-65 tokens. Sign in to both and compare. |
-| **Rehearse the migration** | Flip one setting (`LEGACY_ID_TOKEN_ALG=ML-DSA-65`) to see what an unprepared app does, or use the simulator in the Token Lab. |
+The [site](https://probablyliam.github.io/pq-oidc/) walks through those five steps. You do each one yourself, with real signatures computed in your browser.
 
 <table>
 <tr>
-<td width="50%"><img src="docs/media/lab-provider-check.png" alt="Provider check for Google: not post-quantum ready, RS256 with two RSA 2048-bit keys, PKCE advertised, implicit flow still offered."></td>
-<td width="50%"><img src="docs/media/lab-token-check.png" alt="Token check: an RS256 workforce token grows from 1,473 to 5,548 bytes with ML-DSA-65 and no longer fits in a cookie."></td>
+<td width="50%"><img src="docs/media/site-forged.png" alt="A forged login token, stamped FORGED, is accepted by the app once the attacker has a quantum computer."></td>
+<td width="50%"><img src="docs/media/site-fix.png" alt="With the new signature the same forged token is rejected."></td>
 </tr>
 <tr>
-<td><b>Provider check.</b> Live result for Google on 2026-09-30.</td>
-<td><b>Token check.</b> An example workforce token, projected and re-signed.</td>
+<td><b>Old signature.</b> With a quantum computer, the forged token is accepted.</td>
+<td><b>New signature.</b> The same attack is rejected.</td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/media/site-cost.png" alt="One square per byte: the token with the new signature is 4,844 bytes, 757 more than a cookie holds."></td>
+<td width="50%"><img src="docs/media/site-switch.png" alt="A migration board: the login service holds both keys while four apps move to the new signature one at a time."></td>
+</tr>
+<tr>
+<td><b>The catch.</b> One square per byte. The new token doesn’t fit in a cookie.</td>
+<td><b>The switch.</b> One app at a time, or people get locked out.</td>
 </tr>
 </table>
 
-## What I found
+## Check your own login service
 
-Measured on the running system. Details and methodology: [docs/findings.md](docs/findings.md).
+The check reads the public keys a login service publishes (every OpenID Connect provider publishes them) and reports whether they could be broken by a quantum computer.
 
-| | ES256 (today) | ML-DSA-65 | |
-|---|---:|---:|---|
-| Signature | 64 B | 3,309 B | fixed by FIPS 204 |
-| ID token for a typical user | 553 B | 4,879 B | **8.8× larger** |
-| Public key in the JWKS | 204 B | 2,707 B | 13× larger |
-| Sign / verify (Node.js, native) | 0.08 / 0.10 ms | 0.55 / 0.14 ms | speed isn't the problem |
+- **In the browser:** pick "Your company’s…" on the [site](https://probablyliam.github.io/pq-oidc/) and paste the address, for example `https://your-company.okta.com`. Your browser fetches the keys directly; nothing passes through this project.
+- **From a terminal** (works for services that block browsers, and for ones only reachable inside your network):
 
-1. **The token no longer fits in a cookie.** Browsers silently drop cookies over 4,096 bytes. The PQ-Ready App tries the naive approach on every sign-in and reports what your browser did; it drops the 4,895-byte cookie every time. The fix is server-side sessions ([ADR 4](docs/decisions/0004-server-side-sessions.md)).
-2. **Big providers aren't ready.** Google, Microsoft Entra ID, Apple, GitLab, Auth0 and GitHub Actions all offered only classical algorithms on 2026-09-30. None published an ML-DSA key.
-3. **Order matters.** Switch an app before its library supports ML-DSA and every sign-in fails. Per-client algorithms make the rollout, and the rollback, one setting per app ([ADR 3](docs/decisions/0003-per-client-algorithm.md)).
+```bash
+npm run check -- https://your-company.okta.com
+```
 
-<p align="center"><img src="docs/media/pq-app-signed-in.png" width="460" alt="PQ-Ready App after sign-in: ML-DSA-65 token of 4,879 bytes; the browser silently dropped the 4,895-byte cookie."></p>
+On 2026-10-02 it reported **not ready** for all 20 public login services I tried, including Google, Microsoft, Apple, Okta, Auth0, Salesforce, Atlassian, Slack, PayPal, GitLab and Red Hat’s Keycloak.
 
-**Also in the Token Lab:** a migration simulator where switching an app too early breaks it (and "Show me the safe order" does it properly), and an attack playground where real forged tokens meet a naive verifier and the pq-oidc verifier side by side.
+**What it can and can’t tell you.** It reads what the service publishes: the algorithms it offers and the keys it signs with. It can’t see services that don’t speak OpenID Connect, and it doesn’t test your apps, only the login service they rely on.
 
-<table>
-<tr>
-<td width="50%"><img src="docs/media/lab-migration.png" alt="Migration simulator: Payroll switched to ML-DSA-65 before its library supports it, so its users can't sign in."></td>
-<td width="50%"><img src="docs/media/lab-attack.png" alt="Attack playground: an unsigned alg none token fools the naive verifier and is rejected by the pq-oidc verifier."></td>
-</tr>
-</table>
+## How do you know it works?
 
-## Run it
+```bash
+npm run prove
+```
+
+That one command starts the real login service, performs real sign-ins, and checks every claim with code that shares nothing with the code under test:
+
+```
+1. Real sign-ins against the provider
+   legacy-app received a 498-byte ID token, pq-app a 4824-byte ID token
+2. The provider's published keys, read with plain fetch (no project code)
+   EC/ES256, AKP/ML-DSA-65
+3. Independent verification in Python
+   ✓ Python accepts the ES256 token
+   ✓ Python accepts the ML-DSA-65 token (3,309-byte signature per FIPS 204)
+4. A legacy configuration refuses the post-quantum token
+   ✓ REJECTED alg-not-allowed
+   ✓ REJECTED bad-signature (corrupted token)
+5. Readiness verdicts next to the raw key types
+   ✓ this provider (EC + AKP keys): partial
+   ✓ Google (RSA/RS256, RSA/RS256): not-ready
+All claims held.
+```
+
+Beyond that:
+
+- **Two independent verifiers.** The TypeScript verifier and a separate [Python verifier](interop/python) (built on `pyca/cryptography`) must agree on every honest token and reject six kinds of forgery with identical codes (`npm run interop`).
+- **A real browser.** Chrome silently dropped the 4,895-byte cookie holding the new token; the end-to-end tests reproduce that behaviour.
+- **A real cluster.** CI deploys the service to Kubernetes, signs in through both apps, then switches an unprepared app too early and expects its sign-in to fail.
+- **69 automated tests**, including the classic token attacks and protocol abuse (see [Security](#security)).
+
+## Has this been done before?
+
+Partly, and it’s worth being exact about it.
+
+- **The size problem is known.** The [OpenID Foundation described it](https://openid.net/post-quantum-openid-connect/) in September 2026, as did others. This project measures it; it didn’t discover it.
+- **Post-quantum token libraries exist** in several languages, and some identity servers have started adding ML-DSA.
+- **What I couldn’t find elsewhere:** a tool that checks whether an arbitrary login service is quantum-ready, an exact byte-for-byte projection for your own tokens, and a runnable login service that demonstrates the per-app switch along with its failure modes.
+
+## Run the login service
 
 Needs Node.js 24.7 or newer (for native ML-DSA). Dependencies install into the project folder only.
 
@@ -76,38 +105,42 @@ npm install
 npm start
 ```
 
-| | URL | ID tokens |
+| | Address | Signature it receives |
 |---|---|---|
-| Legacy App | http://localhost:3001 | ES256 |
-| PQ-Ready App | http://localhost:3002 | ML-DSA-65 |
-| Provider | http://localhost:3000 | discovery, JWKS |
+| Legacy App | http://localhost:3001 | old (ES256) |
+| PQ-Ready App | http://localhost:3002 | new (ML-DSA-65) |
+| Login service | http://localhost:3000 | |
 
 Sign in as `alice` or `bob`, password `quantum-safe` (fictional demo users).
 
+<p align="center"><img src="docs/media/pq-app-signed-in.png" width="440" alt="PQ-Ready App after sign-in: a 4,879-byte token with the new signature; the browser silently dropped the 4,895-byte cookie."></p>
+
 ```bash
-# Move Legacy App to ML-DSA-65 before it's ready, and watch sign-in fail with a clear reason
+# Switch Legacy App to the new signature before it's ready, and watch sign-in fail with a clear reason
 LEGACY_ID_TOKEN_ALG=ML-DSA-65 npm start
 
-# Check any provider or token from a terminal (no browser CORS limits)
-npm run check -- https://token.actions.githubusercontent.com
+# What happens to one of your own tokens
 npm run check -- eyJhbGciOi...
-
-# The Token Lab, locally
-npm run lab:dev
 ```
 
-**Docker:** `docker compose up --build` runs the same three services as separate, read-only, non-root containers.
+**Docker:** `docker compose up --build`. **Kubernetes:** a Helm chart is in [`deploy/helm/pq-oidc`](deploy/helm/pq-oidc).
 
-**Kubernetes:** a Helm chart lives in [`deploy/helm/pq-oidc`](deploy/helm/pq-oidc). CI installs it on a [kind](https://kind.sigs.k8s.io/) cluster, signs in through both apps, then migrates Legacy App too early with `helm upgrade` and checks that the sign-in is refused.
+---
 
-```bash
-docker build -t pq-oidc:local .
-kind load docker-image pq-oidc:local
-helm install pq-oidc deploy/helm/pq-oidc
-helm upgrade pq-oidc deploy/helm/pq-oidc --reuse-values --set apps.legacy.idTokenAlg=ML-DSA-65
-```
+# For engineers
 
-## How it works
+## Measurements
+
+Measured on the running system. Method and details: [docs/findings.md](docs/findings.md).
+
+| | ES256 | ML-DSA-65 | |
+|---|---:|---:|---|
+| Signature | 64 B | 3,309 B | fixed by FIPS 204 |
+| ID token for a typical user | 553 B | 4,879 B | 8.8× |
+| Public key in the JWKS | 204 B | 2,707 B | 13× |
+| Sign / verify (Node.js, native) | 0.08 / 0.10 ms | 0.55 / 0.14 ms | speed isn’t the problem |
+
+## Architecture
 
 ```mermaid
 sequenceDiagram
@@ -127,27 +160,26 @@ sequenceDiagram
   A->>B: session cookie (a random ID, not the token)
 ```
 
-- **Provider** ([`packages/provider`](packages/provider)): [`oidc-provider`](https://github.com/panva/node-oidc-provider), which is OpenID Certified, configured as an OAuth 2.1-style server: authorization code flow only, PKCE S256 required, exact redirect URIs, short-lived single-use codes. It publishes an ES256 key and an ML-DSA-65 key (RFC 9964 `"kty": "AKP"`) side by side. Each registered app's `id_token_signed_response_alg` decides which one signs its tokens. That setting is the migration switch.
-- **Apps** ([`packages/rp`](packages/rp)): `openid-client` runs the protocol (state, nonce, PKCE, code exchange). The ID token signature is then verified explicitly with an **algorithm allowlist**. That check is what makes an unprepared app refuse ML-DSA, and what stops `alg: none` and algorithm-confusion attacks.
-- **Shared toolkit** ([`packages/token-kit`](packages/token-kit)): token measurement, exact size projection, verification with plain-language errors, and the provider readiness analysis used by both the CLI and the Token Lab.
-- **Python verifier** ([`interop/python`](interop/python)): about 150 lines on `pyca/cryptography`, because no Python JWT library supports RFC 9964 yet. `npm run interop` has Node sign tokens for Python to verify, Python sign one for Node to verify, and checks that both verifiers reject six forgeries with identical rejection codes. CI runs it on every push.
-- **Token Lab** ([`apps/lab`](apps/lab)): a static React site. ML-DSA runs in the browser through `@noble/post-quantum`, and ES256/RS256 through Web Crypto. Tests prove its tokens interoperate with Node's native ML-DSA in both directions.
+- **Provider** ([`packages/provider`](packages/provider)): [`oidc-provider`](https://github.com/panva/node-oidc-provider) (OpenID Certified), configured as an OAuth 2.1-style server: authorization code flow only, PKCE S256 required, exact redirect URIs, single-use codes. It publishes an ES256 key and an ML-DSA-65 key (RFC 9964 `"kty": "AKP"`). Each client's `id_token_signed_response_alg` decides which one signs its tokens; that setting is the migration switch.
+- **Apps** ([`packages/rp`](packages/rp)): `openid-client` runs the protocol. The ID token signature is then verified explicitly with an algorithm allowlist, which is what makes an unprepared app refuse ML-DSA and what stops `alg: none` and algorithm confusion.
+- **Shared toolkit** ([`packages/token-kit`](packages/token-kit)): measurement, exact size projection, verification, and the readiness analysis used by the CLI and the site.
+- **Python verifier** ([`interop/python`](interop/python)): about 150 lines, because no Python JWT library supports RFC 9964 yet.
+- **Site** ([`apps/lab`](apps/lab)): static React. ML-DSA runs in the browser through `@noble/post-quantum`; tests prove its tokens interoperate with Node's native ML-DSA both ways.
 
-No build step for the server code: Node.js 24 runs the TypeScript sources directly, so what you read is what runs.
+No build step for the server code: Node.js 24 runs the TypeScript sources directly.
 
 ## Security
 
-The [threat model](docs/threat-model.md) walks through STRIDE for the provider, apps and tokens, and links each mitigation to the test that proves it. The automated tests include:
+The [threat model](docs/threat-model.md) covers the provider, apps and tokens with STRIDE, linking each mitigation to the test that proves it. Tests include:
 
-- **Two independent verifiers** (TypeScript and Python) that must agree on every forged token.
 - **Token forgery:** `alg: none`, algorithm confusion (HS256 signed with the public key), attacker keys embedded in the header, edited claims, expired tokens, wrong audience, nonce replay.
-- **Protocol abuse:** missing PKCE, `plain` PKCE, implicit flow, unregistered redirect URIs (open redirect / code theft), unknown clients, authorization code replay, stolen codes without the verifier, one app redeeming another's code, wrong client secret.
-- **Web:** CSP without `unsafe-inline`, `frame-ancestors 'none'`, HTML escaping of reflected input, login CSRF across browser sessions, no private key material in the JWKS.
-- **Containers:** non-root, read-only filesystem, all capabilities dropped, seccomp `RuntimeDefault`, no service-account token.
+- **Protocol abuse:** missing PKCE, `plain` PKCE, implicit flow, unregistered redirect URIs, unknown clients, authorization code replay, stolen codes without the verifier, one app redeeming another's code, wrong client secret.
+- **Web:** CSP without `unsafe-inline`, `frame-ancestors 'none'`, HTML escaping, login CSRF across browser sessions, no private key material in the JWKS.
+- **Containers:** non-root, read-only filesystem, all capabilities dropped, seccomp `RuntimeDefault`.
 
-CI also runs CodeQL (`security-extended`), `npm audit` on production dependencies, and Dependabot for npm, Actions and Docker.
+CI also runs CodeQL, `npm audit`, and Dependabot.
 
-**Not production-ready by design:** state and keys live in memory (one replica), there's no rate limiting on the login form, and demo users have a published password. The threat model's [residual risks](docs/threat-model.md#residual-risks-and-deliberate-non-goals) section lists what production would need.
+**Not production-ready by design:** state and keys live in memory (one replica), there's no rate limiting on the login form, and demo users have a published password. See [residual risks](docs/threat-model.md#residual-risks-and-deliberate-non-goals).
 
 ## Design decisions
 
@@ -156,32 +188,18 @@ CI also runs CodeQL (`security-extended`), `npm audit` on production dependencie
 3. [Migrate one app at a time with per-client signing algorithms](docs/decisions/0003-per-client-algorithm.md)
 4. [Keep tokens server-side; cookies hold only a session ID](docs/decisions/0004-server-side-sessions.md)
 
-## Project layout
-
-```
-packages/provider    OIDC provider: config, keys, login UI
-packages/rp          demo app (run as "legacy" or "pq")
-packages/token-kit   measure, project, verify, provider readiness (shared)
-apps/lab             Token Lab website (GitHub Pages)
-interop/python       RFC 9964 verifier in Python, cross-checked against Node
-scripts/             npm start, smoke test, CLI checker
-tests/               end-to-end and protocol security tests
-deploy/helm/pq-oidc  Helm chart
-docs/                threat model, findings, decision records
-```
-
 ## Development
 
 ```bash
-npm test            # 68 tests: unit, interop, end-to-end, protocol security
-npm run lint
-npm run typecheck
-npm run smoke       # sign in to both apps against a running deployment
+npm test            # 69 tests
+npm run lint && npm run typecheck
+npm run prove       # the evidence above (needs the Python venv)
+npm run interop     # Python <-> Node, both directions
+npm run lab:dev     # the site, locally
 
-# Python <-> Node interop (needs Python 3.10+)
+# one-time Python setup (3.10+), inside the project folder
 python -m venv interop/python/.venv
 interop/python/.venv/bin/pip install -r interop/python/requirements.txt   # Windows: .venv\Scripts\pip
-npm run interop
 ```
 
 ## Standards

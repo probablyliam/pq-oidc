@@ -156,3 +156,39 @@ def sign_ml_dsa_jwt(private_key, alg: str, kid: str, claims: dict[str, Any]) -> 
         b64url_encode(json.dumps(part, separators=(",", ":")).encode("utf-8")) for part in (header, claims)
     )
     return f"{signing_input}.{b64url_encode(private_key.sign(signing_input.encode('ascii')))}"
+
+
+# --- Command line: verify a token against a live provider ----------------------
+
+
+def main() -> int:
+    import argparse
+    import urllib.request
+
+    parser = argparse.ArgumentParser(description="Verify an ID token against an OpenID Connect provider's published keys.")
+    parser.add_argument("token")
+    parser.add_argument("--issuer", required=True, help="e.g. http://localhost:3000")
+    parser.add_argument("--audience", required=True, help="the app (client ID) the token was issued to")
+    parser.add_argument("--alg", action="append", help="allowed algorithm; repeat for several (default: ML-DSA-65)")
+    args = parser.parse_args()
+
+    def fetch_json(url: str) -> dict[str, Any]:
+        with urllib.request.urlopen(url, timeout=10) as response:  # noqa: S310 (URL comes from the operator)
+            return json.load(response)
+
+    discovery = fetch_json(args.issuer.rstrip("/") + "/.well-known/openid-configuration")
+    jwks = fetch_json(discovery["jwks_uri"])
+    try:
+        result = verify_id_token(
+            args.token, jwks, issuer=discovery["issuer"], audience=args.audience, algorithms=args.alg or ["ML-DSA-65"]
+        )
+    except TokenRejected as rejected:
+        print(f"REJECTED {rejected.code}: {rejected}")
+        return 1
+    signature_bytes = len(b64url_decode(args.token.split(".")[2]))
+    print(f"VALID {result.header['alg']} sub={result.claims['sub']} signature={signature_bytes}B kid={result.header['kid']}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
