@@ -1,0 +1,175 @@
+/* ---------- Token page ---------- */
+.token-page {
+  --part-header: #6b7686;
+  --part-payload: var(--ink);
+  --part-signature: var(--k-token);
+}
+.token-input {
+  margin-top: 22px;
+  max-width: 62rem;
+}
+.token-input label {
+  display: block;
+  margin-bottom: 6px;
+}
+.token-input textarea {
+  font-size: 0.82rem;
+  line-height: 1.45;
+  word-break: break-all;
+  resize: vertical;
+}
+.token-report {
+  margin-top: 26px;
+  display: grid;
+  gap: 20px;
+  max-width: 62rem;
+}
+
+/* Encoded, signed, encrypted: three separate facts. */
+.three-facts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+}
+.three-facts > div {
+  padding: 14px 16px;
+}
+.three-facts > div + div {
+  border-left: 1px solid var(--rule);
+}
+.three-facts dt {
+  font: 700 1.2rem var(--head);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+/* A filled square for yes, an empty one for no. */
+.three-facts dt::before {
+  content: '';
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--ink);
+}
+.three-facts .yes dt::before {
+  background: var(--ink);
+}
+.three-facts dd {
+  margin-top: 6px;
+  color: var(--ink-soft);
+  font-size: 0.97rem;
+}
+
+.anatomy {
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+}
+.token-text {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--rule);
+  font: 0.8rem/1.5 var(--mono);
+  word-break: break-all;
+  max-height: 8.5em;
+  overflow-y: auto;
+}
+.token-text .part-header {
+  color: var(--part-header);
+}
+.token-text .part-payload {
+  color: var(--part-payload);
+  font-weight: 600;
+}
+.token-text .part-signature {
+  color: var(--part-signature);
+}
+.anatomy-parts {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr 1fr;
+}
+.anatomy-parts section {
+  padding: 12px 16px 16px;
+  min-width: 0;
+  border-top: 6px solid;
+}
+.anatomy-parts section + section {
+  border-left: 1px solid var(--rule);
+}
+.anatomy-parts .part-header {
+  border-top-color: var(--part-header);
+}
+.anatomy-parts .part-payload {
+  border-top-color: var(--part-payload);
+}
+.anatomy-parts .part-signature {
+  border-top-color: var(--part-signature);
+}
+.anatomy-parts pre {
+  margin-top: 6px;
+  font-size: 0.8rem;
+  max-height: 16em;
+  overflow-y: auto;
+}
+.anatomy-parts p {
+  margin-top: 6px;
+}
+
+.verify {
+  padding: 16px 18px;
+}
+.verify .notice {
+  margin-top: 14px;
+}
+.verify .notice p + p {
+  margin-top: 8px;
+}
+.token-report > .findings {
+  background: var(--paper);
+}
+
+.sizes {
+  padding: 16px 18px;
+}
+.sizes p {
+  margin-top: 8px;
+  max-width: 50rem;
+  color: var(--ink-soft);
+}
+.sizes table {
+  margin-top: 12px;
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.95rem;
+}
+.sizes th,
+.sizes td {
+  text-align: left;
+  padding: 7px 14px 7px 0;
+  border-bottom: 1px solid var(--rule);
+}
+.sizes th {
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+}
+.sizes tr.current td:first-child {
+  font-weight: 700;
+}
+.sizes td.bad {
+  font-weight: 600;
+}
+
+@media (max-width: 760px) {
+  .three-facts,
+  .anatomy-parts {
+    grid-template-columns: 1fr;
+  }
+  .three-facts > div + div,
+  .anatomy-parts section + section {
+    border-left: 0;
+    border-top-width: 1px;
+  }
+  .anatomy-parts section + section {
+    border-top: 6px solid;
+  }
+}

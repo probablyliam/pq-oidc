@@ -1,0 +1,729 @@
+{
+  "schema": 1,
+  "engine": "1.0.0",
+  "target": {
+    "input": "https://www.cloudflare.com",
+    "url": "https://www.cloudflare.com/",
+    "origin": "https://www.cloudflare.com",
+    "hostname": "www.cloudflare.com",
+    "port": 443,
+    "lab": false
+  },
+  "startedAt": "2026-10-02T20:24:55.543Z",
+  "finishedAt": "2026-10-02T20:24:56.299Z",
+  "durationMs": 756,
+  "network": {
+    "address": "104.16.123.96",
+    "family": 4,
+    "resolved": [
+      "2606:4700::6810:7b60",
+      "2606:4700::6810:7c60",
+      "104.16.123.96",
+      "104.16.124.96"
+    ]
+  },
+  "reachable": true,
+  "tls": {
+    "probes": [
+      {
+        "id": "pq-capable-client",
+        "purpose": "A client that supports post-quantum key exchange and ML-DSA signatures, as current browsers increasingly do",
+        "offered": {
+          "versions": [
+            "1.3",
+            "1.2"
+          ],
+          "groups": [
+            4588,
+            29,
+            23,
+            4587,
+            4589,
+            513,
+            514,
+            24
+          ],
+          "keyShares": [
+            4588,
+            29
+          ]
+        },
+        "outcome": "handshake",
+        "version": 772,
+        "cipherSuite": 4866,
+        "group": 4588,
+        "alpn": "h2",
+        "signatureScheme": 1027,
+        "signatureValid": true,
+        "finishedValid": true,
+        "leafFingerprint": "802c43b9f4a84d4107a1f06ddd3bd73c69897f675ca261490926f1ef643ee450",
+        "durationMs": 58
+      },
+      {
+        "id": "classical-client",
+        "purpose": "A client with no post-quantum support",
+        "offered": {
+          "versions": [
+            "1.3",
+            "1.2"
+          ],
+          "groups": [
+            29,
+            23,
+            24
+          ],
+          "keyShares": [
+            29,
+            23
+          ]
+        },
+        "outcome": "handshake",
+        "version": 772,
+        "cipherSuite": 4866,
+        "group": 29,
+        "alpn": "h2",
+        "signatureScheme": 1027,
+        "signatureValid": true,
+        "finishedValid": true,
+        "leafFingerprint": "802c43b9f4a84d4107a1f06ddd3bd73c69897f675ca261490926f1ef643ee450",
+        "durationMs": 48
+      },
+      {
+        "id": "tls12-client",
+        "purpose": "A client that only speaks TLS 1.2",
+        "offered": {
+          "versions": [
+            "1.2"
+          ],
+          "groups": [
+            29,
+            23,
+            24
+          ],
+          "keyShares": []
+        },
+        "outcome": "handshake",
+        "alpn": "h2",
+        "version": 771,
+        "cipherSuite": 49195,
+        "group": 29,
+        "signatureScheme": 1027,
+        "signatureValid": true,
+        "leafFingerprint": "802c43b9f4a84d4107a1f06ddd3bd73c69897f675ca261490926f1ef643ee450",
+        "durationMs": 45
+      },
+      {
+        "id": "group-4587",
+        "purpose": "Offers only SecP256r1MLKEM768, with no key share, to see whether the server asks for one",
+        "offered": {
+          "versions": [
+            "1.3"
+          ],
+          "groups": [
+            4587
+          ],
+          "keyShares": []
+        },
+        "outcome": "alert",
+        "alert": "handshake_failure",
+        "durationMs": 53
+      },
+      {
+        "id": "group-4589",
+        "purpose": "Offers only SecP384r1MLKEM1024, with no key share, to see whether the server asks for one",
+        "offered": {
+          "versions": [
+            "1.3"
+          ],
+          "groups": [
+            4589
+          ],
+          "keyShares": []
+        },
+        "outcome": "alert",
+        "alert": "handshake_failure",
+        "durationMs": 46
+      },
+      {
+        "id": "group-513",
+        "purpose": "Offers only MLKEM768, with no key share, to see whether the server asks for one",
+        "offered": {
+          "versions": [
+            "1.3"
+          ],
+          "groups": [
+            513
+          ],
+          "keyShares": []
+        },
+        "outcome": "alert",
+        "alert": "handshake_failure",
+        "durationMs": 44
+      },
+      {
+        "id": "group-514",
+        "purpose": "Offers only MLKEM1024, with no key share, to see whether the server asks for one",
+        "offered": {
+          "versions": [
+            "1.3"
+          ],
+          "groups": [
+            514
+          ],
+          "keyShares": []
+        },
+        "outcome": "alert",
+        "alert": "handshake_failure",
+        "durationMs": 52
+      }
+    ],
+    "groupSupport": [
+      {
+        "group": 4588,
+        "name": "X25519MLKEM768",
+        "kex": "hybrid",
+        "supported": true,
+        "evidence": "negotiated in the main handshake"
+      },
+      {
+        "group": 4587,
+        "name": "SecP256r1MLKEM768",
+        "kex": "hybrid",
+        "supported": false,
+        "evidence": "refused with alert handshake_failure"
+      },
+      {
+        "group": 4589,
+        "name": "SecP384r1MLKEM1024",
+        "kex": "hybrid",
+        "supported": false,
+        "evidence": "refused with alert handshake_failure"
+      },
+      {
+        "group": 513,
+        "name": "MLKEM768",
+        "kex": "pq",
+        "supported": false,
+        "evidence": "refused with alert handshake_failure"
+      },
+      {
+        "group": 514,
+        "name": "MLKEM1024",
+        "kex": "pq",
+        "supported": false,
+        "evidence": "refused with alert handshake_failure"
+      }
+    ]
+  },
+  "certificates": [
+    {
+      "position": 0,
+      "subject": "CN=www.cloudflare.com",
+      "issuer": "CN=WE1, O=Google Trust Services, C=US",
+      "serialNumber": "948B98D32610078C13848B586DE3B23F",
+      "notBefore": "2026-09-16T13:01:15.000Z",
+      "notAfter": "2026-12-15T14:00:55.000Z",
+      "expired": false,
+      "notYetValid": false,
+      "selfSigned": false,
+      "isCa": false,
+      "names": [
+        "www.cloudflare.com",
+        "timeline.www.cloudflare.com"
+      ],
+      "key": {
+        "algorithm": "ECDSA P-256",
+        "family": "ECDSA",
+        "curve": "P-256",
+        "quantumSafe": false
+      },
+      "signature": {
+        "algorithm": "ECDSA with SHA-256",
+        "oid": "1.2.840.10045.4.3.2",
+        "family": "ECDSA",
+        "hash": "SHA-256",
+        "quantumSafe": false
+      },
+      "fingerprint256": "802c43b9f4a84d4107a1f06ddd3bd73c69897f675ca261490926f1ef643ee450",
+      "pem": "-----BEGIN CERTIFICATE-----\nMIIDlzCCAz2gAwIBAgIRAJSLmNMmEAeME4SLWG3jsj8wCgYIKoZIzj0EAwIwOzEL\nMAkGA1UEBhMCVVMxHjAcBgNVBAoTFUdvb2dsZSBUcnVzdCBTZXJ2aWNlczEMMAoG\nA1UEAxMDV0UxMB4XDTI2MDkxNjEzMDExNVoXDTI2MTIxNTE0MDA1NVowHTEbMBkG\nA1UEAxMSd3d3LmNsb3VkZmxhcmUuY29tMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcD\nQgAEKjMp+qz1X5KcoI8aen57UVrSB5pBsUcWcnbNsU37mQPPwAgV7CM+9n3P+hyI\nuBYXyNXnr/rUr4R2CscAL1y8IqOCAj4wggI6MA4GA1UdDwEB/wQEAwIHgDATBgNV\nHSUEDDAKBggrBgEFBQcDATAMBgNVHRMBAf8EAjAAMB0GA1UdDgQWBBR0h95W2twI\nUM6EaD3RlBnzhGsLxDAfBgNVHSMEGDAWgBSQd5I1Z8T/qMyp5nvZgHl7zJP5ODA1\nBggrBgEFBQcBAQQpMCcwJQYIKwYBBQUHMAKGGWh0dHA6Ly9pLnBraS5nb29nL3dl\nMS5jcnQwOgYDVR0RBDMwMYISd3d3LmNsb3VkZmxhcmUuY29tght0aW1lbGluZS53\nd3cuY2xvdWRmbGFyZS5jb20wEwYDVR0gBAwwCjAIBgZngQwBAgEwNgYDVR0fBC8w\nLTAroCmgJ4YlaHR0cDovL2MucGtpLmdvb2cvd2UxLzdUa0pCSmZLX1k4LmNybDCC\nAQMGCisGAQQB1nkCBAIEgfQEgfEA7wB1ANdtfRDRp/V3wsfpX9cAv/mCyTNaZeHQ\nswFzF8DIxWl3AAABoKqFkjUAAAQDAEYwRAIgFASx4IvBGzOJ0nQczYYD1eagrbcP\nAO+lDoYWRPdhKyMCIDuNsSiBbFuHMd1IIx28JDhXBI+Lw4YthyXc2zOYKtOzAHYA\nyKPEf8ezrbk1awE/anoSbeM6TkOlxkb5l605dZkdz5oAAAGgqoWSRQAABAMARzBF\nAiAA9hK+hXnX5q6OSN0k7/ZJ+g2Jle9HzoSQt+XLu1zXwQIhAMdl01WPtS2/rPFy\nj2nmL12vrxaPjFtcY6++ZfbotBWuMAoGCCqGSM49BAMCA0gAMEUCIQCAZwMRZtnc\neUxTSucCpHkuHGgA8/WRnTwC5kZVgiJjSQIgD/x+QxA4j2gEgmaBRfQB4C3WzAUC\nlgS5XzAr+OzyuwU=\n-----END CERTIFICATE-----\n"
+    },
+    {
+      "position": 1,
+      "subject": "CN=WE1, O=Google Trust Services, C=US",
+      "issuer": "CN=GTS Root R4, O=Google Trust Services LLC, C=US",
+      "serialNumber": "7FF31977972C224A76155D13B6D685E3",
+      "notBefore": "2023-12-13T09:00:00.000Z",
+      "notAfter": "2029-02-20T14:00:00.000Z",
+      "expired": false,
+      "notYetValid": false,
+      "selfSigned": false,
+      "isCa": true,
+      "names": [],
+      "key": {
+        "algorithm": "ECDSA P-256",
+        "family": "ECDSA",
+        "curve": "P-256",
+        "quantumSafe": false
+      },
+      "signature": {
+        "algorithm": "ECDSA with SHA-384",
+        "oid": "1.2.840.10045.4.3.3",
+        "family": "ECDSA",
+        "hash": "SHA-384",
+        "quantumSafe": false
+      },
+      "fingerprint256": "1dfc1605fbad358d8bc844f76d15203fac9ca5c1a79fd4857ffaf2864fbebf96",
+      "pem": "-----BEGIN CERTIFICATE-----\nMIICnzCCAiWgAwIBAgIQf/MZd5csIkp2FV0TttaF4zAKBggqhkjOPQQDAzBHMQsw\nCQYDVQQGEwJVUzEiMCAGA1UEChMZR29vZ2xlIFRydXN0IFNlcnZpY2VzIExMQzEU\nMBIGA1UEAxMLR1RTIFJvb3QgUjQwHhcNMjMxMjEzMDkwMDAwWhcNMjkwMjIwMTQw\nMDAwWjA7MQswCQYDVQQGEwJVUzEeMBwGA1UEChMVR29vZ2xlIFRydXN0IFNlcnZp\nY2VzMQwwCgYDVQQDEwNXRTEwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAARvzTr+\nZ1dHTCEDhUDCR127WEcPQMFcF4XGGTfn1XzthkubgdnXGhOlCgP4mMTG6J7/EFmP\nLCaY9eYmJbsPAvpWo4H+MIH7MA4GA1UdDwEB/wQEAwIBhjAdBgNVHSUEFjAUBggr\nBgEFBQcDAQYIKwYBBQUHAwIwEgYDVR0TAQH/BAgwBgEB/wIBADAdBgNVHQ4EFgQU\nkHeSNWfE/6jMqeZ72YB5e8yT+TgwHwYDVR0jBBgwFoAUgEzW63T/STaj1dj8tT7F\navCUHYwwNAYIKwYBBQUHAQEEKDAmMCQGCCsGAQUFBzAChhhodHRwOi8vaS5wa2ku\nZ29vZy9yNC5jcnQwKwYDVR0fBCQwIjAgoB6gHIYaaHR0cDovL2MucGtpLmdvb2cv\nci9yNC5jcmwwEwYDVR0gBAwwCjAIBgZngQwBAgEwCgYIKoZIzj0EAwMDaAAwZQIx\nAOcCq1HW90OVznX+0RGU1cxAQXomvtgM8zItPZCuFQ8jSBJSjz5keROv9aYsAm5V\nsQIwJonMaAFi54mrfhfoFNZEfuNMSQ6/bIBiNLiyoX46FohQvKeIoJ99cx7sUkFN\n7uJW\n-----END CERTIFICATE-----\n"
+    },
+    {
+      "position": 2,
+      "subject": "CN=GTS Root R4, O=Google Trust Services LLC, C=US",
+      "issuer": "CN=GlobalSign Root CA, OU=Root CA, O=GlobalSign nv-sa, C=BE",
+      "serialNumber": "7FE530BF331343BEDD821610493D8A1B",
+      "notBefore": "2023-11-15T03:43:21.000Z",
+      "notAfter": "2028-01-28T00:00:42.000Z",
+      "expired": false,
+      "notYetValid": false,
+      "selfSigned": false,
+      "isCa": true,
+      "names": [],
+      "key": {
+        "algorithm": "ECDSA P-384",
+        "family": "ECDSA",
+        "curve": "P-384",
+        "quantumSafe": false
+      },
+      "signature": {
+        "algorithm": "RSA PKCS#1 v1.5 with SHA-256",
+        "oid": "1.2.840.113549.1.1.11",
+        "family": "RSA",
+        "hash": "SHA-256",
+        "quantumSafe": false
+      },
+      "fingerprint256": "76b27b80a58027dc3cf1da68dac17010ed93997d0b603e2fadbe85012493b5a7",
+      "pem": "-----BEGIN CERTIFICATE-----\nMIIDejCCAmKgAwIBAgIQf+UwvzMTQ77dghYQST2KGzANBgkqhkiG9w0BAQsFADBX\nMQswCQYDVQQGEwJCRTEZMBcGA1UEChMQR2xvYmFsU2lnbiBudi1zYTEQMA4GA1UE\nCxMHUm9vdCBDQTEbMBkGA1UEAxMSR2xvYmFsU2lnbiBSb290IENBMB4XDTIzMTEx\nNTAzNDMyMVoXDTI4MDEyODAwMDA0MlowRzELMAkGA1UEBhMCVVMxIjAgBgNVBAoT\nGUdvb2dsZSBUcnVzdCBTZXJ2aWNlcyBMTEMxFDASBgNVBAMTC0dUUyBSb290IFI0\nMHYwEAYHKoZIzj0CAQYFK4EEACIDYgAE83Rzp2iLYK5DuDXFgTB7S0md+8Fhzube\nRr1r1WEYNa5A3XP3iZEwWus87oV8okB2O6nGuEfYKueSkWpz6bFyOZ8pn6KY019e\nWIZlD6GEZQbR3IvJx3PIjGov5cSr0R2Ko4H/MIH8MA4GA1UdDwEB/wQEAwIBhjAd\nBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwDwYDVR0TAQH/BAUwAwEB/zAd\nBgNVHQ4EFgQUgEzW63T/STaj1dj8tT7FavCUHYwwHwYDVR0jBBgwFoAUYHtmGkUN\nl8qJUC99BM00qP/8/UswNgYIKwYBBQUHAQEEKjAoMCYGCCsGAQUFBzAChhpodHRw\nOi8vaS5wa2kuZ29vZy9nc3IxLmNydDAtBgNVHR8EJjAkMCKgIKAehhxodHRwOi8v\nYy5wa2kuZ29vZy9yL2dzcjEuY3JsMBMGA1UdIAQMMAowCAYGZ4EMAQIBMA0GCSqG\nSIb3DQEBCwUAA4IBAQAYQrsPBtYDh5bjP2OBDwmkoWhIDDkic574y04tfzHpn+cJ\nodI2D4SseesQ6bDrarZ7C30ddLibZatoKiws3UL9xnELz4ct92vID24FfVbiI1hY\n+SW6FoVHkNeWIP0GCbaM4C6uVdF5dTUsMVs/ZbzNnIdCp5Gxmx5ejvEau8otR/Cs\nkGN+hr/W5GvT1tMBjgWKZ1i4//emhA1JG1BbPzoLJQvyEotc03lXjTaCzv8mEbep\n8RqZ7a2CPsgRbuvTPBwcOMBBmuFeU88+FSBX6+7iP0il8b4Z0QFqIwwMHfs/L6K1\nvepuoxtGzi4CZ68zJpiq1UvSqTbFJjtbD4seiMHl\n-----END CERTIFICATE-----\n"
+    }
+  ],
+  "trust": {
+    "checked": true,
+    "trusted": true,
+    "store": "the CA certificates shipped with Node.js v25.9.0 (Mozilla’s list)"
+  },
+  "transport": {
+    "hops": [
+      {
+        "url": "https://www.cloudflare.com/",
+        "status": 200
+      }
+    ],
+    "hsts": {
+      "raw": "max-age=31536000; includeSubDomains",
+      "maxAge": 31536000,
+      "includeSubDomains": true,
+      "preload": false
+    },
+    "cookies": [
+      {
+        "name": "_ga",
+        "secure": false,
+        "httpOnly": false
+      },
+      {
+        "name": "cfz_google-analytics_v4",
+        "secure": true,
+        "httpOnly": true,
+        "sameSite": "lax"
+      },
+      {
+        "name": "cfz_adobe",
+        "secure": true,
+        "httpOnly": true,
+        "sameSite": "lax"
+      },
+      {
+        "name": "kndctr_8AD56F28618A50850A495FB6_AdobeOrg_identity",
+        "secure": true,
+        "httpOnly": false,
+        "sameSite": "lax"
+      },
+      {
+        "name": "__cf_bm",
+        "secure": true,
+        "httpOnly": true,
+        "sameSite": "none"
+      }
+    ],
+    "plainHttp": {
+      "status": 301,
+      "location": "https://www.cloudflare.com/",
+      "upgradesToHttps": true
+    },
+    "serverHeader": "cloudflare"
+  },
+  "oidc": {
+    "found": false,
+    "tried": [
+      {
+        "url": "https://www.cloudflare.com/.well-known/openid-configuration",
+        "result": "HTTP 301"
+      },
+      {
+        "url": "https://www.cloudflare.com/.well-known/oauth-authorization-server",
+        "result": "HTTP 301"
+      }
+    ]
+  },
+  "related": [],
+  "layers": [
+    {
+      "id": "key-establishment",
+      "name": "TLS key establishment",
+      "headline": "Hybrid: X25519MLKEM768, with classical fallback",
+      "exposure": "depends-on-client",
+      "tone": "caution"
+    },
+    {
+      "id": "server-authentication",
+      "name": "TLS server authentication",
+      "headline": "Classical: ECDSA P-256 certificate",
+      "exposure": "forgery-once-quantum",
+      "tone": "caution"
+    },
+    {
+      "id": "record-protection",
+      "name": "Encryption of the data itself",
+      "headline": "AES-256-GCM",
+      "exposure": "reduced-margin",
+      "tone": "good"
+    },
+    {
+      "id": "transport-policy",
+      "name": "Is HTTPS enforced?",
+      "headline": "HSTS set",
+      "exposure": "not-applicable",
+      "tone": "caution"
+    },
+    {
+      "id": "token-signing",
+      "name": "Application token signing",
+      "headline": "Could not determine",
+      "exposure": "undetermined",
+      "tone": "neutral"
+    },
+    {
+      "id": "dependencies",
+      "name": "Dependencies",
+      "headline": "Internal dependencies not observable",
+      "exposure": "undetermined",
+      "tone": "neutral"
+    }
+  ],
+  "findings": [
+    {
+      "id": "kex.negotiated",
+      "layer": "key-establishment",
+      "kind": "observation",
+      "tone": "good",
+      "title": "Key exchange: X25519MLKEM768, a hybrid of X25519 and ML-KEM-768",
+      "detail": "Negotiated by a client that offers post-quantum key exchange. The session keys depend on both parts, so they stay secret unless both are broken.",
+      "evidence": [
+        {
+          "label": "Scanner offered",
+          "value": "X25519MLKEM768, x25519, secp256r1, SecP256r1MLKEM768, SecP384r1MLKEM1024, MLKEM768, MLKEM1024 and secp384r1; key shares for X25519MLKEM768 and x25519"
+        },
+        {
+          "label": "ServerHello",
+          "value": "TLS 1.3, TLS_AES_256_GCM_SHA384, group 0x11ec X25519MLKEM768"
+        },
+        {
+          "label": "Finished MAC",
+          "value": "verified: the scanner derived the same keys as the server"
+        }
+      ],
+      "learn": {
+        "view": "login",
+        "landmark": "key-establishment",
+        "mode": "hybrid",
+        "label": "See what hybrid key exchange does"
+      }
+    },
+    {
+      "id": "kex.classical-client",
+      "layer": "key-establishment",
+      "kind": "observation",
+      "tone": "neutral",
+      "title": "Clients without post-quantum support still connect, using x25519",
+      "detail": "This keeps older browsers, libraries and devices working. Their sessions get classical key exchange.",
+      "evidence": [
+        {
+          "label": "Scanner offered",
+          "value": "x25519, secp256r1 and secp384r1; key shares for x25519 and secp256r1"
+        },
+        {
+          "label": "ServerHello",
+          "value": "TLS 1.3, TLS_AES_256_GCM_SHA384, group 0x001d x25519"
+        },
+        {
+          "label": "Finished MAC",
+          "value": "verified: the scanner derived the same keys as the server"
+        }
+      ]
+    },
+    {
+      "id": "kex.tls12",
+      "layer": "key-establishment",
+      "kind": "observation",
+      "tone": "neutral",
+      "title": "TLS 1.2 is still accepted (x25519)",
+      "detail": "A client that only speaks TLS 1.2 gets classical key exchange; post-quantum groups exist only in TLS 1.3. Clients that support 1.3 cannot be forced down to 1.2 by an attacker.",
+      "evidence": [
+        {
+          "label": "ServerHello",
+          "value": "TLS 1.2, TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"
+        }
+      ]
+    },
+    {
+      "id": "kex.groups",
+      "layer": "key-establishment",
+      "kind": "observation",
+      "tone": "good",
+      "title": "Post-quantum groups accepted: X25519MLKEM768",
+      "detail": "The scanner asked about each of 5 hybrid and ML-KEM groups separately. A group it did not ask about cannot be detected.",
+      "evidence": [
+        {
+          "label": "X25519MLKEM768",
+          "value": "accepted: negotiated in the main handshake"
+        },
+        {
+          "label": "SecP256r1MLKEM768",
+          "value": "not accepted: refused with alert handshake_failure"
+        },
+        {
+          "label": "SecP384r1MLKEM1024",
+          "value": "not accepted: refused with alert handshake_failure"
+        },
+        {
+          "label": "MLKEM768",
+          "value": "not accepted: refused with alert handshake_failure"
+        },
+        {
+          "label": "MLKEM1024",
+          "value": "not accepted: refused with alert handshake_failure"
+        }
+      ]
+    },
+    {
+      "id": "kex.exposure",
+      "layer": "key-establishment",
+      "kind": "inference",
+      "tone": "caution",
+      "title": "Recorded traffic is protected only for clients that support post-quantum key exchange",
+      "detail": "Sessions that negotiate ML-KEM cannot be decrypted later by a quantum computer. Sessions from clients that fall back to classical key exchange can: an attacker who records them now can decrypt them once a large quantum computer exists (\"harvest now, decrypt later\"). Which of your clients fall back is not visible from outside.",
+      "basedOn": [
+        "kex.negotiated",
+        "kex.classical-client",
+        "kex.tls12"
+      ],
+      "learn": {
+        "view": "login",
+        "landmark": "harvest",
+        "mode": "hybrid",
+        "attacker": "quantum",
+        "label": "Watch a quantum attacker fail against hybrid"
+      }
+    },
+    {
+      "id": "auth.certificate",
+      "layer": "server-authentication",
+      "kind": "observation",
+      "tone": "neutral",
+      "title": "Certificate key: ECDSA P-256",
+      "detail": "Issued to www.cloudflare.com by \"CN=WE1, O=Google Trust Services, C=US\", valid until 2026-12-15. The server sent 3 certificates.",
+      "evidence": [
+        {
+          "label": "Leaf",
+          "value": "CN=www.cloudflare.com; key ECDSA P-256; signed by \"CN=WE1, O=Google Trust Services, C=US\" with ECDSA with SHA-256"
+        },
+        {
+          "label": "Chain #1",
+          "value": "CN=WE1, O=Google Trust Services, C=US; key ECDSA P-256; signed by \"CN=GTS Root R4, O=Google Trust Services LLC, C=US\" with ECDSA with SHA-384"
+        },
+        {
+          "label": "Chain #2",
+          "value": "CN=GTS Root R4, O=Google Trust Services LLC, C=US; key ECDSA P-384; signed by \"CN=GlobalSign Root CA, OU=Root CA, O=GlobalSign nv-sa, C=BE\" with RSA PKCS#1 v1.5 with SHA-256"
+        }
+      ],
+      "learn": {
+        "view": "login",
+        "landmark": "secure-channel",
+        "mode": "classical",
+        "label": "What is ECDSA doing here?"
+      }
+    },
+    {
+      "id": "auth.proof",
+      "layer": "server-authentication",
+      "kind": "observation",
+      "tone": "neutral",
+      "title": "The server proved it holds that key with ecdsa_secp256r1_sha256",
+      "detail": "The scanner checked CertificateVerify, a signature over the handshake transcript against the leaf certificate’s public key. It is valid.",
+      "evidence": [
+        {
+          "label": "Signature scheme",
+          "value": "0x0403 ecdsa_secp256r1_sha256"
+        }
+      ]
+    },
+    {
+      "id": "auth.trust",
+      "layer": "server-authentication",
+      "kind": "observation",
+      "tone": "good",
+      "title": "The certificate chain is publicly trusted and matches the host name",
+      "detail": "Validated by OpenSSL against the CA certificates shipped with Node.js v25.9.0 (Mozilla’s list)."
+    },
+    {
+      "id": "auth.exposure",
+      "layer": "server-authentication",
+      "kind": "inference",
+      "tone": "caution",
+      "title": "A quantum computer could impersonate this server, but only at the time of an attack",
+      "detail": "The server’s identity rests on the certificate key (ECDSA P-256), a chain signature (ECDSA with SHA-256), a chain signature (ECDSA with SHA-384) and a chain signature (RSA PKCS#1 v1.5 with SHA-256). Shor’s algorithm recovers such private keys from the public keys, which would let an attacker present this identity. Unlike key exchange, this cannot be used on recorded traffic: the forgery has to be made, with a working quantum computer, during a live connection while the certificate is still valid. Publicly trusted certificate authorities do not issue post-quantum certificates yet, so a public site cannot change this alone today.",
+      "basedOn": [
+        "auth.certificate",
+        "auth.proof"
+      ],
+      "learn": {
+        "view": "login",
+        "landmark": "forgery",
+        "mode": "classical",
+        "attacker": "quantum",
+        "label": "Watch a signature being forged"
+      }
+    },
+    {
+      "id": "cipher.negotiated",
+      "layer": "record-protection",
+      "kind": "observation",
+      "tone": "neutral",
+      "title": "Data is encrypted with AES-256-GCM",
+      "detail": "Cipher suite TLS_AES_256_GCM_SHA384. The key for it comes out of the key exchange above; the cipher itself uses no public-key cryptography.",
+      "evidence": [
+        {
+          "label": "Cipher suite",
+          "value": "0x1302 TLS_AES_256_GCM_SHA384"
+        }
+      ],
+      "learn": {
+        "view": "login",
+        "landmark": "authentication",
+        "mode": "classical",
+        "label": "See what the cipher protects"
+      }
+    },
+    {
+      "id": "cipher.exposure",
+      "layer": "record-protection",
+      "kind": "inference",
+      "tone": "good",
+      "title": "The cipher is not at risk from a quantum computer",
+      "detail": "Quantum computers do not break symmetric ciphers. Grover’s algorithm at best halves the effective key length, which leaves a 256-bit key with about 128 bits of security.",
+      "basedOn": [
+        "cipher.negotiated"
+      ]
+    },
+    {
+      "id": "http.hsts",
+      "layer": "transport-policy",
+      "kind": "observation",
+      "tone": "good",
+      "title": "HSTS tells browsers to use HTTPS only, for 365 days",
+      "detail": "A browser that has seen this header refuses to talk to the site over plain HTTP until it expires.",
+      "evidence": [
+        {
+          "label": "Strict-Transport-Security",
+          "value": "max-age=31536000; includeSubDomains"
+        }
+      ]
+    },
+    {
+      "id": "http.plain",
+      "layer": "transport-policy",
+      "kind": "observation",
+      "tone": "good",
+      "title": "Plain HTTP redirects to HTTPS",
+      "detail": "A request to port 80 is sent to the HTTPS site.",
+      "evidence": [
+        {
+          "label": "GET http://…:80/",
+          "value": "301 → https://www.cloudflare.com/"
+        }
+      ]
+    },
+    {
+      "id": "http.cookies",
+      "layer": "transport-policy",
+      "kind": "observation",
+      "tone": "caution",
+      "title": "Cookie _ga can be sent over plain HTTP",
+      "detail": "A cookie without the Secure attribute is sent on plain-HTTP requests too, where anyone on the network path can read it. Whether that matters depends on what the cookie is for, which a scan cannot tell: for a session cookie it means the session can be stolen.",
+      "evidence": [
+        {
+          "label": "_ga",
+          "value": "not Secure, readable by scripts, no SameSite"
+        },
+        {
+          "label": "cfz_google-analytics_v4",
+          "value": "Secure, HttpOnly, SameSite=lax"
+        },
+        {
+          "label": "cfz_adobe",
+          "value": "Secure, HttpOnly, SameSite=lax"
+        },
+        {
+          "label": "kndctr_8AD56F28618A50850A495FB6_AdobeOrg_identity",
+          "value": "Secure, readable by scripts, SameSite=lax"
+        },
+        {
+          "label": "__cf_bm",
+          "value": "Secure, HttpOnly, SameSite=none"
+        }
+      ]
+    },
+    {
+      "id": "token.undetermined",
+      "layer": "token-signing",
+      "kind": "undetermined",
+      "tone": "neutral",
+      "title": "Unable to determine the application-level token signing algorithm",
+      "detail": "No OpenID Connect or OAuth metadata is published at this address. A service can issue signed tokens without saying how; from outside that is only visible in a token itself. If this system gives you a token, paste it into the token analyzer.",
+      "evidence": [
+        {
+          "label": "https://www.cloudflare.com/.well-known/openid-configuration",
+          "value": "HTTP 301"
+        },
+        {
+          "label": "https://www.cloudflare.com/.well-known/oauth-authorization-server",
+          "value": "HTTP 301"
+        }
+      ],
+      "learn": {
+        "view": "token",
+        "label": "Analyze a token from this system"
+      }
+    },
+    {
+      "id": "deps.internal",
+      "layer": "dependencies",
+      "kind": "undetermined",
+      "tone": "neutral",
+      "title": "Internal dependencies cannot be observed from outside",
+      "detail": "Connections between your own services, databases, key storage, vendor APIs and the devices your users connect from all use cryptography too. None of it is visible to an external scan. Finding it is the first step of a migration.",
+      "learn": {
+        "view": "migrate",
+        "label": "See why inventory comes first"
+      }
+    }
+  ]
+}

@@ -1,0 +1,422 @@
+/*
+ * The visual grammar, used the same way on every page:
+ *
+ *   How a finding is known
+ *     observed             solid rule        read off the wire or a published document
+ *     inferred             dashed rule       a conclusion, with its reasoning
+ *     could not determine  hatched           looked for and not established
+ *
+ *   Cryptographic objects (stage, reports, token view)
+ *     solid fill     private or secret     outline        public
+ *     plain          classical mathematics dotted lattice post-quantum
+ *     blue  session key exchange           teal  the TLS certificate key
+ *     violet  the token-signing key        yellow  a shared secret and what it protects
+ *     red   anything an attacker holds
+ *
+ * Yellow is the one loud colour and it always means the same thing: protected.
+ */
+:root {
+  --ink: #111a2b;
+  --ink-soft: #4d586c;
+  --paper: #ffffff;
+  --sheet: #f4f6f9;
+  --grid: #e3e8ee;
+  --rule: #c5cdd9;
+
+  --signal: #ffd60a;
+  --signal-wash: #fff6c7;
+
+  --good: #0e6b4e;
+  --good-wash: #e2f3ec;
+  --caution: #8a5a00;
+  --caution-wash: #fbf1d8;
+  --bad: #bf3220;
+  --bad-wash: #fbe9e5;
+
+  --k-session: #2253c4;
+  --k-session-wash: #e6ecfa;
+  --k-cert: #0b7285;
+  --k-cert-wash: #dff3f6;
+  --k-token: #6b3fa0;
+  --k-token-wash: #efe6f8;
+  --k-attacker: #bf3220;
+
+  --text: 'Barlow', 'Segoe UI', system-ui, sans-serif;
+  --head: 'Barlow Semi Condensed', 'Barlow', 'Segoe UI', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+
+  --page: 72rem;
+  --gutter: max(20px, calc((100% - var(--page)) / 2));
+  /* 45° hatching: the drafting convention for "not shown". */
+  --hatch: repeating-linear-gradient(135deg, var(--rule) 0 1.5px, transparent 1.5px 7px);
+
+  color-scheme: light;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html {
+  scroll-padding-top: 72px;
+}
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 1.0625rem/1.5 var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  font-family: var(--head);
+  font-weight: 700;
+  line-height: 1.12;
+  text-wrap: balance;
+}
+h1 {
+  font-size: clamp(2.1rem, 5vw, 3.1rem);
+}
+h2 {
+  font-size: clamp(1.5rem, 3vw, 2rem);
+}
+h3 {
+  font-size: 1.2rem;
+}
+h4 {
+  font-size: 1rem;
+}
+p,
+ul,
+ol,
+dl,
+dd,
+figure {
+  margin: 0;
+}
+ul,
+ol {
+  padding: 0;
+  list-style: none;
+}
+a {
+  color: var(--k-session);
+  text-underline-offset: 3px;
+}
+code,
+pre,
+.mono {
+  font-family: var(--mono);
+  font-size: 0.85em;
+}
+pre {
+  margin: 0;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+:focus-visible {
+  outline: 3px solid var(--k-session);
+  outline-offset: 2px;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---------- Controls ---------- */
+button,
+.button {
+  font: 600 0.98rem var(--text);
+  color: var(--ink);
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  padding: 8px 14px;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+}
+button:hover:not(:disabled),
+.button:hover {
+  background: var(--sheet);
+}
+button.primary,
+.button.primary,
+button[aria-pressed='true'] {
+  background: var(--ink);
+  color: var(--paper);
+}
+button.primary:hover:not(:disabled),
+.button.primary:hover {
+  background: #263148;
+}
+button.danger {
+  border-color: var(--bad);
+  color: var(--bad);
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+button.link {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--k-session);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+button.link:hover:not(:disabled) {
+  background: none;
+  color: var(--ink);
+}
+input[type='text'],
+input[type='url'],
+textarea {
+  font: 1rem var(--mono);
+  color: var(--ink);
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  padding: 11px 12px;
+  width: 100%;
+}
+label {
+  font-weight: 600;
+}
+
+/* A row of mutually exclusive choices. */
+.seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+}
+.seg button {
+  border-radius: 0;
+  margin-left: -2px;
+}
+.seg button:first-child {
+  margin-left: 0;
+  border-radius: 3px 0 0 3px;
+}
+.seg button:last-child {
+  border-radius: 0 3px 3px 0;
+}
+
+/* ---------- Shell ---------- */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px 22px;
+  flex-wrap: wrap;
+  padding: 10px var(--gutter);
+  background: var(--ink);
+  color: var(--paper);
+}
+.topbar a,
+.topbar button.link {
+  color: var(--paper);
+  text-decoration: none;
+  font-weight: 500;
+}
+.topbar .logo {
+  font: 700 1.15rem var(--head);
+  margin-right: auto;
+}
+.topbar nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+}
+.topbar nav a {
+  padding: 3px 0;
+  border-bottom: 3px solid transparent;
+}
+.topbar nav a:hover,
+.topbar nav a[aria-current='page'] {
+  border-bottom-color: var(--signal);
+}
+.topbar .account {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-left: 22px;
+  border-left: 1px solid #3a4560;
+  font-size: 0.95rem;
+}
+.topbar .account button,
+.topbar .account .button {
+  padding: 4px 10px;
+  border-color: var(--paper);
+  background: transparent;
+  color: var(--paper);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.topbar .account button:hover:not(:disabled),
+.topbar .account .button:hover {
+  background: #263148;
+}
+
+main {
+  min-height: 70vh;
+}
+.band {
+  padding: 44px var(--gutter) 40px;
+  background: var(--signal);
+}
+.band h1 {
+  max-width: 18ch;
+}
+.band.compact {
+  padding-top: 18px;
+  padding-bottom: 18px;
+}
+.band.compact .scan-form {
+  margin-top: 0;
+}
+.band .sub {
+  max-width: 46rem;
+  margin-top: 12px;
+  font-size: 1.15rem;
+}
+.sheet {
+  padding: 36px var(--gutter) 64px;
+  background:
+    linear-gradient(var(--grid) 1px, transparent 1px) 0 0 / 100% 24px,
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0 / 24px 100%,
+    var(--sheet);
+}
+.page {
+  padding: 36px var(--gutter) 64px;
+}
+.page > h1,
+.sheet > h1 {
+  font-size: clamp(1.8rem, 4vw, 2.5rem);
+}
+.page .sub,
+.sheet .sub {
+  max-width: 44rem;
+  margin-top: 10px;
+  color: var(--ink-soft);
+  font-size: 1.1rem;
+}
+.panel {
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+}
+.notice {
+  padding: 12px 14px;
+  border-left: 6px solid var(--ink);
+  background: var(--paper);
+}
+.notice.bad {
+  border-left-color: var(--bad);
+  background: var(--bad-wash);
+}
+.notice.caution {
+  border-left-color: var(--caution);
+  background: var(--caution-wash);
+}
+.fine {
+  color: var(--ink-soft);
+  font-size: 0.92rem;
+}
+.scroll-x {
+  overflow-x: auto;
+}
+
+footer.site {
+  padding: 22px var(--gutter);
+  border-top: 2px solid var(--ink);
+  font-size: 0.92rem;
+  color: var(--ink-soft);
+}
+footer.site p {
+  max-width: 60rem;
+}
+
+/* ---------- The scan form ---------- */
+.scan-form {
+  margin-top: 26px;
+  max-width: 52rem;
+}
+.scan-form label {
+  display: block;
+  margin-bottom: 6px;
+}
+.scan-row {
+  display: flex;
+  gap: 10px;
+}
+.scan-row input {
+  flex: 1;
+  min-width: 0;
+}
+.scan-row button {
+  white-space: nowrap;
+}
+.examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-top: 12px;
+  font-size: 0.98rem;
+}
+.examples button.link {
+  color: var(--ink);
+}
+.band .notice {
+  margin-top: 14px;
+  max-width: 52rem;
+}
+
+/* ---------- Tone ---------- */
+.good {
+  color: var(--good);
+}
+.caution {
+  color: var(--caution);
+}
+.bad {
+  color: var(--bad);
+}
+
+@media (max-width: 640px) {
+  body {
+    font-size: 1rem;
+  }
+  .topbar .logo {
+    width: 100%;
+  }
+  .topbar .account {
+    padding-left: 0;
+    border-left: 0;
+  }
+  .scan-row {
+    flex-direction: column;
+  }
+  .band {
+    padding-top: 30px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    scroll-behavior: auto !important;
+    transition: none !important;
+  }
+}

@@ -1,0 +1,676 @@
+{
+  "schema": 1,
+  "engine": "1.0.0",
+  "target": {
+    "input": "https://localhost:9444",
+    "url": "https://localhost:9444/",
+    "origin": "https://localhost:9444",
+    "hostname": "localhost",
+    "port": 9444,
+    "lab": true
+  },
+  "startedAt": "2026-10-02T20:24:43.251Z",
+  "finishedAt": "2026-10-02T20:24:43.286Z",
+  "durationMs": 35,
+  "network": {
+    "address": "127.0.0.1",
+    "family": 4,
+    "resolved": [
+      "::1",
+      "127.0.0.1"
+    ]
+  },
+  "reachable": true,
+  "tls": {
+    "probes": [
+      {
+        "id": "pq-capable-client",
+        "purpose": "A client that supports post-quantum key exchange and ML-DSA signatures, as current browsers increasingly do",
+        "offered": {
+          "versions": [
+            "1.3",
+            "1.2"
+          ],
+          "groups": [
+            4588,
+            29,
+            23,
+            4587,
+            4589,
+            513,
+            514,
+            24
+          ],
+          "keyShares": [
+            4588,
+            29
+          ]
+        },
+        "outcome": "handshake",
+        "version": 772,
+        "cipherSuite": 4866,
+        "group": 4588,
+        "alpn": "http/1.1",
+        "signatureScheme": 2309,
+        "signatureValid": true,
+        "finishedValid": true,
+        "leafFingerprint": "e228d5ad78f9596f931d9d6e67335ee025a1000657a2581af3089ef5cf6a9344",
+        "durationMs": 10
+      },
+      {
+        "id": "classical-client",
+        "purpose": "A client with no post-quantum support",
+        "offered": {
+          "versions": [
+            "1.3",
+            "1.2"
+          ],
+          "groups": [
+            29,
+            23,
+            24
+          ],
+          "keyShares": [
+            29,
+            23
+          ]
+        },
+        "outcome": "alert",
+        "alert": "handshake_failure",
+        "durationMs": 1
+      },
+      {
+        "id": "tls12-client",
+        "purpose": "A client that only speaks TLS 1.2",
+        "offered": {
+          "versions": [
+            "1.2"
+          ],
+          "groups": [
+            29,
+            23,
+            24
+          ],
+          "keyShares": []
+        },
+        "outcome": "alert",
+        "alert": "protocol_version",
+        "durationMs": 1
+      },
+      {
+        "id": "group-4587",
+        "purpose": "Offers only SecP256r1MLKEM768, with no key share, to see whether the server asks for one",
+        "offered": {
+          "versions": [
+            "1.3"
+          ],
+          "groups": [
+            4587
+          ],
+          "keyShares": []
+        },
+        "outcome": "alert",
+        "alert": "handshake_failure",
+        "durationMs": 0
+      },
+      {
+        "id": "group-4589",
+        "purpose": "Offers only SecP384r1MLKEM1024, with no key share, to see whether the server asks for one",
+        "offered": {
+          "versions": [
+            "1.3"
+          ],
+          "groups": [
+            4589
+          ],
+          "keyShares": []
+        },
+        "outcome": "hello-retry-request",
+        "version": 772,
+        "cipherSuite": 4866,
+        "group": 4589,
+        "durationMs": 1
+      },
+      {
+        "id": "group-513",
+        "purpose": "Offers only MLKEM768, with no key share, to see whether the server asks for one",
+        "offered": {
+          "versions": [
+            "1.3"
+          ],
+          "groups": [
+            513
+          ],
+          "keyShares": []
+        },
+        "outcome": "hello-retry-request",
+        "version": 772,
+        "cipherSuite": 4866,
+        "group": 513,
+        "durationMs": 0
+      },
+      {
+        "id": "group-514",
+        "purpose": "Offers only MLKEM1024, with no key share, to see whether the server asks for one",
+        "offered": {
+          "versions": [
+            "1.3"
+          ],
+          "groups": [
+            514
+          ],
+          "keyShares": []
+        },
+        "outcome": "hello-retry-request",
+        "version": 772,
+        "cipherSuite": 4866,
+        "group": 514,
+        "durationMs": 1
+      }
+    ],
+    "groupSupport": [
+      {
+        "group": 4588,
+        "name": "X25519MLKEM768",
+        "kex": "hybrid",
+        "supported": true,
+        "evidence": "negotiated in the main handshake"
+      },
+      {
+        "group": 4587,
+        "name": "SecP256r1MLKEM768",
+        "kex": "hybrid",
+        "supported": false,
+        "evidence": "refused with alert handshake_failure"
+      },
+      {
+        "group": 4589,
+        "name": "SecP384r1MLKEM1024",
+        "kex": "hybrid",
+        "supported": true,
+        "evidence": "HelloRetryRequest selecting SecP384r1MLKEM1024"
+      },
+      {
+        "group": 513,
+        "name": "MLKEM768",
+        "kex": "pq",
+        "supported": true,
+        "evidence": "HelloRetryRequest selecting MLKEM768"
+      },
+      {
+        "group": 514,
+        "name": "MLKEM1024",
+        "kex": "pq",
+        "supported": true,
+        "evidence": "HelloRetryRequest selecting MLKEM1024"
+      }
+    ]
+  },
+  "certificates": [
+    {
+      "position": 0,
+      "subject": "CN=pq.lab.localhost",
+      "issuer": "CN=pq-oidc lab issuing CA (ml-dsa)",
+      "serialNumber": "018F53010A05DA8EC03EBDE61EFE29A5",
+      "notBefore": "2026-10-02T19:24:38.000Z",
+      "notAfter": "2026-12-31T20:24:38.000Z",
+      "expired": false,
+      "notYetValid": false,
+      "selfSigned": false,
+      "isCa": false,
+      "names": [
+        "localhost",
+        "127.0.0.1",
+        "0:0:0:0:0:0:0:1"
+      ],
+      "key": {
+        "algorithm": "ML-DSA-65",
+        "family": "ML-DSA",
+        "quantumSafe": true
+      },
+      "signature": {
+        "algorithm": "ML-DSA-65",
+        "oid": "2.16.840.1.101.3.4.3.18",
+        "family": "ML-DSA",
+        "quantumSafe": true
+      },
+      "fingerprint256": "e228d5ad78f9596f931d9d6e67335ee025a1000657a2581af3089ef5cf6a9344",
+      "pem": "-----BEGIN CERTIFICATE-----\n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\n-----END CERTIFICATE-----\n"
+    },
+    {
+      "position": 1,
+      "subject": "CN=pq-oidc lab issuing CA (ml-dsa)",
+      "issuer": "CN=pq-oidc lab root (ml-dsa)",
+      "serialNumber": "01712E271BA44620E5E96FCD5AD86068",
+      "notBefore": "2026-10-02T19:24:38.000Z",
+      "notAfter": "2026-12-31T20:24:38.000Z",
+      "expired": false,
+      "notYetValid": false,
+      "selfSigned": false,
+      "isCa": true,
+      "names": [],
+      "key": {
+        "algorithm": "ML-DSA-65",
+        "family": "ML-DSA",
+        "quantumSafe": true
+      },
+      "signature": {
+        "algorithm": "ML-DSA-65",
+        "oid": "2.16.840.1.101.3.4.3.18",
+        "family": "ML-DSA",
+        "quantumSafe": true
+      },
+      "fingerprint256": "68bc45cdcc2aaa62f86c562a3662117fb30010a84166af470c06ea78339c8d84",
+      "pem": "-----BEGIN CERTIFICATE-----\n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\nAAAAAAAAAAAAAAAAAAAAAAAAAgYLExcd\n-----END CERTIFICATE-----\n"
+    }
+  ],
+  "trust": {
+    "checked": true,
+    "trusted": false,
+    "error": "the issuing certificate authority is not in the trust store",
+    "store": "the CA certificates shipped with Node.js v25.9.0 (Mozilla’s list)"
+  },
+  "transport": {
+    "hops": [
+      {
+        "url": "https://localhost:9444/",
+        "status": 200
+      }
+    ],
+    "hsts": {
+      "raw": "max-age=31536000",
+      "maxAge": 31536000,
+      "includeSubDomains": false,
+      "preload": false
+    },
+    "cookies": [
+      {
+        "name": "session",
+        "secure": true,
+        "httpOnly": true,
+        "sameSite": "strict"
+      }
+    ]
+  },
+  "oidc": {
+    "found": true,
+    "tried": [
+      {
+        "url": "https://localhost:9444/.well-known/openid-configuration",
+        "result": "HTTP 200, metadata found"
+      }
+    ],
+    "discoveryUrl": "https://localhost:9444/.well-known/openid-configuration",
+    "issuer": "https://localhost:9444",
+    "issuerMatches": true,
+    "idTokenAlgs": [
+      "ML-DSA-65"
+    ],
+    "jwksUri": "https://localhost:9444/jwks",
+    "keys": [
+      {
+        "kid": "lab-ml-dsa-65-1",
+        "kty": "AKP",
+        "alg": "ML-DSA-65",
+        "use": "sig",
+        "strength": "ML-DSA-65",
+        "quantumSafe": true,
+        "jsonBytes": 2679
+      }
+    ]
+  },
+  "related": [],
+  "layers": [
+    {
+      "id": "key-establishment",
+      "name": "TLS key establishment",
+      "headline": "Hybrid: X25519MLKEM768",
+      "exposure": "no-known-attack",
+      "tone": "good"
+    },
+    {
+      "id": "server-authentication",
+      "name": "TLS server authentication",
+      "headline": "Post-quantum: ML-DSA-65",
+      "exposure": "no-known-attack",
+      "tone": "good"
+    },
+    {
+      "id": "record-protection",
+      "name": "Encryption of the data itself",
+      "headline": "AES-256-GCM",
+      "exposure": "reduced-margin",
+      "tone": "good"
+    },
+    {
+      "id": "transport-policy",
+      "name": "Is HTTPS enforced?",
+      "headline": "HSTS set",
+      "exposure": "not-applicable",
+      "tone": "good"
+    },
+    {
+      "id": "token-signing",
+      "name": "Application token signing",
+      "headline": "Post-quantum: ML-DSA-65",
+      "exposure": "no-known-attack",
+      "tone": "good"
+    },
+    {
+      "id": "dependencies",
+      "name": "Dependencies",
+      "headline": "Internal dependencies not observable",
+      "exposure": "undetermined",
+      "tone": "neutral"
+    }
+  ],
+  "findings": [
+    {
+      "id": "kex.negotiated",
+      "layer": "key-establishment",
+      "kind": "observation",
+      "tone": "good",
+      "title": "Key exchange: X25519MLKEM768, a hybrid of X25519 and ML-KEM-768",
+      "detail": "Negotiated by a client that offers post-quantum key exchange. The session keys depend on both parts, so they stay secret unless both are broken.",
+      "evidence": [
+        {
+          "label": "Scanner offered",
+          "value": "X25519MLKEM768, x25519, secp256r1, SecP256r1MLKEM768, SecP384r1MLKEM1024, MLKEM768, MLKEM1024 and secp384r1; key shares for X25519MLKEM768 and x25519"
+        },
+        {
+          "label": "ServerHello",
+          "value": "TLS 1.3, TLS_AES_256_GCM_SHA384, group 0x11ec X25519MLKEM768"
+        },
+        {
+          "label": "Finished MAC",
+          "value": "verified: the scanner derived the same keys as the server"
+        }
+      ],
+      "learn": {
+        "view": "login",
+        "landmark": "key-establishment",
+        "mode": "hybrid",
+        "label": "See what hybrid key exchange does"
+      }
+    },
+    {
+      "id": "kex.classical-client",
+      "layer": "key-establishment",
+      "kind": "observation",
+      "tone": "neutral",
+      "title": "Clients without post-quantum support are refused",
+      "detail": "A ClientHello offering only classical groups was rejected. Every client that connects uses post-quantum key exchange; clients that cannot are locked out.",
+      "evidence": [
+        {
+          "label": "Classical-only ClientHello",
+          "value": "alert handshake_failure"
+        }
+      ]
+    },
+    {
+      "id": "kex.tls12",
+      "layer": "key-establishment",
+      "kind": "observation",
+      "tone": "good",
+      "title": "TLS 1.2 is not accepted",
+      "detail": "A TLS 1.2 ClientHello was refused, so every connection uses TLS 1.3.",
+      "evidence": [
+        {
+          "label": "TLS 1.2 ClientHello",
+          "value": "alert protocol_version"
+        }
+      ]
+    },
+    {
+      "id": "kex.groups",
+      "layer": "key-establishment",
+      "kind": "observation",
+      "tone": "good",
+      "title": "Post-quantum groups accepted: X25519MLKEM768, SecP384r1MLKEM1024, MLKEM768 and MLKEM1024",
+      "detail": "The scanner asked about each of 5 hybrid and ML-KEM groups separately. A group it did not ask about cannot be detected.",
+      "evidence": [
+        {
+          "label": "X25519MLKEM768",
+          "value": "accepted: negotiated in the main handshake"
+        },
+        {
+          "label": "SecP256r1MLKEM768",
+          "value": "not accepted: refused with alert handshake_failure"
+        },
+        {
+          "label": "SecP384r1MLKEM1024",
+          "value": "accepted: HelloRetryRequest selecting SecP384r1MLKEM1024"
+        },
+        {
+          "label": "MLKEM768",
+          "value": "accepted: HelloRetryRequest selecting MLKEM768"
+        },
+        {
+          "label": "MLKEM1024",
+          "value": "accepted: HelloRetryRequest selecting MLKEM1024"
+        }
+      ]
+    },
+    {
+      "id": "kex.exposure",
+      "layer": "key-establishment",
+      "kind": "inference",
+      "tone": "good",
+      "title": "Traffic recorded today cannot be decrypted later by a quantum computer",
+      "detail": "Every client that can connect negotiates ML-KEM (FIPS 203), for which no quantum attack is known. An attacker who stores this traffic gains nothing from a future quantum computer.",
+      "basedOn": [
+        "kex.negotiated",
+        "kex.classical-client",
+        "kex.tls12"
+      ],
+      "learn": {
+        "view": "login",
+        "landmark": "harvest",
+        "mode": "hybrid",
+        "attacker": "quantum",
+        "label": "Watch a quantum attacker fail against this"
+      }
+    },
+    {
+      "id": "auth.certificate",
+      "layer": "server-authentication",
+      "kind": "observation",
+      "tone": "good",
+      "title": "Certificate key: ML-DSA-65",
+      "detail": "Issued to localhost by \"CN=pq-oidc lab issuing CA (ml-dsa)\", valid until 2026-12-31. The server sent 2 certificates.",
+      "evidence": [
+        {
+          "label": "Leaf",
+          "value": "CN=pq.lab.localhost; key ML-DSA-65; signed by \"CN=pq-oidc lab issuing CA (ml-dsa)\" with ML-DSA-65"
+        },
+        {
+          "label": "Chain #1",
+          "value": "CN=pq-oidc lab issuing CA (ml-dsa); key ML-DSA-65; signed by \"CN=pq-oidc lab root (ml-dsa)\" with ML-DSA-65"
+        }
+      ],
+      "learn": {
+        "view": "login",
+        "landmark": "secure-channel",
+        "mode": "pq",
+        "label": "What is ML-DSA doing here?"
+      }
+    },
+    {
+      "id": "auth.proof",
+      "layer": "server-authentication",
+      "kind": "observation",
+      "tone": "neutral",
+      "title": "The server proved it holds that key with mldsa65",
+      "detail": "The scanner checked CertificateVerify, a signature over the handshake transcript against the leaf certificate’s public key. It is valid.",
+      "evidence": [
+        {
+          "label": "Signature scheme",
+          "value": "0x0905 mldsa65"
+        }
+      ]
+    },
+    {
+      "id": "auth.trust",
+      "layer": "server-authentication",
+      "kind": "observation",
+      "tone": "neutral",
+      "title": "The certificate chain is not trusted: the issuing certificate authority is not in the trust store",
+      "detail": "Checked by OpenSSL against the CA certificates shipped with Node.js v25.9.0 (Mozilla’s list). Expected for a lab server: its certificate authority exists only on this machine."
+    },
+    {
+      "id": "auth.exposure",
+      "layer": "server-authentication",
+      "kind": "inference",
+      "tone": "good",
+      "title": "No known quantum attack on this server’s identity",
+      "detail": "The certificate key and every signature on the chain the server sent are ML-DSA. No quantum algorithm is known that forges them. Public certificate authorities do not issue such certificates yet, which is why this chain is not publicly trusted.",
+      "basedOn": [
+        "auth.certificate",
+        "auth.proof"
+      ],
+      "learn": {
+        "view": "login",
+        "landmark": "forgery",
+        "mode": "pq",
+        "attacker": "quantum",
+        "label": "Watch a forgery attempt fail"
+      }
+    },
+    {
+      "id": "cipher.negotiated",
+      "layer": "record-protection",
+      "kind": "observation",
+      "tone": "neutral",
+      "title": "Data is encrypted with AES-256-GCM",
+      "detail": "Cipher suite TLS_AES_256_GCM_SHA384. The key for it comes out of the key exchange above; the cipher itself uses no public-key cryptography.",
+      "evidence": [
+        {
+          "label": "Cipher suite",
+          "value": "0x1302 TLS_AES_256_GCM_SHA384"
+        }
+      ],
+      "learn": {
+        "view": "login",
+        "landmark": "authentication",
+        "mode": "classical",
+        "label": "See what the cipher protects"
+      }
+    },
+    {
+      "id": "cipher.exposure",
+      "layer": "record-protection",
+      "kind": "inference",
+      "tone": "good",
+      "title": "The cipher is not at risk from a quantum computer",
+      "detail": "Quantum computers do not break symmetric ciphers. Grover’s algorithm at best halves the effective key length, which leaves a 256-bit key with about 128 bits of security.",
+      "basedOn": [
+        "cipher.negotiated"
+      ]
+    },
+    {
+      "id": "http.hsts",
+      "layer": "transport-policy",
+      "kind": "observation",
+      "tone": "good",
+      "title": "HSTS tells browsers to use HTTPS only, for 365 days",
+      "detail": "A browser that has seen this header refuses to talk to the site over plain HTTP until it expires.",
+      "evidence": [
+        {
+          "label": "Strict-Transport-Security",
+          "value": "max-age=31536000"
+        }
+      ]
+    },
+    {
+      "id": "http.cookies",
+      "layer": "transport-policy",
+      "kind": "observation",
+      "tone": "good",
+      "title": "Cookies set by this page are restricted to HTTPS",
+      "detail": "Every cookie has the Secure attribute.",
+      "evidence": [
+        {
+          "label": "session",
+          "value": "Secure, HttpOnly, SameSite=strict"
+        }
+      ]
+    },
+    {
+      "id": "token.metadata",
+      "layer": "token-signing",
+      "kind": "observation",
+      "tone": "neutral",
+      "title": "Sign-in tokens are signed with ML-DSA-65",
+      "detail": "Read from the service’s own metadata. This is the application’s signature on a token, separate from anything TLS does.",
+      "evidence": [
+        {
+          "label": "Metadata",
+          "value": "https://localhost:9444/.well-known/openid-configuration"
+        },
+        {
+          "label": "issuer",
+          "value": "https://localhost:9444"
+        },
+        {
+          "label": "id_token_signing_alg_values_supported",
+          "value": "ML-DSA-65"
+        }
+      ],
+      "learn": {
+        "view": "login",
+        "landmark": "success",
+        "mode": "classical",
+        "label": "See where a token is signed and checked"
+      }
+    },
+    {
+      "id": "token.keys",
+      "layer": "token-signing",
+      "kind": "observation",
+      "tone": "good",
+      "title": "Signing keys published: ML-DSA-65",
+      "detail": "1 key in the key set that apps use to check tokens.",
+      "evidence": [
+        {
+          "label": "jwks_uri",
+          "value": "https://localhost:9444/jwks"
+        },
+        {
+          "label": "lab-ml-dsa-65-1",
+          "value": "ML-DSA-65, alg ML-DSA-65"
+        }
+      ]
+    },
+    {
+      "id": "token.exposure",
+      "layer": "token-signing",
+      "kind": "inference",
+      "tone": "good",
+      "title": "No known quantum attack forges this service’s tokens",
+      "detail": "Every published signing key is ML-DSA (FIPS 204).",
+      "basedOn": [
+        "token.metadata",
+        "token.keys"
+      ],
+      "learn": {
+        "view": "login",
+        "landmark": "forgery",
+        "mode": "pq",
+        "attacker": "quantum",
+        "label": "Watch a forgery attempt fail"
+      }
+    },
+    {
+      "id": "deps.internal",
+      "layer": "dependencies",
+      "kind": "undetermined",
+      "tone": "neutral",
+      "title": "Internal dependencies cannot be observed from outside",
+      "detail": "Connections between your own services, databases, key storage, vendor APIs and the devices your users connect from all use cryptography too. None of it is visible to an external scan. Finding it is the first step of a migration.",
+      "learn": {
+        "view": "migrate",
+        "label": "See why inventory comes first"
+      }
+    }
+  ]
+}

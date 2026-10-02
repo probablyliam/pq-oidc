@@ -69,7 +69,7 @@ export function createApi(options: ApiOptions) {
   const now = options.now ?? Date.now;
   const auth = new Auth(config, store, now);
   const metrics = new Metrics();
-  const serveStatic = config.webDir ? createStaticHandler(config.webDir) : undefined;
+  const serveStatic = config.webDir ? createStaticHandler(config.webDir, config.oidc.issuer) : undefined;
   const signInLimiter = new WindowLimiter(30, 60_000);
 
   const requests = metrics.counter('http_requests_total', 'Requests handled, by route and status.');
@@ -99,6 +99,7 @@ export function createApi(options: ApiOptions) {
       service: 'pq-oidc',
       engine: ENGINE_VERSION,
       signInUrl: '/auth/login',
+      identityProvider: config.oidc.issuer,
       labOrigins: config.policy.labOrigins,
       allowedPorts: config.policy.allowedPorts,
       limits: { scansPerWindow: config.limits.scansPerWindow, windowSeconds: config.limits.windowMs / 1000, activePerUser: config.limits.activePerUser },
@@ -122,8 +123,9 @@ export function createApi(options: ApiOptions) {
     sendJson(ctx.res, 200, { endSessionUrl }, { 'Set-Cookie': setCookie });
   });
 
+  // "Who am I?" has an answer either way, so this is not an error when nobody is signed in.
   route('public', 'GET', '/api/v1/session', ({ res, session }) => {
-    if (!session) throw new HttpError(401, 'unauthenticated', 'Sign in to continue.');
+    if (!session) return sendJson(res, 200, { user: null });
     sendJson(res, 200, {
       user: { name: session.user.name, email: session.user.email, sub: session.user.sub },
       csrfToken: session.session.csrfToken,

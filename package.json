@@ -2,7 +2,7 @@
   "name": "pq-oidc",
   "version": "0.1.0",
   "private": true,
-  "description": "A crypto-agile OpenID Connect provider that migrates ID token signing from ES256 to post-quantum ML-DSA-65 (RFC 9964), one client at a time.",
+  "description": "A scanner that reports the cryptographic posture of a sign-in endpoint against quantum attackers, an interactive explanation of what it finds, and an OpenID Connect provider that signs with ML-DSA-65.",
   "license": "MIT",
   "type": "module",
   "engines": {
@@ -17,15 +17,17 @@
     "start": "node --disable-warning=ExperimentalWarning scripts/start-all.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -p tsconfig.json --noEmit && npm run typecheck -w apps/lab",
+    "typecheck": "tsc -p tsconfig.json --noEmit && npm run typecheck -w apps/web",
     "lint": "eslint .",
-    "lab:dev": "npm run dev -w apps/lab",
-    "lab:build": "npm run build -w apps/lab",
     "smoke": "node --disable-warning=ExperimentalWarning scripts/smoke.ts",
     "check": "node --disable-warning=ExperimentalWarning scripts/check.ts",
     "interop": "node --disable-warning=ExperimentalWarning scripts/interop.ts",
     "prove": "node --disable-warning=ExperimentalWarning scripts/prove.ts",
-    "scan": "node --disable-warning=ExperimentalWarning scripts/scan.ts"
+    "scan": "node --disable-warning=ExperimentalWarning scripts/scan.ts",
+    "web:dev": "npm run dev -w apps/web",
+    "web:build": "npm run build -w apps/web",
+    "lab": "node --disable-warning=ExperimentalWarning scripts/lab.ts",
+    "dev": "node --disable-warning=ExperimentalWarning scripts/start-all.ts --dev"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

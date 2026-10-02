@@ -1,8 +1,8 @@
 {
-  "name": "@pq-oidc/lab",
+  "name": "@pq-oidc/web",
   "version": "0.1.0",
   "private": true,
-  "description": "Token Lab: an interactive, in-browser explainer for post-quantum ID tokens.",
+  "description": "The web app: scan reports, token analysis, and the interactive explanation of what a login does.",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -17,7 +17,13 @@
     "vite": "8.3.2"
   },
   "dependencies": {
+    "@fontsource/barlow": "5.3.0",
+    "@fontsource/barlow-semi-condensed": "5.3.0",
+    "@fontsource/jetbrains-mono": "5.3.0",
+    "@noble/curves": "2.4.0",
     "@noble/post-quantum": "0.7.1",
+    "@pq-oidc/scan-core": "0.1.0",
+    "@pq-oidc/token-kit": "0.1.0",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   }

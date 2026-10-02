@@ -51,8 +51,8 @@ export function describeJwsAlg(value: unknown): JwsAlg {
   if (alg === 'ES256K') return { alg, kind: 'ecdsa', name: 'ECDSA with secp256k1 and SHA-256', publicKey: true, quantum: 'shor', hash: 'SHA-256' };
   if (alg === 'EdDSA' || alg === 'Ed25519') return { alg, kind: 'eddsa', name: 'EdDSA (Ed25519)', publicKey: true, quantum: 'shor', curve: 'Ed25519' };
   if (alg === 'Ed448') return { alg, kind: 'eddsa', name: 'EdDSA (Ed448)', publicKey: true, quantum: 'shor' };
-  if (/^ML-DSA-(44|65|87)$/.test(alg)) return { alg, kind: 'ml-dsa', name: `${alg} (FIPS 204)`, publicKey: true, quantum: 'no-known-attack' };
-  if (/^SLH-DSA-/.test(alg)) return { alg, kind: 'slh-dsa', name: `${alg} (FIPS 205)`, publicKey: true, quantum: 'no-known-attack' };
+  if (/^ML-DSA-(44|65|87)$/.test(alg)) return { alg, kind: 'ml-dsa', name: 'a module-lattice signature (FIPS 204)', publicKey: true, quantum: 'no-known-attack' };
+  if (/^SLH-DSA-/.test(alg)) return { alg, kind: 'slh-dsa', name: 'a hash-based signature (FIPS 205)', publicKey: true, quantum: 'no-known-attack' };
   return { alg, kind: 'unknown', name: alg ? `unrecognised algorithm "${alg}"` : 'no algorithm named', publicKey: false, quantum: 'unknown' };
 }
 

@@ -230,7 +230,8 @@ describe('sign-in', () => {
     const { endSessionUrl } = (await response.json()) as { endSessionUrl: string };
     expect(endSessionUrl).toContain(`${service.issuer}/session/end`);
     expect(endSessionUrl).toContain('post_logout_redirect_uri=');
-    expect((await carol.get('/api/v1/session')).status).toBe(401);
+    expect(await (await carol.get('/api/v1/session')).json()).toEqual({ user: null });
+    expect((await carol.get('/api/v1/scans')).status).toBe(401);
   });
 
   it('expires sessions', async () => {
@@ -251,7 +252,6 @@ describe('every API route requires a session', () => {
   it.each([
     ['GET', '/api/v1/scans'],
     ['GET', '/api/v1/scans/00000000-0000-4000-8000-000000000000'],
-    ['GET', '/api/v1/session'],
     ['GET', '/api/v1/session/id-token'],
     ['POST', '/api/v1/scans'],
     ['DELETE', '/api/v1/scans/00000000-0000-4000-8000-000000000000'],
@@ -265,6 +265,10 @@ describe('every API route requires a session', () => {
   it('treats a made-up session cookie as no session', async () => {
     const response = await fetch(`${service.publicUrl}/api/v1/scans`, { headers: { cookie: 'pq_session=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' } });
     expect(response.status).toBe(401);
+  });
+
+  it('tells a visitor with no session that they are not signed in, and nothing else', async () => {
+    expect(await (await fetch(`${service.publicUrl}/api/v1/session`)).json()).toEqual({ user: null });
   });
 
   it('serves only public information without one', async () => {

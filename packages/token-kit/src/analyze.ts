@@ -239,7 +239,7 @@ export function analyzeToken(input: string, nowSeconds = Math.floor(Date.now() /
       detail: `${alg.name} is broken by Shor’s algorithm: the issuer’s private key can be computed from its public key, and with it an attacker can sign any claims. This is not retroactive. A token that has expired cannot be made useful again, so the risk begins when such a computer exists.`,
     });
   } else if (alg.quantum === 'no-known-attack') {
-    add({ id: 'quantum.signature', kind: 'inference', tone: 'good', title: 'No known quantum attack forges this signature', detail: `${alg.name} is one of the post-quantum signature standards.` });
+    add({ id: 'quantum.signature', kind: 'inference', tone: 'good', title: 'No known quantum attack forges this signature', detail: `${alg.alg} is ${alg.name}, one of the post-quantum signature standards.` });
   } else if (alg.kind === 'hmac') {
     add({
       id: 'quantum.signature',
@@ -336,7 +336,7 @@ export function describeSignature(analysis: TokenAnalysis, check: SignatureCheck
         id: 'signature.check',
         kind: 'observation',
         tone: 'good',
-        title: `The signature verifies with a ${check.key.strength} key${from}`,
+        title: `The signature verifies: ${check.key.strength} key${from}`,
         detail: 'The header and payload are exactly what the holder of that key signed. This shows who signed the token; whether that issuer is one you should trust, and whether the token was meant for you, are separate questions.',
         evidence: [{ label: 'Key', value: `${check.key.kid ?? '(no kid)'}: ${check.key.strength}` }],
       };

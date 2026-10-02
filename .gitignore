@@ -14,3 +14,7 @@ jwks.private.json
 .venv/
 __pycache__/
 .pytest_cache/
+
+# The scanner's SQLite database
+data/
+.shots/

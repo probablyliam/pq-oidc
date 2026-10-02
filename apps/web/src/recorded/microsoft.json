@@ -1,0 +1,775 @@
+{
+  "schema": 1,
+  "engine": "1.0.0",
+  "target": {
+    "input": "https://login.microsoftonline.com/common/v2.0",
+    "url": "https://login.microsoftonline.com/common/v2.0",
+    "origin": "https://login.microsoftonline.com",
+    "hostname": "login.microsoftonline.com",
+    "port": 443,
+    "lab": false
+  },
+  "startedAt": "2026-10-02T20:24:51.590Z",
+  "finishedAt": "2026-10-02T20:24:52.886Z",
+  "durationMs": 1296,
+  "network": {
+    "address": "20.190.135.5",
+    "family": 4,
+    "resolved": [
+      "2603:1036:3000:148::c",
+      "2603:1036:3000:148::1",
+      "2603:1037:1:148::a",
+      "2603:1036:3000:148::6",
+      "2603:1037:1:148::c",
+      "2603:1036:3000:148::7",
+      "2603:1037:1:148::11",
+      "2603:1036:3000:148::8",
+      "20.190.135.5",
+      "20.190.135.7",
+      "40.126.28.20",
+      "40.126.28.13",
+      "40.126.28.23",
+      "20.190.135.17",
+      "20.190.135.6",
+      "40.126.7.35"
+    ]
+  },
+  "reachable": true,
+  "tls": {
+    "probes": [
+      {
+        "id": "pq-capable-client",
+        "purpose": "A client that supports post-quantum key exchange and ML-DSA signatures, as current browsers increasingly do",
+        "offered": {
+          "versions": [
+            "1.3",
+            "1.2"
+          ],
+          "groups": [
+            4588,
+            29,
+            23,
+            4587,
+            4589,
+            513,
+            514,
+            24
+          ],
+          "keyShares": [
+            4588,
+            29
+          ]
+        },
+        "outcome": "handshake",
+        "version": 772,
+        "cipherSuite": 4866,
+        "group": 24,
+        "signatureScheme": 2052,
+        "signatureValid": true,
+        "finishedValid": true,
+        "leafFingerprint": "840f1b72048bf396d2adafb98ac25459c2a8ffdf591da502077bf43d3a5aa026",
+        "retried": true,
+        "durationMs": 150
+      },
+      {
+        "id": "classical-client",
+        "purpose": "A client with no post-quantum support",
+        "offered": {
+          "versions": [
+            "1.3",
+            "1.2"
+          ],
+          "groups": [
+            29,
+            23,
+            24
+          ],
+          "keyShares": [
+            29,
+            23
+          ]
+        },
+        "outcome": "handshake",
+        "version": 772,
+        "cipherSuite": 4866,
+        "group": 23,
+        "signatureScheme": 2052,
+        "signatureValid": true,
+        "finishedValid": true,
+        "leafFingerprint": "840f1b72048bf396d2adafb98ac25459c2a8ffdf591da502077bf43d3a5aa026",
+        "durationMs": 86
+      },
+      {
+        "id": "tls12-client",
+        "purpose": "A client that only speaks TLS 1.2",
+        "offered": {
+          "versions": [
+            "1.2"
+          ],
+          "groups": [
+            29,
+            23,
+            24
+          ],
+          "keyShares": []
+        },
+        "outcome": "handshake",
+        "version": 771,
+        "cipherSuite": 49200,
+        "group": 24,
+        "signatureScheme": 2052,
+        "signatureValid": true,
+        "leafFingerprint": "840f1b72048bf396d2adafb98ac25459c2a8ffdf591da502077bf43d3a5aa026",
+        "durationMs": 89
+      },
+      {
+        "id": "group-4588",
+        "purpose": "Offers only X25519MLKEM768, with no key share, to see whether the server asks for one",
+        "offered": {
+          "versions": [
+            "1.3"
+          ],
+          "groups": [
+            4588
+          ],
+          "keyShares": []
+        },
+        "outcome": "closed",
+        "detail": "the server reset the connection",
+        "durationMs": 78
+      },
+      {
+        "id": "group-4587",
+        "purpose": "Offers only SecP256r1MLKEM768, with no key share, to see whether the server asks for one",
+        "offered": {
+          "versions": [
+            "1.3"
+          ],
+          "groups": [
+            4587
+          ],
+          "keyShares": []
+        },
+        "outcome": "closed",
+        "detail": "the server reset the connection",
+        "durationMs": 72
+      },
+      {
+        "id": "group-4589",
+        "purpose": "Offers only SecP384r1MLKEM1024, with no key share, to see whether the server asks for one",
+        "offered": {
+          "versions": [
+            "1.3"
+          ],
+          "groups": [
+            4589
+          ],
+          "keyShares": []
+        },
+        "outcome": "closed",
+        "detail": "the server reset the connection",
+        "durationMs": 77
+      },
+      {
+        "id": "group-513",
+        "purpose": "Offers only MLKEM768, with no key share, to see whether the server asks for one",
+        "offered": {
+          "versions": [
+            "1.3"
+          ],
+          "groups": [
+            513
+          ],
+          "keyShares": []
+        },
+        "outcome": "closed",
+        "detail": "the server reset the connection",
+        "durationMs": 68
+      },
+      {
+        "id": "group-514",
+        "purpose": "Offers only MLKEM1024, with no key share, to see whether the server asks for one",
+        "offered": {
+          "versions": [
+            "1.3"
+          ],
+          "groups": [
+            514
+          ],
+          "keyShares": []
+        },
+        "outcome": "closed",
+        "detail": "the server reset the connection",
+        "durationMs": 60
+      }
+    ],
+    "groupSupport": [
+      {
+        "group": 4588,
+        "name": "X25519MLKEM768",
+        "kex": "hybrid",
+        "supported": false,
+        "evidence": "refused: the server closed the connection without a TLS alert"
+      },
+      {
+        "group": 4587,
+        "name": "SecP256r1MLKEM768",
+        "kex": "hybrid",
+        "supported": false,
+        "evidence": "refused: the server closed the connection without a TLS alert"
+      },
+      {
+        "group": 4589,
+        "name": "SecP384r1MLKEM1024",
+        "kex": "hybrid",
+        "supported": false,
+        "evidence": "refused: the server closed the connection without a TLS alert"
+      },
+      {
+        "group": 513,
+        "name": "MLKEM768",
+        "kex": "pq",
+        "supported": false,
+        "evidence": "refused: the server closed the connection without a TLS alert"
+      },
+      {
+        "group": 514,
+        "name": "MLKEM1024",
+        "kex": "pq",
+        "supported": false,
+        "evidence": "refused: the server closed the connection without a TLS alert"
+      }
+    ]
+  },
+  "certificates": [
+    {
+      "position": 0,
+      "subject": "CN=stamp2.login.microsoftonline.com, O=Microsoft Corporation, L=Redmond, ST=Washington, C=US",
+      "issuer": "CN=DigiCert Global G2 TLS RSA SHA256 2020 CA1, O=DigiCert Inc, C=US",
+      "serialNumber": "0B1A53761991E6111967F03C4E0E84DC",
+      "notBefore": "2026-09-04T00:00:00.000Z",
+      "notAfter": "2026-12-13T23:59:59.000Z",
+      "expired": false,
+      "notYetValid": false,
+      "selfSigned": false,
+      "isCa": false,
+      "names": [
+        "stamp2.login.microsoftonline.com",
+        "login.microsoftonline-int.com",
+        "login.microsoftonline-p.com",
+        "login.microsoftonline.com",
+        "login2.microsoftonline-int.com",
+        "login2.microsoftonline.com",
+        "loginex.microsoftonline-int.com",
+        "loginex.microsoftonline.com",
+        "stamp2.login.microsoftonline-int.com"
+      ],
+      "key": {
+        "algorithm": "RSA 2048-bit",
+        "family": "RSA",
+        "bits": 2048,
+        "quantumSafe": false
+      },
+      "signature": {
+        "algorithm": "RSA PKCS#1 v1.5 with SHA-256",
+        "oid": "1.2.840.113549.1.1.11",
+        "family": "RSA",
+        "hash": "SHA-256",
+        "quantumSafe": false
+      },
+      "fingerprint256": "840f1b72048bf396d2adafb98ac25459c2a8ffdf591da502077bf43d3a5aa026",
+      "pem": "-----BEGIN CERTIFICATE-----\nMIIH8zCCBtugAwIBAgIQCxpTdhmR5hEZZ/A8Tg6E3DANBgkqhkiG9w0BAQsFADBZ\nMQswCQYDVQQGEwJVUzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMTMwMQYDVQQDEypE\naWdpQ2VydCBHbG9iYWwgRzIgVExTIFJTQSBTSEEyNTYgMjAyMCBDQTEwHhcNMjYw\nOTA0MDAwMDAwWhcNMjYxMjEzMjM1OTU5WjB/MQswCQYDVQQGEwJVUzETMBEGA1UE\nCBMKV2FzaGluZ3RvbjEQMA4GA1UEBxMHUmVkbW9uZDEeMBwGA1UEChMVTWljcm9z\nb2Z0IENvcnBvcmF0aW9uMSkwJwYDVQQDEyBzdGFtcDIubG9naW4ubWljcm9zb2Z0\nb25saW5lLmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAPgAb0Df\naPwNAwOwapZupWWtskVmDR658bAqpgo6BcP8kBqwIOjYeZG7CG1Vl9/2h7/TbMN4\nLaPefQOaDlp2TkRMpfsJo5jiVh2WndK4I+KkPnif28uV3NQ+2t84FZHSAU36ox5g\ncgi0e73ybap5vxx1D8NrJ5KLGv4LXJHuFOzBaazsv32fHQd9xzl4MaI4q6xoGMTM\nJlPst6TuEpooznLcbQWsKb89Kel43ovIVE33GrXSg4upCktk//gKiuddxDWCEBga\nDB3RgmDohP7Ua+LIYWE5rYvlb7Gd8rXdRsUX86m4hJTkgzZ9o/PEL8yKVMdhHTpN\nDWbYUyf3/T43jm0CAwEAAaOCBI8wggSLMB8GA1UdIwQYMBaAFHSFgMBmx9833s+9\nKTeqAx2+7c0XMB0GA1UdDgQWBBTTn+PBsKpZBBuyKtzL11U6fx6i/TCCASYGA1Ud\nEQSCAR0wggEZgiBzdGFtcDIubG9naW4ubWljcm9zb2Z0b25saW5lLmNvbYIdbG9n\naW4ubWljcm9zb2Z0b25saW5lLWludC5jb22CG2xvZ2luLm1pY3Jvc29mdG9ubGlu\nZS1wLmNvbYIZbG9naW4ubWljcm9zb2Z0b25saW5lLmNvbYIebG9naW4yLm1pY3Jv\nc29mdG9ubGluZS1pbnQuY29tghpsb2dpbjIubWljcm9zb2Z0b25saW5lLmNvbYIf\nbG9naW5leC5taWNyb3NvZnRvbmxpbmUtaW50LmNvbYIbbG9naW5leC5taWNyb3Nv\nZnRvbmxpbmUuY29tgiRzdGFtcDIubG9naW4ubWljcm9zb2Z0b25saW5lLWludC5j\nb20wPgYDVR0gBDcwNTAzBgZngQwBAgIwKTAnBggrBgEFBQcCARYbaHR0cDovL3d3\ndy5kaWdpY2VydC5jb20vQ1BTMA4GA1UdDwEB/wQEAwIFoDATBgNVHSUEDDAKBggr\nBgEFBQcDATCBnwYDVR0fBIGXMIGUMEigRqBEhkJodHRwOi8vY3JsMy5kaWdpY2Vy\ndC5jb20vRGlnaUNlcnRHbG9iYWxHMlRMU1JTQVNIQTI1NjIwMjBDQTEtMS5jcmww\nSKBGoESGQmh0dHA6Ly9jcmw0LmRpZ2ljZXJ0LmNvbS9EaWdpQ2VydEdsb2JhbEcy\nVExTUlNBU0hBMjU2MjAyMENBMS0xLmNybDCBhwYIKwYBBQUHAQEEezB5MCQGCCsG\nAQUFBzABhhhodHRwOi8vb2NzcC5kaWdpY2VydC5jb20wUQYIKwYBBQUHMAKGRWh0\ndHA6Ly9jYWNlcnRzLmRpZ2ljZXJ0LmNvbS9EaWdpQ2VydEdsb2JhbEcyVExTUlNB\nU0hBMjU2MjAyMENBMS0xLmNydDAMBgNVHRMBAf8EAjAAMIIBfgYKKwYBBAHWeQIE\nAgSCAW4EggFqAWgAdgDCMX5XRRmjRe5/ON6ykEHrx8IhWiK/f9W1rXaa2Q5SzQAA\nAaBtJnbAAAAEAwBHMEUCIQDD3Qy0WW8Ndl1tS74Rcpp5zSEg2OcXvYm2JzUcZcRs\nogIgFD0maGS/qCvebCv8RzAPcrqbuj0cEBqor09UBZJeMC0AdgDYCVU7lE96/8gW\nGW+UT4WrsPj8XodVJg8V0S5yu0VLFAAAAaBtJnbGAAAEAwBHMEUCICy6TzLCO4o/\nSkwYIEDc+ziKM+fYV8kjg8Ah9IdnIgvYAiEAtlvbLYJgtsKo05nUfreAaaShcbp5\nQaxvyOLO6XgdDc8AdgCUTkOH+uzB74HzGSQmqBhlAcfTXzgCAT9yZ31VNy4Z2AAA\nAaBtJnbJAAAEAwBHMEUCIQDnKVjXF31WJATIK7+qrl03vNbTFeqa7oPZCVWkkqLB\ntgIgE4Qbe5cwFUuEc/O16hN8dBbDOQy1UqHyb1gbiF8YxG8wDQYJKoZIhvcNAQEL\nBQADggEBAIpwQ4VxeYzPgz7/jdy0UYa1EGviEtJ6NfgnSn3q8PAi6Jq3cg3P2vVF\nAwxbjS/GxCECevWpBZQwfivs02GLQRk8Hnlo+ItfmEX5nWQqCQwdMyrYcseM0fi3\nyQ8rYf57Sq6J0KvgoZR2OV9+nKKlKoKlBSYvMcc5TUxQDQjMUyxmO1cf4yPZGq72\nyQTL917tgxUY67CzC4mI54pPYAHghl3jbX7EZs+5uYR9jhQGwZepedxECkTWXAsY\nsZksQGICPHiQ9fVTd3hiUaK8jgKFF/kzOq9rEtq0wRyXwJ+CSgeGF/4vdV6AyscL\no1l3hgVFUJyvR9K6jHoO4u/Z3zES1m0=\n-----END CERTIFICATE-----\n"
+    },
+    {
+      "position": 1,
+      "subject": "CN=DigiCert Global G2 TLS RSA SHA256 2020 CA1, O=DigiCert Inc, C=US",
+      "issuer": "CN=DigiCert Global Root G2, OU=www.digicert.com, O=DigiCert Inc, C=US",
+      "serialNumber": "0CF5BD062B5602F47AB8502C23CCF066",
+      "notBefore": "2021-03-30T00:00:00.000Z",
+      "notAfter": "2031-03-29T23:59:59.000Z",
+      "expired": false,
+      "notYetValid": false,
+      "selfSigned": false,
+      "isCa": true,
+      "names": [],
+      "key": {
+        "algorithm": "RSA 2048-bit",
+        "family": "RSA",
+        "bits": 2048,
+        "quantumSafe": false
+      },
+      "signature": {
+        "algorithm": "RSA PKCS#1 v1.5 with SHA-256",
+        "oid": "1.2.840.113549.1.1.11",
+        "family": "RSA",
+        "hash": "SHA-256",
+        "quantumSafe": false
+      },
+      "fingerprint256": "c8025f9fc65fdfc95b3ca8cc7867b9a587b5277973957917463fc813d0b625a9",
+      "pem": "-----BEGIN CERTIFICATE-----\nMIIEyDCCA7CgAwIBAgIQDPW9BitWAvR6uFAsI8zwZjANBgkqhkiG9w0BAQsFADBh\nMQswCQYDVQQGEwJVUzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMRkwFwYDVQQLExB3\nd3cuZGlnaWNlcnQuY29tMSAwHgYDVQQDExdEaWdpQ2VydCBHbG9iYWwgUm9vdCBH\nMjAeFw0yMTAzMzAwMDAwMDBaFw0zMTAzMjkyMzU5NTlaMFkxCzAJBgNVBAYTAlVT\nMRUwEwYDVQQKEwxEaWdpQ2VydCBJbmMxMzAxBgNVBAMTKkRpZ2lDZXJ0IEdsb2Jh\nbCBHMiBUTFMgUlNBIFNIQTI1NiAyMDIwIENBMTCCASIwDQYJKoZIhvcNAQEBBQAD\nggEPADCCAQoCggEBAMz3EGJPprtjb+2QUlbFbSd7ehJWivH0+dbn4Y+9lavyYEEV\ncNsSAPonCrVXOFt9slGTcZUOakGUWzUb+nv6u8W+JDD+Vu/E832X4xT1FE3LpxDy\nFuqrIvAxIhFhaZAmunjZlx/jfWardUSVc8is/+9dCopZQ+GssjoP80j812s3wWPc\n3kbW20X+fSP9kOhRBx5Ro1/tSUZUfyyIxfQTnJcVPAPooTncaQwywa8WV0yUR0J8\nosicfebUTVSvQpmowQTCd5zWSOTOEeAqgJnwQ3DPP3Zr0UxJqyRewg2C/Uaoq2yT\nzGJSQnWS+Jr6Xl6ysGHlHx+5fwmY6D36g39HaaECAwEAAaOCAYIwggF+MBIGA1Ud\nEwEB/wQIMAYBAf8CAQAwHQYDVR0OBBYEFHSFgMBmx9833s+9KTeqAx2+7c0XMB8G\nA1UdIwQYMBaAFE4iVCAYlebjbuYP+vq5Eu0GF485MA4GA1UdDwEB/wQEAwIBhjAd\nBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwdgYIKwYBBQUHAQEEajBoMCQG\nCCsGAQUFBzABhhhodHRwOi8vb2NzcC5kaWdpY2VydC5jb20wQAYIKwYBBQUHMAKG\nNGh0dHA6Ly9jYWNlcnRzLmRpZ2ljZXJ0LmNvbS9EaWdpQ2VydEdsb2JhbFJvb3RH\nMi5jcnQwQgYDVR0fBDswOTA3oDWgM4YxaHR0cDovL2NybDMuZGlnaWNlcnQuY29t\nL0RpZ2lDZXJ0R2xvYmFsUm9vdEcyLmNybDA9BgNVHSAENjA0MAsGCWCGSAGG/WwC\nATAHBgVngQwBATAIBgZngQwBAgEwCAYGZ4EMAQICMAgGBmeBDAECAzANBgkqhkiG\n9w0BAQsFAAOCAQEAkPFwyyiXaZd8dP3A+iZ7U6utzWX9upwGnIrXWkOH7U1MVl+t\nwcW1BSAuWdH/SvWgKtiwla3JLko716f2b4gp/DA/JIS7w7d7kwcsr4drdjPtAFVS\nslme5LnQ89/nD/7d+MS5EHKBCQRfz5eeLjJ1js+aWNJXMX43AYGyZm0pGrFmCW3R\nbpD0ufovARTFXFZkAdl9h6g4U5+LXUZtXMYnhIHUfoyMo5tS58aI7Dd8KvvwVVo4\nchDYABPPTHPbqjc1qCmBaZx2vN4Ye5DUys/vZwP9BFohFrH/6j/f3IL16/RZkiMN\nJCqVJUzKoZHm1Lesh3Sz8W2jmdv51b2EQJ8HmA==\n-----END CERTIFICATE-----\n"
+    }
+  ],
+  "trust": {
+    "checked": true,
+    "trusted": true,
+    "store": "the CA certificates shipped with Node.js v25.9.0 (Mozilla’s list)"
+  },
+  "transport": {
+    "hops": [
+      {
+        "url": "https://login.microsoftonline.com/common/v2.0",
+        "status": 404
+      }
+    ],
+    "hsts": {
+      "raw": "max-age=31536000; includeSubDomains",
+      "maxAge": 31536000,
+      "includeSubDomains": true,
+      "preload": false
+    },
+    "cookies": [
+      {
+        "name": "x-ms-gateway-slice",
+        "secure": true,
+        "httpOnly": true,
+        "sameSite": "none"
+      }
+    ],
+    "plainHttp": {
+      "status": 302,
+      "location": "https://login.microsoftonline.com:443/",
+      "upgradesToHttps": true
+    }
+  },
+  "oidc": {
+    "found": true,
+    "tried": [
+      {
+        "url": "https://login.microsoftonline.com/common/v2.0/.well-known/openid-configuration",
+        "result": "HTTP 200, metadata found"
+      }
+    ],
+    "discoveryUrl": "https://login.microsoftonline.com/common/v2.0/.well-known/openid-configuration",
+    "issuer": "https://login.microsoftonline.com/{tenantid}/v2.0",
+    "issuerMatches": false,
+    "idTokenAlgs": [
+      "RS256"
+    ],
+    "jwksUri": "https://login.microsoftonline.com/common/discovery/v2.0/keys",
+    "keys": [
+      {
+        "kid": "SNaVJx8A_IYwib6ITN46_ejclXw",
+        "kty": "RSA",
+        "use": "sig",
+        "strength": "RSA 2048-bit",
+        "quantumSafe": false,
+        "jsonBytes": 1601
+      },
+      {
+        "kid": "dgvSDvK8A5KyKyppw1dAwTXD3CA",
+        "kty": "RSA",
+        "use": "sig",
+        "strength": "RSA 2048-bit",
+        "quantumSafe": false,
+        "jsonBytes": 1601
+      },
+      {
+        "kid": "soMctcfaUvWKm1gYhvnNJxnFCZc",
+        "kty": "RSA",
+        "use": "sig",
+        "strength": "RSA 2048-bit",
+        "quantumSafe": false,
+        "jsonBytes": 1572
+      },
+      {
+        "kid": "myOHS_wwkWumGXDcirfbRWoslv4",
+        "kty": "RSA",
+        "use": "sig",
+        "strength": "RSA 2048-bit",
+        "quantumSafe": false,
+        "jsonBytes": 1643
+      },
+      {
+        "kid": "dcyqtZghKiZBw9sKvH0DecrHQXU",
+        "kty": "RSA",
+        "use": "sig",
+        "strength": "RSA 2048-bit",
+        "quantumSafe": false,
+        "jsonBytes": 1643
+      }
+    ]
+  },
+  "related": [],
+  "layers": [
+    {
+      "id": "key-establishment",
+      "name": "TLS key establishment",
+      "headline": "Classical: secp384r1",
+      "exposure": "harvest-now-decrypt-later",
+      "tone": "bad"
+    },
+    {
+      "id": "server-authentication",
+      "name": "TLS server authentication",
+      "headline": "Classical: RSA 2048-bit certificate",
+      "exposure": "forgery-once-quantum",
+      "tone": "caution"
+    },
+    {
+      "id": "record-protection",
+      "name": "Encryption of the data itself",
+      "headline": "AES-256-GCM",
+      "exposure": "reduced-margin",
+      "tone": "good"
+    },
+    {
+      "id": "transport-policy",
+      "name": "Is HTTPS enforced?",
+      "headline": "HSTS set",
+      "exposure": "not-applicable",
+      "tone": "good"
+    },
+    {
+      "id": "token-signing",
+      "name": "Application token signing",
+      "headline": "Classical: RSA 2048-bit",
+      "exposure": "forgery-once-quantum",
+      "tone": "caution"
+    },
+    {
+      "id": "dependencies",
+      "name": "Dependencies",
+      "headline": "Internal dependencies not observable",
+      "exposure": "undetermined",
+      "tone": "neutral"
+    }
+  ],
+  "findings": [
+    {
+      "id": "kex.negotiated",
+      "layer": "key-establishment",
+      "kind": "observation",
+      "tone": "caution",
+      "title": "Key exchange: secp384r1, classical",
+      "detail": "The scanner offered X25519MLKEM768 first and sent a key share for it. The server chose a classical group instead.",
+      "evidence": [
+        {
+          "label": "Scanner offered",
+          "value": "X25519MLKEM768, x25519, secp256r1, SecP256r1MLKEM768, SecP384r1MLKEM1024, MLKEM768, MLKEM1024 and secp384r1; key shares for X25519MLKEM768 and x25519"
+        },
+        {
+          "label": "ServerHello",
+          "value": "TLS 1.3, TLS_AES_256_GCM_SHA384, group 0x0018 secp384r1"
+        },
+        {
+          "label": "Finished MAC",
+          "value": "verified: the scanner derived the same keys as the server"
+        },
+        {
+          "label": "Note",
+          "value": "the server first asked for a different key share (HelloRetryRequest)"
+        }
+      ],
+      "learn": {
+        "view": "login",
+        "landmark": "key-establishment",
+        "mode": "classical",
+        "label": "See what this key exchange does"
+      }
+    },
+    {
+      "id": "kex.tls12",
+      "layer": "key-establishment",
+      "kind": "observation",
+      "tone": "neutral",
+      "title": "TLS 1.2 is still accepted (secp384r1)",
+      "detail": "A client that only speaks TLS 1.2 gets classical key exchange; post-quantum groups exist only in TLS 1.3. Clients that support 1.3 cannot be forced down to 1.2 by an attacker.",
+      "evidence": [
+        {
+          "label": "ServerHello",
+          "value": "TLS 1.2, TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
+        }
+      ]
+    },
+    {
+      "id": "kex.groups",
+      "layer": "key-establishment",
+      "kind": "observation",
+      "tone": "neutral",
+      "title": "No post-quantum key-exchange group is accepted",
+      "detail": "The scanner asked about each of 5 hybrid and ML-KEM groups separately. A group it did not ask about cannot be detected.",
+      "evidence": [
+        {
+          "label": "X25519MLKEM768",
+          "value": "not accepted: refused: the server closed the connection without a TLS alert"
+        },
+        {
+          "label": "SecP256r1MLKEM768",
+          "value": "not accepted: refused: the server closed the connection without a TLS alert"
+        },
+        {
+          "label": "SecP384r1MLKEM1024",
+          "value": "not accepted: refused: the server closed the connection without a TLS alert"
+        },
+        {
+          "label": "MLKEM768",
+          "value": "not accepted: refused: the server closed the connection without a TLS alert"
+        },
+        {
+          "label": "MLKEM1024",
+          "value": "not accepted: refused: the server closed the connection without a TLS alert"
+        }
+      ]
+    },
+    {
+      "id": "kex.exposure",
+      "layer": "key-establishment",
+      "kind": "inference",
+      "tone": "bad",
+      "title": "Traffic recorded today could be decrypted later by a quantum computer",
+      "detail": "The session keys come from secp384r1 alone. Shor’s algorithm recovers the private value behind the public key share sent in the handshake, so an attacker who stores this traffic can decrypt it once a large enough quantum computer exists (\"harvest now, decrypt later\"). No such computer exists today. This is the most urgent quantum risk because the recording can happen now.",
+      "basedOn": [
+        "kex.negotiated",
+        "kex.tls12"
+      ],
+      "learn": {
+        "view": "login",
+        "landmark": "harvest",
+        "mode": "classical",
+        "attacker": "quantum",
+        "label": "Watch a recorded session being decrypted"
+      }
+    },
+    {
+      "id": "auth.certificate",
+      "layer": "server-authentication",
+      "kind": "observation",
+      "tone": "neutral",
+      "title": "Certificate key: RSA 2048-bit",
+      "detail": "Issued to stamp2.login.microsoftonline.com by \"CN=DigiCert Global G2 TLS RSA SHA256 2020 CA1, O=DigiCert Inc, C=US\", valid until 2026-12-13. The server sent 2 certificates.",
+      "evidence": [
+        {
+          "label": "Leaf",
+          "value": "CN=stamp2.login.microsoftonline.com, O=Microsoft Corporation, L=Redmond, ST=Washington, C=US; key RSA 2048-bit; signed by \"CN=DigiCert Global G2 TLS RSA SHA256 2020 CA1, O=DigiCert Inc, C=US\" with RSA PKCS#1 v1.5 with SHA-256"
+        },
+        {
+          "label": "Chain #1",
+          "value": "CN=DigiCert Global G2 TLS RSA SHA256 2020 CA1, O=DigiCert Inc, C=US; key RSA 2048-bit; signed by \"CN=DigiCert Global Root G2, OU=www.digicert.com, O=DigiCert Inc, C=US\" with RSA PKCS#1 v1.5 with SHA-256"
+        }
+      ],
+      "learn": {
+        "view": "login",
+        "landmark": "secure-channel",
+        "mode": "classical",
+        "label": "What is RSA doing here?"
+      }
+    },
+    {
+      "id": "auth.proof",
+      "layer": "server-authentication",
+      "kind": "observation",
+      "tone": "neutral",
+      "title": "The server proved it holds that key with rsa_pss_rsae_sha256",
+      "detail": "The scanner checked CertificateVerify, a signature over the handshake transcript against the leaf certificate’s public key. It is valid.",
+      "evidence": [
+        {
+          "label": "Signature scheme",
+          "value": "0x0804 rsa_pss_rsae_sha256"
+        }
+      ]
+    },
+    {
+      "id": "auth.trust",
+      "layer": "server-authentication",
+      "kind": "observation",
+      "tone": "good",
+      "title": "The certificate chain is publicly trusted and matches the host name",
+      "detail": "Validated by OpenSSL against the CA certificates shipped with Node.js v25.9.0 (Mozilla’s list)."
+    },
+    {
+      "id": "auth.exposure",
+      "layer": "server-authentication",
+      "kind": "inference",
+      "tone": "caution",
+      "title": "A quantum computer could impersonate this server, but only at the time of an attack",
+      "detail": "The server’s identity rests on the certificate key (RSA 2048-bit) and a chain signature (RSA PKCS#1 v1.5 with SHA-256). Shor’s algorithm recovers such private keys from the public keys, which would let an attacker present this identity. Unlike key exchange, this cannot be used on recorded traffic: the forgery has to be made, with a working quantum computer, during a live connection while the certificate is still valid. Publicly trusted certificate authorities do not issue post-quantum certificates yet, so a public site cannot change this alone today.",
+      "basedOn": [
+        "auth.certificate",
+        "auth.proof"
+      ],
+      "learn": {
+        "view": "login",
+        "landmark": "forgery",
+        "mode": "classical",
+        "attacker": "quantum",
+        "label": "Watch a signature being forged"
+      }
+    },
+    {
+      "id": "cipher.negotiated",
+      "layer": "record-protection",
+      "kind": "observation",
+      "tone": "neutral",
+      "title": "Data is encrypted with AES-256-GCM",
+      "detail": "Cipher suite TLS_AES_256_GCM_SHA384. The key for it comes out of the key exchange above; the cipher itself uses no public-key cryptography.",
+      "evidence": [
+        {
+          "label": "Cipher suite",
+          "value": "0x1302 TLS_AES_256_GCM_SHA384"
+        }
+      ],
+      "learn": {
+        "view": "login",
+        "landmark": "authentication",
+        "mode": "classical",
+        "label": "See what the cipher protects"
+      }
+    },
+    {
+      "id": "cipher.exposure",
+      "layer": "record-protection",
+      "kind": "inference",
+      "tone": "good",
+      "title": "The cipher is not at risk from a quantum computer",
+      "detail": "Quantum computers do not break symmetric ciphers. Grover’s algorithm at best halves the effective key length, which leaves a 256-bit key with about 128 bits of security.",
+      "basedOn": [
+        "cipher.negotiated"
+      ]
+    },
+    {
+      "id": "http.hsts",
+      "layer": "transport-policy",
+      "kind": "observation",
+      "tone": "good",
+      "title": "HSTS tells browsers to use HTTPS only, for 365 days",
+      "detail": "A browser that has seen this header refuses to talk to the site over plain HTTP until it expires.",
+      "evidence": [
+        {
+          "label": "Strict-Transport-Security",
+          "value": "max-age=31536000; includeSubDomains"
+        }
+      ]
+    },
+    {
+      "id": "http.plain",
+      "layer": "transport-policy",
+      "kind": "observation",
+      "tone": "good",
+      "title": "Plain HTTP redirects to HTTPS",
+      "detail": "A request to port 80 is sent to the HTTPS site.",
+      "evidence": [
+        {
+          "label": "GET http://…:80/",
+          "value": "302 → https://login.microsoftonline.com:443/"
+        }
+      ]
+    },
+    {
+      "id": "http.cookies",
+      "layer": "transport-policy",
+      "kind": "observation",
+      "tone": "good",
+      "title": "Cookies set by this page are restricted to HTTPS",
+      "detail": "Every cookie has the Secure attribute.",
+      "evidence": [
+        {
+          "label": "x-ms-gateway-slice",
+          "value": "Secure, HttpOnly, SameSite=none"
+        }
+      ]
+    },
+    {
+      "id": "token.metadata",
+      "layer": "token-signing",
+      "kind": "observation",
+      "tone": "neutral",
+      "title": "Sign-in tokens are signed with RS256",
+      "detail": "Read from the service’s own metadata. This is the application’s signature on a token, separate from anything TLS does.",
+      "evidence": [
+        {
+          "label": "Metadata",
+          "value": "https://login.microsoftonline.com/common/v2.0/.well-known/openid-configuration"
+        },
+        {
+          "label": "issuer",
+          "value": "https://login.microsoftonline.com/{tenantid}/v2.0 (does not match the URL it was served from)"
+        },
+        {
+          "label": "id_token_signing_alg_values_supported",
+          "value": "RS256"
+        }
+      ],
+      "learn": {
+        "view": "login",
+        "landmark": "success",
+        "mode": "classical",
+        "label": "See where a token is signed and checked"
+      }
+    },
+    {
+      "id": "token.keys",
+      "layer": "token-signing",
+      "kind": "observation",
+      "tone": "neutral",
+      "title": "Signing keys published: RSA 2048-bit",
+      "detail": "5 keys in the key set that apps use to check tokens.",
+      "evidence": [
+        {
+          "label": "jwks_uri",
+          "value": "https://login.microsoftonline.com/common/discovery/v2.0/keys"
+        },
+        {
+          "label": "SNaVJx8A_IYwib6ITN46_ejclXw",
+          "value": "RSA 2048-bit"
+        },
+        {
+          "label": "dgvSDvK8A5KyKyppw1dAwTXD3CA",
+          "value": "RSA 2048-bit"
+        },
+        {
+          "label": "soMctcfaUvWKm1gYhvnNJxnFCZc",
+          "value": "RSA 2048-bit"
+        },
+        {
+          "label": "myOHS_wwkWumGXDcirfbRWoslv4",
+          "value": "RSA 2048-bit"
+        },
+        {
+          "label": "dcyqtZghKiZBw9sKvH0DecrHQXU",
+          "value": "RSA 2048-bit"
+        }
+      ]
+    },
+    {
+      "id": "token.exposure",
+      "layer": "token-signing",
+      "kind": "inference",
+      "tone": "caution",
+      "title": "A quantum computer could forge this service’s tokens once it exists",
+      "detail": "Shor’s algorithm recovers an RSA or elliptic-curve private key from the published public key; with it an attacker can sign a token for any user. Tokens are short-lived, so there is nothing to record and attack later: the risk begins when such a computer exists.",
+      "basedOn": [
+        "token.metadata",
+        "token.keys"
+      ],
+      "learn": {
+        "view": "login",
+        "landmark": "forgery",
+        "mode": "classical",
+        "attacker": "quantum",
+        "label": "Watch a token being forged"
+      }
+    },
+    {
+      "id": "deps.internal",
+      "layer": "dependencies",
+      "kind": "undetermined",
+      "tone": "neutral",
+      "title": "Internal dependencies cannot be observed from outside",
+      "detail": "Connections between your own services, databases, key storage, vendor APIs and the devices your users connect from all use cryptography too. None of it is visible to an external scan. Finding it is the first step of a migration.",
+      "learn": {
+        "view": "migrate",
+        "label": "See why inventory comes first"
+      }
+    }
+  ]
+}
