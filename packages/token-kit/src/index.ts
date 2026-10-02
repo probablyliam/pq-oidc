@@ -6,3 +6,6 @@ export * from './html.ts';
 export * from './limits.ts';
 export * from './projection.ts';
 export * from './readiness.ts';
+export * from './jose.ts';
+export * from './signature.ts';
+export * from './analyze.ts';
