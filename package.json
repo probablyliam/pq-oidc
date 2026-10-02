@@ -10,7 +10,8 @@
   },
   "workspaces": [
     "packages/*",
-    "apps/*"
+    "apps/*",
+    "services/*"
   ],
   "scripts": {
     "start": "node --disable-warning=ExperimentalWarning scripts/start-all.ts",
@@ -23,7 +24,8 @@
     "smoke": "node --disable-warning=ExperimentalWarning scripts/smoke.ts",
     "check": "node --disable-warning=ExperimentalWarning scripts/check.ts",
     "interop": "node --disable-warning=ExperimentalWarning scripts/interop.ts",
-    "prove": "node --disable-warning=ExperimentalWarning scripts/prove.ts"
+    "prove": "node --disable-warning=ExperimentalWarning scripts/prove.ts",
+    "scan": "node --disable-warning=ExperimentalWarning scripts/scan.ts"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

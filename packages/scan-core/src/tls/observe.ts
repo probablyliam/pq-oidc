@@ -15,6 +15,8 @@ export interface ObserveOptions {
   connectTimeoutMs?: number;
   /** Time allowed for the server's whole flight after the ClientHello is sent. */
   handshakeTimeoutMs?: number;
+  /** Epoch milliseconds after which the scan as a whole is out of time. */
+  deadline?: number;
 }
 
 /** A server's flight is a few kilobytes; ML-DSA chains reach tens. Past this the peer is not behaving like a TLS server. */
@@ -23,9 +25,11 @@ const MAX_BYTES = 512 * 1024;
 export type ProbeSpec = Omit<ClientHelloSpec, 'serverName'>;
 
 export async function observeHandshake(pinned: PinnedTarget, spec: ProbeSpec, options: ObserveOptions = {}): Promise<HandshakeObservation> {
+  const left = (options.deadline ?? Infinity) - Date.now();
+  if (left <= 0) return { outcome: 'timeout', detail: 'the scan ran out of time before this handshake' };
   let socket;
   try {
-    socket = await connectPinned(pinned, options.connectTimeoutMs ?? 5000);
+    socket = await connectPinned(pinned, Math.min(options.connectTimeoutMs ?? 5000, left));
   } catch (error) {
     if (error instanceof ConnectError) return { outcome: 'unreachable', detail: error.message };
     throw error;
@@ -44,7 +48,7 @@ export async function observeHandshake(pinned: PinnedTarget, spec: ProbeSpec, op
     const timer = setTimeout(() => {
       observer.end('timeout');
       finish();
-    }, options.handshakeTimeoutMs ?? 8000);
+    }, Math.min(options.handshakeTimeoutMs ?? 6000, left));
 
     socket.on('data', (chunk: Buffer) => {
       received += chunk.length;

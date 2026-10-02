@@ -281,7 +281,8 @@ export class HandshakeObserver {
   private decrypt(record: TlsRecord, protection: Protection): { type: number; content: Buffer } {
     if (record.fragment.length < 17) throw new WireError('encrypted record too short');
     const tagAt = record.fragment.length - 16;
-    const decipher = crypto.createDecipheriv(protection.algorithm, protection.key, recordNonce(protection.iv, protection.sequence++), {
+    // All three TLS 1.3 AEADs take the same options; the cast picks one overload for the type checker.
+    const decipher = crypto.createDecipheriv(protection.algorithm as 'aes-256-gcm', protection.key, recordNonce(protection.iv, protection.sequence++), {
       authTagLength: 16,
     });
     decipher.setAAD(record.header, { plaintextLength: tagAt });

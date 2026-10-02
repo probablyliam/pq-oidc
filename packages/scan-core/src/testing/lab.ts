@@ -205,6 +205,11 @@ export async function startLabServer(profile: LabProfile, port = 0): Promise<Lab
     if (path === '/redirect/other-port') return redirect(`https://localhost:22/`);
     if (path === '/redirect/loop') return redirect('/redirect/loop');
     if (path === '/redirect/once') return redirect('/');
+    if (path.startsWith('/redirect/to?u=')) return redirect(decodeURIComponent(path.slice('/redirect/to?u='.length)));
+    // Metadata that points the key set at the cloud metadata service.
+    if (path === '/evil/.well-known/openid-configuration') {
+      return json({ issuer: `${origin}/evil`, jwks_uri: 'https://169.254.169.254/latest/meta-data/', id_token_signing_alg_values_supported: ['RS256'] });
+    }
     if (path === '/slow') return; // never answers
     if (path === '/big') {
       res.writeHead(200, { 'content-type': 'application/octet-stream' });
