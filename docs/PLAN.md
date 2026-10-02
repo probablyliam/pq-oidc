@@ -10,20 +10,27 @@ Decisions with reasoning live in [`docs/adr/`](adr/). Nothing here is pushed to 
 | 0 | Inspect, run, assess, plan | done |
 | 1 | Scan core: target policy, SSRF-safe resolver and connector | done |
 | 2 | Real analysis: TLS handshake observer, certificates, HTTP transport, OIDC metadata, report | done |
-| 3 | Token analysis with real verification | pending |
-| 4 | API service, job model, persistence, worker, OIDC sign-in, authorization | pending |
-| 5 | Results UI: layered report, history, compare, token page | pending |
-| 6 | Scrubbable login timeline with the attacker in the same environment | pending |
-| 7 | Migration exercise, seeded from scan results | pending |
+| 3 | Token analysis with real verification | done |
+| 4 | API service, job model, persistence, worker, OIDC sign-in, authorization | done |
+| 5 | Results UI: layered report, history, compare, token page | done |
+| 6 | Scrubbable login timeline with the attacker in the same environment | done |
+| 7 | Migration exercise, seeded from scan results | in progress |
 | 8 | Docker, Helm (NetworkPolicy), CI | pending |
 | 9 | Hardening: security review, accessibility, mobile, performance, test gaps | pending |
 | 10 | Final review against the definition of done, `FINAL_REPORT.md`, README | pending |
 
 ## Next steps
 
-Phase 3: extend `packages/token-kit` with an isomorphic token analyzer (`analyze.ts`) and signature verification against a JWKS, with tests for `alg: none`, HMAC/confusion, header-supplied keys and ML-DSA. Then Phase 4: `services/api` and `services/worker`.
+Work stopped mid-Phase 7 (usage limit). Resume here, in this order:
 
-Useful commands: `npm test`, `npm run scan -- <url>` (set `SCAN_LAB_ORIGINS` for lab servers), `npx tsc -p tsconfig.json --noEmit`, `npx eslint .`.
+1. **Phase 7, migration.** `apps/web/src/migrate/model.ts` is written but has never been run: add `model.test.ts` (safe order never breaks production and reaches `done`; each early change produces its problem; `rehearse` finds a break without causing it; `rollOut` records an incident only when untested; `seedFromScan` for the recorded reports). Then replace the placeholder `apps/web/src/views/MigrateView.tsx` with the real view (parts in path order, look / try in staging / roll out, outage banner, completion summary, `?scan=` and `?recorded=` seeding) and fill `styles/migrate.css`. Link reports to it with the scan ID.
+2. **Reviews.** Two independent reviews of the backend (TLS/crypto correctness; SSRF and API security) were started and then stopped unread when the usage limit hit. Re-run them and fix what they find.
+3. **Browser test.** `tests/browser/`: drive the built app with `playwright-core` (channel `msedge` locally, `chrome` in CI): sign in, scan a lab server, read the report; token page; set the timeline range input and assert the SVG matches `sceneAt`. Regenerate `docs/screenshots/` from it (working shots are in the untracked `.shots/`).
+4. **Phase 8, infrastructure.** Dockerfile (add `services/`, `packages/scan-core`, build `apps/web`), `docker-compose.yml`, Helm: api (PVC for SQLite, one replica), worker, NetworkPolicies (worker: internet egress minus private ranges; api: no egress except the provider), `.env.example`, CI jobs (tests, web build, kind deploy, NetworkPolicy check), Pages workflow path `apps/web`. None of this can be run on this machine; render and schema-check the chart with tools kept outside the repo.
+5. **Phase 9, hardening.** Provider login rate limit; favicon 404 on the provider; `npm audit`; accessibility pass (focus order, contrast, SVG labels); bundle size (code-split the learn view).
+6. **Phase 10.** Rewrite `README.md` (it still describes the old site), update `docs/threat-model.md` for the scanner, API and worker, write `docs/FINAL_REPORT.md`, copy screenshots to `docs/screenshots/`.
+
+Useful commands: `npm start` (whole stack on :8080, sign in as alice / quantum-safe), `npm run dev`, `npm run lab`, `npm test`, `npm run scan -- <url>`, `npx tsc -p tsconfig.json --noEmit`, `npm run typecheck -w apps/web`, `npx eslint .`.
 
 ---
 
@@ -182,3 +189,20 @@ Filled in at the end of each phase.
 - **Verified by running against public sites** (2026-10-02, four sites, one scan each plus one repeat): accounts.google.com (X25519MLKEM768 negotiated, MLKEM1024 also accepted, Finished verified against BoringSSL), www.cloudflare.com (X25519MLKEM768), login.microsoftonline.com (secp384r1 after a HelloRetryRequest, RSA certificate, resets instead of alerting on unknown groups), github.com (x25519, AES-128-GCM, no OIDC metadata).
 - **Not verified / limits**: QUIC; servers behind client-certificate requirements; groups outside the registry; behaviour through an HTTP proxy (the scanner connects directly); IPv6 targets (code path tested with literals, not with a live IPv6 server).
 - **Found and fixed along the way**: PEM encoder emitted a blank line at exact multiples of 64 characters; a reset in reply to a group-only ClientHello is now reported as a refusal rather than "unknown".
+
+### Phase 3 (token analysis)
+
+- **Verified by tests** (`packages/token-kit`, 63 tests): genuine RS256, PS256, ES256, ES384, EdDSA and ML-DSA-65 tokens verify; edited payloads and foreign keys do not; `alg: none` in four capitalisations is unsigned, never valid; an HS256 token "signed" with the RSA public key is never checked against published keys; a key is not used for an algorithm it was not published for; embedded `jwk` is ignored; `jku`/`x5u` are flagged and no network request is made; JWE is recognised and not "read".
+- **Verified in a real browser**: the signed-in user's own ML-DSA-65 ID token verifies in the page against the provider's keys.
+
+### Phase 4 (service)
+
+- **Verified by tests** (`tests/service.test.ts`, 62 tests, real provider + API + worker + lab server in one process): sign-in end to end; replayed, stolen and state-tampered callbacks; open-redirect attempts; logout; session expiry; every API route refuses without a session; cross-user read, list and delete; CSRF (missing or foreign token, foreign Origin, cross-site fetch metadata, form body); target refusals before queuing; per-user, active and per-host limits; worker token and port separation; lease expiry, retry once, then `worker-lost`; a full scan of a lab server through the worker; no credential in the logs. Mutation check: removing the owner filter or the CSRF check makes tests fail.
+- **Not verified**: more than one API replica (not supported: SQLite); behaviour behind a real reverse proxy; load.
+
+### Phases 5 and 6 (web app)
+
+- **Verified in headless Edge** (scripts and screenshots in the untracked `.shots/`): sign in, scan a lab server, report renders; recorded reports; token examples; own-token verification; the stage at fixed playhead positions in all three modes with and without an attacker; phone viewport (390 px) with no horizontal overflow on any page; no console errors under the Content-Security-Policy after fonts were made same-origin.
+- **Verified by tests** (`apps/web/src/learn/learn.test.ts`, 38 tests): the nine mode/attacker scores validate; `sceneAt` is order-independent; a share is mid-network at mid-trip; a signature is half formed at the midpoint of signing; the login is scrambled only between encrypt and decrypt; no prop jumps between frames; the six attack outcomes are real decryptions and verifications.
+- **Not yet checked**: history and compare views in a browser; autoplay with motion enabled; keyboard control of the playhead in a browser; screen-reader behaviour; Firefox and Safari.
+- **Known gaps**: `MigrateView` is a placeholder; `README.md` still describes the old site; nothing in `deploy/`, `Dockerfile`, `docker-compose.yml` or `.github/` has been updated for the new services yet.

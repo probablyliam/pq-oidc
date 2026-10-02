@@ -478,7 +478,6 @@ export function buildScore(session: Session, attack?: AttackOutcome): LoginScore
   // ------------------------------------------------------------------ The attack
   if (attack) {
     const quantum = attack.attacker === 'quantum';
-    const machine = quantum ? 'a large quantum computer' : 'an ordinary computer';
     const loginSlot = kem ? 'm.slot6' : 'm.slot4';
     beat({
       id: 'recorded',
