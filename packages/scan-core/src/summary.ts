@@ -14,7 +14,7 @@
  *
  * Pure, and free of Node APIs: the web app computes it when it draws a report.
  */
-import type { LayerId, LearnLink, QuantumExposure, ScanReport } from './report.ts';
+import type { LayerId, LearnLink, PageSummary, QuantumExposure, ScanReport } from './report.ts';
 
 /** safe: fine against a quantum computer. later: at risk once one exists. now: at risk from today. */
 export type PlainStatus = 'safe' | 'later' | 'now' | 'unknown';
@@ -35,13 +35,34 @@ export interface PlainAnswer {
 
 export type Verdict = 'not-safe' | 'partly' | 'safe' | 'unknown';
 
+/** What the address is, in one sentence: the scanner looks at any address, and a login is only one kind. */
+export interface PlainPage {
+  kind: PageSummary['kind'];
+  note: string;
+  /** Where visitors are sent on to, when that is another origin. */
+  leadsTo?: string;
+}
+
 export interface PlainSummary {
   verdict: Verdict;
   headline: string;
   explanation: string;
   answers: PlainAnswer[];
+  /** Absent when the address could not be fetched, or the report predates the check. */
+  page?: PlainPage;
   /** Problems that have nothing to do with quantum computers, as plain sentences. */
   alsoNoticed: string[];
+}
+
+function describePage(page: PageSummary): PlainPage {
+  const elsewhere = page.leadsTo ? new URL(page.leadsTo).host : undefined;
+  const note = {
+    'sign-in-service': 'A sign-in service: other sites send people here to log in.',
+    'sign-in-page': 'A sign-in page: it asks for a password.',
+    'leads-to-sign-in': `This address sends visitors on to sign in at ${elsewhere}.`,
+    other: elsewhere ? `No sign-in found here. This address sends visitors on to ${elsewhere}.` : 'No sign-in found on this page.',
+  }[page.kind];
+  return { kind: page.kind, note, leadsTo: page.leadsTo };
 }
 
 const strip = (headline: string) => headline.replace(/^(Classical|Hybrid|Post-quantum|Migrating): /, '');
@@ -100,6 +121,7 @@ export function plainSummary(report: ScanReport): PlainSummary {
 
   // ---- Can someone fake a sign-in? The token signature decides, when it can be seen at all.
   const token = exposure('token-signing');
+  const page = report.reachable && report.page ? describePage(report.page) : undefined;
   const migrating = layer('token-signing')?.headline.startsWith('Migrating') ?? false;
   const signIn: PlainAnswer = {
     id: 'sign-in',
@@ -117,7 +139,13 @@ export function plainSummary(report: ScanReport): PlainSummary {
         }
       : token === 'no-known-attack'
         ? { status: 'safe', short: 'No', answer: 'Sign-ins are vouched for with a quantum-safe signature.' }
-        : {
+        : page?.kind === 'other'
+          ? {
+              status: 'unknown',
+              short: 'No sign-in found',
+              answer: 'Nothing at this address signs anyone in, so there is nothing to check here. If the site has a login, scan the address of its login page.',
+            }
+          : {
             status: 'unknown',
             short: 'Cannot tell from outside',
             answer: 'This site does not publish how it signs sign-ins, so a scan cannot see it. If the site gives you a token, the token checker can.',
@@ -150,5 +178,5 @@ export function plainSummary(report: ScanReport): PlainSummary {
   const today = ['kex.large-hello', 'kex.tls12', 'auth.validity', 'auth.trust', 'auth.proof', 'http.hsts', 'http.plain', 'http.cookies'];
   const alsoNoticed = report.findings.filter((f) => today.includes(f.id) && (f.tone === 'bad' || (f.tone === 'caution' && f.kind === 'observation'))).map((f) => f.title);
 
-  return { verdict, headline, explanation, answers, alsoNoticed };
+  return { verdict, headline, explanation, answers, page, alsoNoticed };
 }

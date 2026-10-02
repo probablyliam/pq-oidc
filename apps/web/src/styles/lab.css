@@ -1,0 +1,317 @@
+/* ---------- The login lab ---------- */
+.lab {
+  display: grid;
+  gap: 24px;
+  max-width: 68rem;
+}
+.lab-head {
+  max-width: 48rem;
+}
+
+/* The three choices: a strict row, each the same shape. */
+.controls {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+.control {
+  display: grid;
+  gap: 6px;
+}
+.control-label {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+.control .seg {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.control .seg button {
+  justify-content: center;
+  text-align: center;
+  padding: 9px 8px;
+  font-size: 0.9rem;
+}
+
+/* The login card: where the visitor actually logs in. */
+.screen-card {
+  max-width: 34rem;
+  padding: 16px 18px;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+}
+.screen-site {
+  font: 0.85rem var(--mono);
+  color: var(--ink-soft);
+}
+.demo-login {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.demo-login input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 10px;
+  font-size: 0.95rem;
+}
+.demo-login input:last-of-type {
+  flex-grow: 1.3;
+}
+.demo-login button {
+  white-space: nowrap;
+}
+.screen-in {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 10px;
+}
+.screen-in b {
+  font: 700 1.2rem var(--head);
+  color: var(--good);
+}
+
+/* The three processes, mirrored by the three attacker rows below. */
+.processes,
+.attack-rows {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+.process {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 14px 16px 16px;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  border-top: 5px solid var(--k-session);
+}
+.process.pq {
+  border-top-style: dashed;
+}
+.process > header {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.process-n {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--paper);
+  font: 700 0.85rem var(--mono);
+}
+.process h3 {
+  font-size: 1.05rem;
+}
+.process-sub {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  font-size: 0.92rem;
+}
+.process-note {
+  font-size: 0.86rem;
+  color: var(--ink-soft);
+}
+
+/* A labelled value with its bytes. Dotted frame = post-quantum. */
+.val {
+  display: grid;
+  gap: 1px;
+  padding: 7px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: var(--sheet);
+}
+.val.pq {
+  border-style: dashed;
+  border-color: var(--good);
+}
+.val-label {
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+.val-bytes {
+  font: 0.86rem var(--mono);
+  word-break: break-all;
+}
+.val-note {
+  font-size: 0.74rem;
+  color: var(--ink-soft);
+  text-transform: lowercase;
+}
+.check {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.check::before {
+  content: '';
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  transform: translateY(1px);
+}
+.check.ok {
+  color: var(--good);
+}
+.check.ok::before {
+  background: var(--good);
+}
+.check.bad {
+  color: var(--bad);
+}
+.check.bad::before {
+  background: var(--bad);
+}
+
+/* The attacker panel: clearly its own, clearly hostile. */
+.attacker {
+  padding: 18px 20px 20px;
+  background: var(--bad-wash);
+  border: 2px solid var(--k-attacker);
+  border-radius: 3px;
+}
+.attacker-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 20px;
+}
+.attacker-head h2 {
+  color: var(--k-attacker);
+}
+.attacker-head .sub {
+  max-width: 40rem;
+  margin-top: 4px;
+}
+.attacker .seg button[aria-pressed='true'] {
+  background: var(--k-attacker);
+  border-color: var(--k-attacker);
+}
+.attacker .seg button {
+  border-color: var(--k-attacker);
+  color: var(--k-attacker);
+}
+.attacker .seg button[aria-pressed='true'] {
+  color: var(--paper);
+}
+.attack-rows {
+  margin-top: 18px;
+}
+.attack-row {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 12px 14px 14px;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  border-left: 5px solid var(--rule);
+}
+.attack-row.won {
+  border-left-color: var(--bad);
+}
+.attack-row.lost {
+  border-left-color: var(--good);
+}
+.attack-row > header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.attack-row h4 {
+  font-size: 0.98rem;
+}
+.attack-row .process-n {
+  background: var(--k-attacker);
+}
+.outcome {
+  margin-left: auto;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font: 700 0.72rem var(--head);
+  white-space: nowrap;
+}
+.outcome.won {
+  background: var(--bad);
+  color: var(--paper);
+}
+.outcome.lost {
+  background: var(--good-wash);
+  color: var(--good);
+}
+.attack-text {
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+}
+
+/* The "working it out" readout. */
+.cracker {
+  display: block;
+  padding: 8px 10px;
+  border-radius: 3px;
+  background: var(--ink);
+  color: #7CFC9B;
+  font: 0.9rem/1.3 var(--mono);
+  letter-spacing: 0.08em;
+  word-break: break-all;
+  min-height: 2.4em;
+}
+.cracker.churning {
+  color: var(--rule);
+  opacity: 0.75;
+}
+.cracker.solved {
+  color: #7CFC9B;
+}
+.attacker-foot {
+  margin-top: 16px;
+  font-size: 0.92rem;
+  color: var(--ink-soft);
+  max-width: 54rem;
+}
+
+@media (max-width: 860px) {
+  .controls {
+    grid-template-columns: 1fr;
+  }
+  .processes,
+  .attack-rows {
+    grid-template-columns: 1fr;
+  }
+  .attacker-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+@media (max-width: 520px) {
+  .demo-login {
+    flex-wrap: wrap;
+  }
+  .demo-login button {
+    width: 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cracker.churning {
+    /* Nothing to animate toward; show a steady blocked state. */
+    color: var(--rule);
+  }
+}

@@ -61,7 +61,7 @@ async function startService(overrides: Overrides = {}): Promise<Service> {
     policy: { allowedPorts: [443, 8443], labOrigins: overrides.labOrigins ?? [] },
     limits: { scansPerWindow: 50, windowMs: 600_000, activePerClient: 50, perHostPerMinute: 50, maxQueueDepth: 100, ...overrides.limits },
     reuseMs: overrides.reuseMs ?? 0,
-    retentionMs: 24 * 3_600_000,
+    retentionMs: 3_600_000,
     webDir: overrides.webDir,
   };
   const app = createApi({
@@ -158,7 +158,7 @@ describe('scanning needs no account', () => {
 
   it('says what it is and what it allows, and nothing secret', async () => {
     const meta = (await (await fetch(`${service.publicUrl}/api/v1/meta`)).json()) as Record<string, unknown>;
-    expect(meta).toMatchObject({ service: 'pq-oidc', allowedPorts: [443, 8443], retentionHours: 24 });
+    expect(meta).toMatchObject({ service: 'pq-oidc', allowedPorts: [443, 8443], retentionHours: 1 });
     expect(JSON.stringify(meta)).not.toMatch(/secret|token/i);
   });
 });
@@ -329,17 +329,17 @@ describe('what is kept, and for how long', () => {
     }
   });
 
-  it('deletes results after a day, and not before', async () => {
+  it('deletes results after an hour, and not before', async () => {
     const kept = await startService();
     try {
       const ana = visitor(kept, '203.0.113.1');
       const finished = (await ana.scan('https://example.com/')).body.scan!.id;
       await worker(kept, '/internal/v1/jobs/claim', { workerId: 'w1' });
       await worker(kept, `/internal/v1/jobs/${finished}/result`, { workerId: 'w1', status: 'succeeded', result: { schema: 1 } });
-      kept.advance(23 * 3_600_000);
+      kept.advance(55 * 60_000);
       kept.purge();
       expect((await ana.read(finished)).status).toBe(200);
-      kept.advance(2 * 3_600_000);
+      kept.advance(10 * 60_000);
       kept.purge();
       expect((await ana.read(finished)).status).toBe(404);
     } finally {

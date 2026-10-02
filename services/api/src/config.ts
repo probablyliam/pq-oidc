@@ -68,7 +68,7 @@ export function configFromEnv(env: NodeJS.ProcessEnv): ApiConfig {
       maxQueueDepth: integer(env, 'MAX_QUEUE_DEPTH', 100),
     },
     reuseMs: integer(env, 'REUSE_RESULT_SECONDS', 300, 0) * 1000,
-    retentionMs: integer(env, 'RETENTION_HOURS', 24) * 3_600_000,
+    retentionMs: integer(env, 'RETENTION_HOURS', 1) * 3_600_000,
     webDir: env.WEB_DIR || undefined,
   };
 }

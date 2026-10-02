@@ -134,7 +134,7 @@ export function assess(seen: Observations): Assessment {
                   ? 'The server chose TLS 1.2 although TLS 1.3 was offered. TLS 1.2 has no post-quantum key exchange.'
                   : 'The scanner offered X25519MLKEM768 first and sent a key share for it. The server chose a classical group instead.',
       evidence: helloEvidence(best),
-      learn: { view: 'login', landmark: 'key-establishment', mode: quantumSafe ? 'hybrid' : 'classical', label: quantumSafe ? 'See what hybrid key exchange does' : 'See what this key exchange does' },
+      learn: { view: 'login', landmark: 'key-establishment', mode: quantumSafe ? 'hybrid' : 'classical' },
     });
 
     // A capable client was ignored but a plain one was answered: usually a large-ClientHello problem.
@@ -235,7 +235,7 @@ export function assess(seen: Observations): Assessment {
         title: 'Traffic recorded today cannot be decrypted later by a quantum computer',
         detail: 'Every client that can connect negotiates ML-KEM (FIPS 203), for which no quantum attack is known. An attacker who stores this traffic gains nothing from a future quantum computer.',
         basedOn,
-        learn: { view: 'login', landmark: 'harvest', mode: 'hybrid', attacker: 'quantum', label: 'Watch a quantum attacker fail against this' },
+        learn: { view: 'login', landmark: 'harvest', mode: 'hybrid', attacker: 'quantum' },
       });
       layer('key-establishment', 'TLS key establishment', `${kex.kind === 'hybrid' ? 'Hybrid' : 'Post-quantum'}: ${kex.label}`, 'no-known-attack', 'good');
     } else if (quantumSafe) {
@@ -248,7 +248,7 @@ export function assess(seen: Observations): Assessment {
         detail:
           'Sessions that negotiate ML-KEM cannot be decrypted later by a quantum computer. Sessions from clients that fall back to classical key exchange can: an attacker who records them now can decrypt them once a large quantum computer exists ("harvest now, decrypt later"). Which of your clients fall back is not visible from outside.',
         basedOn,
-        learn: { view: 'login', landmark: 'harvest', mode: 'hybrid', attacker: 'quantum', label: 'Watch a quantum attacker fail against hybrid' },
+        learn: { view: 'login', landmark: 'harvest', mode: 'hybrid', attacker: 'quantum' },
       });
       layer('key-establishment', 'TLS key establishment', `${kex.kind === 'hybrid' ? 'Hybrid' : 'Post-quantum'}: ${kex.label}, with classical fallback`, 'depends-on-client', 'caution');
     } else if (kex.kind === 'unknown') {
@@ -273,7 +273,7 @@ export function assess(seen: Observations): Assessment {
             ? 'The session secret is encrypted to an RSA key. Shor’s algorithm recovers an RSA private key from the public key, so an attacker who stores this traffic can decrypt all of it once a large enough quantum computer exists. A stolen private key does the same today.'
             : `The session keys come from ${kex.label} alone. Shor’s algorithm recovers the private value behind the public key share sent in the handshake, so an attacker who stores this traffic can decrypt it once a large enough quantum computer exists ("harvest now, decrypt later"). No such computer exists today. This is the most urgent quantum risk because the recording can happen now.`,
         basedOn,
-        learn: { view: 'login', landmark: 'harvest', mode: 'classical', attacker: 'quantum', label: 'Watch a recorded session being decrypted' },
+        learn: { view: 'login', landmark: 'harvest', mode: 'classical', attacker: 'quantum' },
       });
       layer('key-establishment', 'TLS key establishment', `Classical: ${kex.label}`, 'harvest-now-decrypt-later', 'bad');
     }
@@ -306,7 +306,7 @@ export function assess(seen: Observations): Assessment {
         label: c.position === 0 ? 'Leaf' : `Chain #${c.position}`,
         value: `${c.subject}; key ${c.key.algorithm}; signed by "${c.issuer}" with ${c.signature.algorithm}`,
       })),
-      learn: { view: 'login', landmark: 'secure-channel', mode: leaf.key.quantumSafe ? 'pq' : 'classical', label: `What is ${leaf.key.family === 'unknown' ? 'the certificate' : leaf.key.family} doing here?` },
+      learn: { view: 'login', landmark: 'secure-channel', mode: leaf.key.quantumSafe ? 'pq' : 'classical' },
     });
 
     if (leaf.expired || leaf.notYetValid) {
@@ -399,7 +399,7 @@ export function assess(seen: Observations): Assessment {
         title: 'No known quantum attack on this server’s identity',
         detail: `The certificate key and every signature on the chain the server sent are ${leaf.key.family}. No quantum algorithm is known that forges them.${seen.trust.trusted ? '' : ' Public certificate authorities do not issue such certificates yet, which is why this chain is not publicly trusted.'}`,
         basedOn,
-        learn: { view: 'login', landmark: 'forgery', mode: 'pq', attacker: 'quantum', label: 'Watch a forgery attempt fail' },
+        learn: { view: 'login', landmark: 'forgery', mode: 'pq', attacker: 'quantum' },
       });
       layer('server-authentication', 'TLS server authentication', `Post-quantum: ${leaf.key.algorithm}`, 'no-known-attack', 'good');
     } else {
@@ -411,7 +411,7 @@ export function assess(seen: Observations): Assessment {
         title: 'A quantum computer could impersonate this server, but only at the time of an attack',
         detail: `The server’s identity rests on ${list(classicalParts)}. Shor’s algorithm recovers such private keys from the public keys, which would let an attacker present this identity. Unlike key exchange, this cannot be used on recorded traffic: the forgery has to be made, with a working quantum computer, during a live connection while the certificate is still valid.${pqParts > 0 ? ' Part of the chain is already post-quantum, but a chain is as strong as its weakest signature.' : ''} Publicly trusted certificate authorities do not issue post-quantum certificates yet, so a public site cannot change this alone today.`,
         basedOn,
-        learn: { view: 'login', landmark: 'forgery', mode: 'classical', attacker: 'quantum', label: 'Watch a signature being forged' },
+        learn: { view: 'login', landmark: 'forgery', mode: 'classical', attacker: 'quantum' },
       });
       layer('server-authentication', 'TLS server authentication', `Classical: ${leaf.key.algorithm} certificate`, 'forgery-once-quantum', 'caution');
     }
@@ -440,7 +440,7 @@ export function assess(seen: Observations): Assessment {
       title: `Data is encrypted with ${suite.cipher}${suite.aead ? '' : ', an older non-AEAD construction'}`,
       detail: `Cipher suite ${suite.name}. The key for it comes out of the key exchange above; the cipher itself uses no public-key cryptography.`,
       evidence: [{ label: 'Cipher suite', value: `${hex(suite.id)} ${suite.name}` }],
-      learn: { view: 'login', landmark: 'authentication', mode: 'classical', label: 'See what the cipher protects' },
+      learn: { view: 'login', landmark: 'authentication', mode: 'classical' },
     });
     const strong = suite.keyBits >= 256;
     add({
@@ -572,7 +572,7 @@ export function assess(seen: Observations): Assessment {
         detail:
           'No OpenID Connect or OAuth metadata is published at this address. A service can issue signed tokens without saying how; from outside that is only visible in a token itself. If this system gives you a token, paste it into the token analyzer.',
         evidence: oidc.tried.map((t) => ({ label: t.url, value: t.result })),
-        learn: { view: 'token', label: 'Analyze a token from this system' },
+        learn: { view: 'token' },
       });
       return layer('token-signing', 'Application token signing', 'Could not determine', 'undetermined', 'neutral');
     }
@@ -590,7 +590,7 @@ export function assess(seen: Observations): Assessment {
         { label: 'issuer', value: `${oidc.issuer}${oidc.issuerMatches ? '' : ' (does not match the URL it was served from)'}` },
         { label: 'id_token_signing_alg_values_supported', value: algs.join(', ') || '(absent)' },
       ],
-      learn: { view: 'login', landmark: 'success', mode: 'classical', label: 'See where a token is signed and checked' },
+      learn: { view: 'login', landmark: 'success', mode: 'classical' },
     });
 
     if (!oidc.keys) {
@@ -630,7 +630,7 @@ export function assess(seen: Observations): Assessment {
         title: 'No known quantum attack forges this service’s tokens',
         detail: 'Every published signing key is ML-DSA (FIPS 204).',
         basedOn,
-        learn: { view: 'login', landmark: 'forgery', mode: 'pq', attacker: 'quantum', label: 'Watch a forgery attempt fail' },
+        learn: { view: 'login', landmark: 'forgery', mode: 'pq', attacker: 'quantum' },
       });
       layer('token-signing', 'Application token signing', `Post-quantum: ${list(kinds)}`, 'no-known-attack', 'good');
     } else {
@@ -643,7 +643,7 @@ export function assess(seen: Observations): Assessment {
         title: mixed ? 'Tokens signed with the classical key could be forged once a quantum computer exists' : 'A quantum computer could forge this service’s tokens once it exists',
         detail: `${mixed ? 'The service publishes a post-quantum key next to a classical one, which is what a migration in progress looks like. Apps still receiving classically signed tokens remain exposed. ' : ''}Shor’s algorithm recovers an RSA or elliptic-curve private key from the published public key; with it an attacker can sign a token for any user. Tokens are short-lived, so there is nothing to record and attack later: the risk begins when such a computer exists.`,
         basedOn,
-        learn: { view: 'login', landmark: 'forgery', mode: 'classical', attacker: 'quantum', label: 'Watch a token being forged' },
+        learn: { view: 'login', landmark: 'forgery', mode: 'classical', attacker: 'quantum' },
       });
       layer('token-signing', 'Application token signing', mixed ? `Migrating: ${list(kinds)}` : `Classical: ${list(kinds)}`, 'forgery-once-quantum', 'caution');
     }

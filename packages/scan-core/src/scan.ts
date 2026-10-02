@@ -13,6 +13,7 @@
 import { assess } from './assess.ts';
 import { fetchFollowingRedirects } from './http/fetch.ts';
 import type { FollowResult } from './http/fetch.ts';
+import { summarizePage } from './http/page.ts';
 import { checkPlainHttp, summarizeTransport } from './http/transport.ts';
 import { DEFAULT_POLICY, parseTarget } from './net/policy.ts';
 import type { TargetPolicy } from './net/policy.ts';
@@ -126,6 +127,7 @@ export async function runScan(input: string, options: ScanOptions = {}): Promise
     trust,
     transport,
     oidc,
+    page: summarizePage(follow, target.origin, oidc),
     related,
     layers,
     findings,

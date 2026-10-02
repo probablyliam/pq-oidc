@@ -1,11 +1,12 @@
-import { useState } from 'react';
 import { NOT_OBSERVABLE } from '@pq-oidc/scan-core/report';
 import type { Finding as ScanFinding, LayerSummary, ScanReport } from '@pq-oidc/scan-core/report';
 import { cipherSuiteName, GROUPS, groupName, signatureSchemeName, versionName } from '@pq-oidc/scan-core/registry';
 import { plainSummary } from '@pq-oidc/scan-core/summary';
 import type { PlainAnswer } from '@pq-oidc/scan-core/summary';
-import { Finding, KIND_MEANING, KindMark, learnHref } from './Finding.tsx';
+import { href } from '../router.ts';
+import { Finding, KIND_MEANING, KindMark, learnHref, learnText } from './Finding.tsx';
 import type { Kind } from './Finding.tsx';
+import { Tag, tagFor } from './Tag.tsx';
 
 /**
  * A scan result, in two depths. First, for anyone: one verdict and three
@@ -17,8 +18,7 @@ function ago(iso: string): string {
   const minutes = Math.round((Date.now() - new Date(iso).getTime()) / 60_000);
   if (minutes < 1) return 'just now';
   if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
-  if (minutes < 60 * 24) return `${Math.round(minutes / 60)} hour${Math.round(minutes / 60) === 1 ? '' : 's'} ago`;
-  return `on ${new Date(iso).toLocaleDateString([], { dateStyle: 'medium' })}`;
+  return `${Math.round(minutes / 60)} hour${Math.round(minutes / 60) === 1 ? '' : 's'} ago`;
 }
 
 function Answer({ answer }: { answer: PlainAnswer }) {
@@ -33,42 +33,55 @@ function Answer({ answer }: { answer: PlainAnswer }) {
         <p className="answer-text">{answer.answer}</p>
         <p className="answer-more">
           {answer.technical && <code>{answer.technical}</code>}
-          {answer.learn && <a href={learnHref(answer.learn)}>{answer.learn.view === 'token' ? 'Check a token from this site' : 'See how this works'}</a>}
+          {answer.learn && <a href={learnHref(answer.learn)}>{learnText(answer.learn)}</a>}
         </p>
       </div>
     </li>
   );
 }
 
-/** The parts of a key-exchange group, drawn in the same grammar as the login explainer: dotted means post-quantum. */
-function GroupParts({ group }: { group: number }) {
-  const info = GROUPS[group];
-  if (!info) return null;
+/**
+ * A layer's headline with each algorithm named once and tagged by kind, instead of the
+ * "Classical:" / "Hybrid:" prefixes the report uses. A hybrid group shows both of its parts.
+ */
+function Headline({ layer, group }: { layer: LayerSummary; group?: number }) {
+  const [, prefix, rest = layer.headline] = /^(Classical|Hybrid|Post-quantum|Migrating): (.*)$/.exec(layer.headline) ?? [];
+  const parts = layer.id === 'key-establishment' && group !== undefined ? GROUPS[group]?.components : undefined;
+  if (parts) {
+    const [, after = ''] = /^[^,]*(,.*)?$/.exec(rest) ?? [];
+    return (
+      <span className="layer-headline">
+        {parts.map((part) => (
+          <span key={part} className="algo">
+            {part} <Tag kind={tagFor(part)} />
+          </span>
+        ))}
+        {after && <span>{after.slice(2)}</span>}
+      </span>
+    );
+  }
+  const kinds = prefix === 'Migrating' ? (['classical', 'PQC'] as const) : prefix === 'Classical' ? (['classical'] as const) : prefix === 'Post-quantum' ? (['PQC'] as const) : layer.exposure === 'reduced-margin' ? (['symmetric'] as const) : [];
   return (
-    <span className="parts" aria-label={`${info.name}: ${info.components.join(' plus ')}`}>
-      {info.components.map((part) => (
-        <span key={part} className={/ML-KEM|Kyber/.test(part) ? 'part pq' : 'part classical'}>
-          {part}
-        </span>
-      ))}
+    <span className="layer-headline">
+      <span className="algo">
+        {rest} {kinds.map((kind) => <Tag key={kind} kind={kind} />)}
+      </span>
     </span>
   );
 }
 
 const KIND_ORDER: ScanFinding['kind'][] = ['observation', 'inference', 'undetermined'];
 
+/** One layer, folded to its headline until opened: read the one you care about. */
 function LayerSection({ layer, report }: { layer: LayerSummary; report: ScanReport }) {
   const findings = report.findings.filter((f) => f.layer === layer.id);
   const main = report.tls.probes.find((p) => p.id === 'pq-capable-client');
   return (
-    <section className={`layer tone-${layer.tone}`}>
-      <header>
+    <details className={`fold layer tone-${layer.tone}`}>
+      <summary>
         <h4>{layer.name}</h4>
-        <p className="layer-headline">
-          {layer.headline}
-          {layer.id === 'key-establishment' && main?.group !== undefined && <GroupParts group={main.group} />}
-        </p>
-      </header>
+        <Headline layer={layer} group={main?.group} />
+      </summary>
       <ul className="findings">
         {KIND_ORDER.flatMap((kind) => findings.filter((f) => f.kind === kind)).map((f) => (
           <Finding key={f.id} finding={f} all={report.findings} />
@@ -78,12 +91,12 @@ function LayerSection({ layer, report }: { layer: LayerSummary; report: ScanRepo
         <ul className="related">
           {report.related.map((r) => (
             <li key={r.origin}>
-              <a href={`#/?target=${encodeURIComponent(r.origin)}`}>Scan {new URL(r.origin).host}</a>
+              <a href={href('', { target: r.origin })}>Scan {new URL(r.origin).host}</a>
             </li>
           ))}
         </ul>
       )}
-    </section>
+    </details>
   );
 }
 
@@ -97,8 +110,11 @@ function RawData({ report }: { report: ScanReport }) {
     URL.revokeObjectURL(link.href);
   };
   return (
-    <section className="raw">
-      <h4>Every handshake the scanner made</h4>
+    <details className="fold raw">
+      <summary>
+        <h4>Every handshake the scanner made</h4>
+        <span className="layer-headline">{report.tls.probes.length} handshakes, {report.certificates.length} certificates</span>
+      </summary>
       <div className="scroll-x">
         <table>
           <thead>
@@ -166,7 +182,7 @@ function RawData({ report }: { report: ScanReport }) {
           Download the full report as JSON
         </button>
       </p>
-    </section>
+    </details>
   );
 }
 
@@ -183,46 +199,28 @@ export function Legend({ kinds = ['observation', 'inference', 'undetermined'] }:
   );
 }
 
-export interface ReportProps {
-  report: ScanReport;
-  /** A saved result from an earlier real scan, not a live one. */
-  recorded?: boolean;
-  /** How long a live result's link keeps working. */
-  retentionHours?: number;
-}
-
-export function Report({ report, recorded, retentionHours }: ReportProps) {
-  const [copied, setCopied] = useState(false);
+export function Report({ report }: { report: ScanReport }) {
   const summary = plainSummary(report);
   const host = new URL(report.target.url).host;
-
-  async function copyLink() {
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      setCopied(true);
-    } catch {
-      // The link is in the address bar either way.
-    }
-  }
 
   return (
     <article className="report">
       <header className={`verdict verdict-${summary.verdict}`}>
         <p className="verdict-host">{host}</p>
+        {summary.page && (
+          <p className="verdict-page">
+            {summary.page.note}
+            {summary.page.leadsTo && (
+              <>
+                {' '}
+                <a href={href('', { target: summary.page.leadsTo })}>Scan {new URL(summary.page.leadsTo).host}</a>
+              </>
+            )}
+          </p>
+        )}
         <h2>{summary.headline}</h2>
         <p className="verdict-why">{summary.explanation}</p>
-        <p className="verdict-meta">
-          {recorded ? `A saved result from a real scan ${ago(report.startedAt)}. Servers change.` : `Scanned ${ago(report.startedAt)}.`}
-          {!recorded && retentionHours !== undefined && (
-            <>
-              {' '}
-              <button type="button" className="link" onClick={() => void copyLink()}>
-                {copied ? 'Link copied' : 'Copy a link to this result'}
-              </button>{' '}
-              (kept for {retentionHours} hours)
-            </>
-          )}
-        </p>
+        <p className="verdict-meta">Scanned {ago(report.startedAt)}.</p>
       </header>
 
       {report.reachable && (
@@ -261,14 +259,33 @@ export function Report({ report, recorded, retentionHours }: ReportProps) {
             ))}
           </ul>
         )}
-        <section className="limits">
-          <h4>What a scan from outside cannot see</h4>
+        {report.page && report.page.evidence.length > 0 && (
+          <details className="fold">
+            <summary>
+              <h4>What this address is</h4>
+              <span className="layer-headline">{summary.page?.note}</span>
+            </summary>
+            <dl className="evidence">
+              {report.page.evidence.map((item) => (
+                <div key={item.label}>
+                  <dt>{item.label}</dt>
+                  <dd>{item.value}</dd>
+                </div>
+              ))}
+            </dl>
+            <p className="fine">Only the HTML the server sent is read. A sign-in form that a script builds after the page loads is not seen.</p>
+          </details>
+        )}
+        <details className="fold limits">
+          <summary>
+            <h4>What a scan from outside cannot see</h4>
+          </summary>
           <ul>
             {NOT_OBSERVABLE.map((item) => (
               <li key={item}>{item}</li>
             ))}
           </ul>
-        </section>
+        </details>
         {report.reachable && <RawData report={report} />}
       </details>
     </article>

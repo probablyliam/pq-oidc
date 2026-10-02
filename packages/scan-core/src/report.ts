@@ -9,7 +9,7 @@ import type { KeySummary } from '@pq-oidc/token-kit/readiness';
 import type { KexClass } from './tls/registry.ts';
 
 /** Bump when findings would change for the same observations. Stored with every report. */
-export const ENGINE_VERSION = '1.0.0';
+export const ENGINE_VERSION = '1.1.0';
 
 /** How a finding is known (ADR 0012). */
 export type FindingKind =
@@ -26,8 +26,8 @@ export type Tone = 'good' | 'caution' | 'bad' | 'neutral';
 
 /** Where in the learning pages a finding is explained. */
 export type LearnLink =
-  | { view: 'login'; landmark: Landmark; mode: LearnMode; attacker?: 'classical' | 'quantum'; label: string }
-  | { view: 'token'; label: string };
+  | { view: 'login'; landmark: Landmark; mode: LearnMode; attacker?: 'classical' | 'quantum' }
+  | { view: 'token' };
 
 export type Landmark = 'login' | 'key-establishment' | 'secure-channel' | 'authentication' | 'success' | 'harvest' | 'forgery';
 export type LearnMode = 'classical' | 'hybrid' | 'pq';
@@ -169,6 +169,20 @@ export interface TransportSummary {
   serverHeader?: string;
 }
 
+/**
+ * What the address is, as far as one fetch of it shows.
+ *   sign-in-service    it publishes OpenID Connect metadata: other sites send people here to log in
+ *   sign-in-page       the HTML it served has a password field
+ *   leads-to-sign-in   it redirects to another origin that is one of the above
+ *   other              none of these was found (a form built later by JavaScript is not seen)
+ */
+export interface PageSummary {
+  kind: 'sign-in-service' | 'sign-in-page' | 'leads-to-sign-in' | 'other';
+  /** The origin the address redirected to, when it left the scanned one. */
+  leadsTo?: string;
+  evidence: { label: string; value: string }[];
+}
+
 export interface OidcSummary {
   found: boolean;
   /** Every URL tried, with what came back. */
@@ -203,6 +217,8 @@ export interface ScanReport {
   trust: TrustResult;
   transport: TransportSummary;
   oidc: OidcSummary;
+  /** Absent in reports from engine 1.0. */
+  page?: PageSummary;
   related: RelatedOrigin[];
   layers: LayerSummary[];
   findings: Finding[];

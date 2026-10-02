@@ -156,7 +156,8 @@ button[aria-pressed='true'] {
   color: var(--paper);
 }
 button.primary:hover:not(:disabled),
-.button.primary:hover {
+.button.primary:hover,
+button[aria-pressed='true']:hover:not(:disabled) {
   background: #263148;
 }
 button.danger {
@@ -366,6 +367,75 @@ footer.site p {
 .examples button.link[aria-pressed='true'] {
   background: none;
   text-decoration-thickness: 3px;
+}
+
+/* Grouped quick-picks: "Try a site" / "Or a local test server". */
+.picks {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+.picks > div {
+  display: grid;
+  grid-template-columns: 11rem 1fr;
+  gap: 4px 14px;
+  align-items: baseline;
+}
+.picks dt {
+  color: var(--ink-soft);
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+.picks dd {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+button.pick {
+  padding: 5px 12px;
+  border: 1.5px solid var(--rule);
+  border-radius: 999px;
+  background: var(--paper);
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+button.pick:hover:not(:disabled) {
+  border-color: var(--ink);
+  background: var(--paper);
+}
+button.pick[aria-pressed='true'] {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+}
+
+/* The classical / PQC / symmetric mark beside an algorithm name. */
+.tag {
+  display: inline-block;
+  padding: 0.5px 6px;
+  border-radius: 3px;
+  font: 700 0.64em/1.5 var(--head);
+  letter-spacing: 0.02em;
+  vertical-align: 0.1em;
+  white-space: nowrap;
+}
+.tag-classical {
+  background: var(--caution-wash);
+  color: var(--caution);
+}
+.tag-pqc {
+  background: var(--good-wash);
+  color: var(--good);
+}
+.tag-symmetric {
+  background: var(--sheet);
+  color: var(--ink-soft);
+}
+.seg .tag {
+  margin-left: 4px;
+}
+.seg button[aria-pressed='true'] .tag {
+  background: var(--paper);
 }
 .band .notice {
   margin-top: 14px;

@@ -14,6 +14,7 @@ import { Finding } from '../components/Finding.tsx';
 import { Legend } from '../components/Report.tsx';
 import { ATTACKS } from '../crypto/attacks.ts';
 import type { AttackContext } from '../crypto/attacks.ts';
+import { encryptJwt } from '../crypto/jwe.ts';
 import { generateKey } from '../crypto/jws.ts';
 import { href } from '../router.ts';
 
@@ -51,27 +52,36 @@ async function fetchKeysDirectly(issuer: string): Promise<KeySource> {
   return { label: discovery.jwks_uri, jwks, declaredIssuer: discovery.issuer === issuer ? undefined : String(discovery.issuer) };
 }
 
-/** A fictional issuer and a token it signed, plus the classic ways of tampering with one. */
-async function buildExample(id: string): Promise<{ token: string; source: KeySource }> {
-  const providerKey = await generateKey(id === 'pq' ? 'ML-DSA-65' : 'RS256', 'example-key-1');
+/** A fictional issuer and a token it signed or encrypted, plus the classic ways of tampering with one. */
+async function buildExample(id: string): Promise<{ token: string; source?: KeySource }> {
   const now = Math.floor(Date.now() / 1000);
-  const context: AttackContext = {
-    providerKey,
-    issuer: 'https://login.example-corp.com',
-    audience: 'payroll',
-    claims: { iss: 'https://login.example-corp.com', aud: 'payroll', sub: 'alice', name: 'Alice Nakamura', email: 'alice.nakamura@example-corp.com', iat: now, exp: now + 3600 },
-  };
+  const claims = { iss: 'https://login.example-corp.com', aud: 'payroll', sub: 'alice', name: 'Alice Nakamura', email: 'alice.nakamura@example-corp.com', iat: now, exp: now + 3600 };
+  // Encrypted tokens carry no signature to check: only the recipient's private key opens them.
+  if (id === 'encrypted') return { token: await encryptJwt(claims) };
+  const providerKey = await generateKey(id === 'pq' ? 'ML-DSA-65' : 'RS256', 'example-key-1');
+  const context: AttackContext = { providerKey, issuer: 'https://login.example-corp.com', audience: 'payroll', claims };
   const attack = ATTACKS.find((a) => a.id === (id === 'pq' ? 'honest' : id)) ?? ATTACKS[0]!;
   return { token: await attack.build(context), source: { label: 'the example issuer’s key set (made on this page)', jwks: { keys: [providerKey.publicJwk] } } };
 }
 
-const EXAMPLES: [id: string, label: string][] = [
-  ['honest', 'a typical token (RS256)'],
-  ['pq', 'a post-quantum token (ML-DSA-65)'],
-  ['edit-claims', 'edited after signing'],
-  ['alg-none', 'signature removed'],
-  ['alg-confusion', 'algorithm confusion'],
-  ['expired', 'expired'],
+const EXAMPLES: { label: string; picks: [id: string, label: string][] }[] = [
+  {
+    label: 'Try a token',
+    picks: [
+      ['honest', 'Typical (RS256)'],
+      ['pq', 'Post-quantum (ML-DSA-65)'],
+      ['encrypted', 'Encrypted (RSA-OAEP-256)'],
+    ],
+  },
+  {
+    label: 'Or a tampered one',
+    picks: [
+      ['edit-claims', 'Edited after signing'],
+      ['alg-none', 'Signature removed'],
+      ['alg-confusion', 'Algorithm confusion'],
+      ['expired', 'Expired'],
+    ],
+  },
 ];
 
 function Facts({ analysis }: { analysis: TokenAnalysis }) {
@@ -201,8 +211,9 @@ export function TokenView({ meta }: { meta: Meta | null }) {
   async function loadExample(id: string) {
     const example = await buildExample(id);
     setToken(example.token);
+    setKeys({ status: 'idle' });
     setExampleId(id);
-    await applyKeys(example.source, example.token);
+    if (example.source) await applyKeys(example.source, example.token);
   }
 
   // Start with something to look at.
@@ -255,14 +266,20 @@ export function TokenView({ meta }: { meta: Meta | null }) {
             Token
           </label>
           <textarea id="jwt" value={token} onChange={(event) => replaceToken(event.target.value.trim())} spellCheck={false} placeholder="eyJhbGciOi…" rows={4} />
-          <p className="examples">
-            <span>Try:</span>
-            {EXAMPLES.map(([id, label]) => (
-              <button key={id} type="button" className="link" aria-pressed={exampleId === id} onClick={() => void loadExample(id)}>
-                {label}
-              </button>
+          <dl className="picks">
+            {EXAMPLES.map((group) => (
+              <div key={group.label}>
+                <dt>{group.label}</dt>
+                <dd>
+                  {group.picks.map(([id, label]) => (
+                    <button key={id} type="button" className="pick" aria-pressed={exampleId === id} onClick={() => void loadExample(id)}>
+                      {label}
+                    </button>
+                  ))}
+                </dd>
+              </div>
             ))}
-          </p>
+          </dl>
         </form>
       </section>
 
@@ -333,8 +350,8 @@ export function TokenView({ meta }: { meta: Meta | null }) {
               </ul>
               <Sizes token={token} analysis={analysis} />
               <p>
-                <a className="learn-link" href={href('learn', { at: 'success', mode: analysis.alg?.quantum === 'no-known-attack' ? 'pq' : 'classical' })}>
-                  See where a token is signed and checked during a login
+                <a className="learn-link" href={href('lab', analysis.alg?.quantum === 'no-known-attack' ? { token: 'mldsa' } : { token: 'ecdsa' })}>
+                  See where a token is signed and checked, in the login lab
                 </a>
               </p>
             </details>

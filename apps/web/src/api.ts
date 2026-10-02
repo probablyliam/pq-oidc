@@ -1,7 +1,4 @@
-/**
- * The web app's side of the API. There are no accounts and no cookies: start
- * a scan, then read it by its ID until it finishes.
- */
+/** The web app's side of the API: start a scan, then read it by its ID until it finishes. */
 import type { ScanReport } from '@pq-oidc/scan-core/report';
 
 export interface Meta {
@@ -10,7 +7,6 @@ export interface Meta {
   /** Local test servers this deployment is allowed to scan. */
   labOrigins: string[];
   allowedPorts: number[];
-  retentionHours: number;
 }
 
 export interface IssuerKeysResult {
@@ -72,7 +68,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 }
 
 export const api = {
-  /** Null when there is no scan service behind this page (the static build on GitHub Pages). */
+  /** Null when there is no scan service behind this page. */
   async meta(): Promise<Meta | null> {
     try {
       // On a static host this path is a 404 page, not JSON, and that is the answer.

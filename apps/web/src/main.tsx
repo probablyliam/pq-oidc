@@ -11,7 +11,7 @@ import { App } from './App.tsx';
 import './styles/base.css';
 import './styles/report.css';
 import './styles/token.css';
-import './styles/stage.css';
+import './styles/lab.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

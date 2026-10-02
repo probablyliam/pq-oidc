@@ -163,7 +163,7 @@ export function createApi(options: ApiOptions) {
   // A scan's ID is its only key: 122 random bits. Whoever has the link can read the result until it expires.
   routes.on('GET', '/api/v1/scans/:id', (ctx) => {
     const row = store.getScan(ctx.params.id ?? '');
-    if (!row) throw new HttpError(404, 'not-found', 'No such scan. Results are kept for a day.');
+    if (!row) throw new HttpError(404, 'not-found', 'No such scan.');
     sendJson(ctx.res, 200, { scan: presentScan(row) });
   });
 
@@ -264,7 +264,7 @@ export function createApi(options: ApiOptions) {
       if (!isWorker(req)) throw new HttpError(401, 'unauthenticated', 'A worker token is required.');
     });
 
-  // Results are kept for a day and then deleted, whether or not anyone looks.
+  // A result outlives the page that asked for it only briefly; then it is deleted.
   const purge = () => {
     const removed = store.purge(now() - config.retentionMs);
     if (removed > 0) log.info('expired scans deleted', { removed });

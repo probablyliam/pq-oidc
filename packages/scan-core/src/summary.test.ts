@@ -74,6 +74,11 @@ describe('the three answers', () => {
     expect(answer('hybrid-only', 'sign-in')).toMatchObject({ status: 'unknown', short: 'Cannot tell from outside', technical: '' });
   });
 
+  it('says what kind of address each one is', () => {
+    expect(summary('classical').page).toMatchObject({ kind: 'sign-in-service', note: 'A sign-in service: other sites send people here to log in.' });
+    expect(summary('hybrid-only').page).toMatchObject({ kind: 'sign-in-page', note: 'A sign-in page: it asks for a password.' });
+  });
+
   it('each answer links to the part of the explanation that shows it', () => {
     expect(answer('classical', 'recording').learn).toMatchObject({ view: 'login', landmark: 'harvest', mode: 'classical' });
     expect(answer('hybrid-only', 'sign-in').learn).toMatchObject({ view: 'token' });

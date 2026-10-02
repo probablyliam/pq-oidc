@@ -1,4 +1,5 @@
-import type { LearnLink } from '@pq-oidc/scan-core/report';
+import type { LearnLink, LearnMode } from '@pq-oidc/scan-core/report';
+import type { Setup } from '../lab/session.ts';
 import { href } from '../router.ts';
 
 /**
@@ -46,9 +47,21 @@ export function KindMark({ kind }: { kind: Kind }) {
   );
 }
 
+/** What each kind of site in a scan result looks like in the login lab. */
+const LAB_SETUP: Record<LearnMode, Setup> = {
+  classical: { kex: 'x25519', cert: 'ecdsa', token: 'ecdsa' },
+  hybrid: { kex: 'hybrid', cert: 'ecdsa', token: 'ecdsa' },
+  pq: { kex: 'hybrid', cert: 'mldsa', token: 'mldsa' },
+};
+
 export function learnHref(link: LearnLink): string {
-  if (link.view === 'login') return href('learn', { mode: link.mode, at: link.landmark, attacker: link.attacker });
-  return href('token');
+  if (link.view === 'token') return href('token');
+  return href('lab', { ...LAB_SETUP[link.mode], computer: link.attacker === 'quantum' ? 'quantum' : undefined });
+}
+
+export function learnText(link: LearnLink): string {
+  if (link.view === 'token') return 'Check a token from this site';
+  return link.attacker ? 'Try this attack in the login lab' : 'See this step in the login lab';
 }
 
 export function Finding({ finding, all }: { finding: FindingLike; all?: FindingLike[] }) {
@@ -86,17 +99,18 @@ export function Finding({ finding, all }: { finding: FindingLike; all?: FindingL
       )}
       {finding.learn && (
         <a className="learn-link" href={learnHref(finding.learn)}>
-          {finding.learn.label}
+          {learnText(finding.learn)}
         </a>
       )}
     </li>
   );
 }
 
-/** In-page jump that leaves the route (which lives in the hash) alone. */
+/** In-page jump that leaves the route (which lives in the hash) alone, opening whatever folds the finding away. */
 function scrollToFinding(event: React.MouseEvent, id: string) {
   event.preventDefault();
   const target = document.getElementById(`finding-${id}`);
+  for (let fold = target?.closest('details'); fold; fold = fold.parentElement?.closest('details') ?? null) fold.open = true;
   target?.scrollIntoView({ block: 'center' });
   target?.classList.add('flash');
   window.setTimeout(() => target?.classList.remove('flash'), 1200);
