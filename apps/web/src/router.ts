@@ -30,8 +30,12 @@ export function useRoute(): Route {
   const [route, setRoute] = useState(() => parseHash(window.location.hash));
   useEffect(() => {
     const onChange = () => {
-      setRoute(parseHash(window.location.hash));
-      window.scrollTo(0, 0);
+      const next = parseHash(window.location.hash);
+      setRoute((previous) => {
+        // A new page starts at the top. A changed option on the same page stays where the reader is.
+        if (previous.path.join('/') !== next.path.join('/')) window.scrollTo(0, 0);
+        return next;
+      });
     };
     window.addEventListener('hashchange', onChange);
     return () => window.removeEventListener('hashchange', onChange);

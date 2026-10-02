@@ -162,6 +162,9 @@
 .kind-simulation i {
   border-top: 3px dotted var(--k-attacker);
 }
+.kind-model i {
+  border-top: 3px dotted var(--ink);
+}
 .legend {
   display: grid;
   gap: 4px;

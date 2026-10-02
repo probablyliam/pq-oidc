@@ -6,7 +6,7 @@ import { href } from '../router.ts';
  * different without relying on colour: a solid rule for something observed, a
  * dashed rule for something inferred, hatching for something not determined.
  */
-export type Kind = 'observation' | 'inference' | 'undetermined' | 'simulation';
+export type Kind = 'observation' | 'inference' | 'undetermined' | 'simulation' | 'model' | 'real';
 
 export interface FindingLike {
   id: string;
@@ -24,13 +24,17 @@ export const KIND_LABEL: Record<Kind, string> = {
   inference: 'Inferred',
   undetermined: 'Could not determine',
   simulation: 'Conceptual simulation',
+  model: 'Simplified model',
+  real: 'Real computation',
 };
 
 export const KIND_MEANING: Record<Kind, string> = {
   observation: 'A real observation: read directly off the connection or from a document the service published.',
   inference: 'An inference: a conclusion drawn from observations, with the reasoning shown.',
   undetermined: 'Something the scanner looked for and could not establish.',
-  simulation: 'An illustration of something that cannot be run today.',
+  simulation: 'An illustration of something that cannot be run today, such as a quantum attack.',
+  model: 'A simplified version of a real protocol, run with real cryptography.',
+  real: 'An operation that actually ran in your browser.',
 };
 
 export function KindMark({ kind }: { kind: Kind }) {

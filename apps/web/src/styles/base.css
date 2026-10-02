@@ -399,6 +399,9 @@ footer.site p {
   body {
     font-size: 1rem;
   }
+  .topbar {
+    position: static;
+  }
   .topbar .logo {
     width: 100%;
   }
