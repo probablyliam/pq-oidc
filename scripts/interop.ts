@@ -7,7 +7,7 @@
  * It also checks that the Python verifier rejects every forged token with the
  * same rejection code as the TypeScript verifier in packages/token-kit.
  *
- * Needs Python with interop/python/requirements.txt installed. Set PYTHON to
+ * Needs Python 3.10+ with interop/python/requirements.txt installed. Set PYTHON to
  * choose the interpreter; otherwise interop/python/.venv is used if present.
  */
 import { spawnSync } from 'node:child_process';
