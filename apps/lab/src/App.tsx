@@ -15,7 +15,7 @@ export function App() {
         <nav aria-label="On this page">
           <a href="#check">Check</a>
           <a href="#how">What it means</a>
-          <a href="#catch">The catch</a>
+          <a href="#catch">Why not yet</a>
           <a href="#switch">Make the switch</a>
           <a href={REPO_URL}>GitHub</a>
         </nav>

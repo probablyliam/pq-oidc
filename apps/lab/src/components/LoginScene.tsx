@@ -1,34 +1,39 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { generateKey, signJwt, verifyJwt } from '../crypto/jws.ts';
 import type { LabKey } from '../crypto/jws.ts';
+import { Stage } from './Stage.tsx';
+import type { Packet, Spot } from './Stage.tsx';
 import { TokenView } from './TokenView.tsx';
 
 /**
- * Two acts, drawn as four-frame strips that stay on screen:
- *   1. Alice logs in. A familiar form on the left, what happens behind it on the right.
+ * Two scenes on the same three machines, stepped through at the reader's pace:
+ *   1. Alice logs in.
  *   2. Mallory, an attacker, tries to get in as Alice without the password.
  *
- * Colour is fixed throughout: green is the login service's secret key (and
- * anything signed with it), blue is the public key anyone can copy, red is
- * anything the attacker makes.
+ * Colour is fixed: green is the login service's secret key and any signature
+ * made with it, blue is the public key, red is anything the attacker makes.
  *
- * Every signature and check is real. The quantum computer is the one simulated
- * part: for today's signature we reveal the service's actual secret key, which
- * is what Shor's algorithm would compute from the public key.
+ * A signature is drawn as a row of tall and short bars. The public key
+ * "expects" a particular row; checking a signature is lining the two up.
+ * The real signatures and checks run underneath (ES256 or ML-DSA-65); with
+ * today's signature and a quantum computer, the page reveals the service's
+ * actual secret key, which is what Shor's algorithm would compute.
  */
 const ISSUER = 'https://login.example';
 const APP = 'payroll';
-const FRAME_MS = 1800;
-const CRACK_MS = 3400;
+const CRACK_MS = 3600;
 
 type Signature = 'old' | 'new';
 const ALG = { old: 'ES256', new: 'ML-DSA-65' } as const;
 
+/** The bar patterns: what the login service's key produces, and what a made-up key produces. */
+const REAL = [1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1];
+const FAKE = [0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 1, 0];
+
 interface Keys {
   service: Record<Signature, LabKey>;
   mallory: Record<Signature, LabKey>;
-  /** The service's real ES256 secret key, shown when the quantum computer "finds" it. */
   oldSecret: string;
 }
 
@@ -55,7 +60,7 @@ async function makeToken(key: LabKey, keys: Keys, signature: Signature) {
   return { token, accepted: result.ok };
 }
 
-/* ---------- Small drawn pieces ---------- */
+/* ---------- Drawn pieces ---------- */
 
 function Key({ kind, children }: { kind: 'secret' | 'public' | 'attacker'; children: ReactNode }) {
   return (
@@ -69,39 +74,160 @@ function Key({ kind, children }: { kind: 'secret' | 'public' | 'attacker'; child
   );
 }
 
-function Person({ who }: { who: 'alice' | 'mallory' }) {
+/** A signature, drawn as bars. `against` colours each bar by whether it matches the expected row. */
+function Bars({ pattern, tone, against }: { pattern: number[]; tone: 'secret' | 'attacker' | 'public'; against?: number[] }) {
   return (
-    <span className={`person ${who}`}>
-      <i aria-hidden="true">{who === 'alice' ? 'A' : 'M'}</i>
-      {who === 'alice' ? 'Alice' : 'Mallory'}
+    <span className={`bars ${tone}`} aria-hidden="true">
+      {pattern.map((bit, i) => (
+        <i key={i} className={`${bit ? 'hi' : 'lo'} ${against ? (against[i] === bit ? 'match' : 'miss') : ''}`} />
+      ))}
     </span>
   );
 }
 
-function Box({ children }: { children: ReactNode }) {
-  return <span className="sysbox">{children}</span>;
-}
+type Signed = 'real' | 'fake' | undefined;
 
-/** A login token, with its signature drawn in the colour of the key that made it. */
-function MiniToken({ signedWith, forged }: { signedWith: 'secret' | 'attacker'; forged?: boolean }) {
+/** A login token. Its signature is green if made with the service's secret key, red if made with any other key. */
+function Token({ signed, forged }: { signed: Signed; forged?: boolean }) {
   return (
     <span className={`minitoken ${forged ? 'forged' : ''}`}>
       <b>Login token</b>
       <span>“This is Alice”</span>
-      <span className={`strip ${signedWith}`}>signature</span>
+      {signed ? (
+        <Bars pattern={signed === 'real' ? REAL : FAKE} tone={signed === 'real' ? 'secret' : 'attacker'} />
+      ) : (
+        <span className="unsigned">not signed yet</span>
+      )}
     </span>
   );
 }
 
-const Arrow = ({ label }: { label?: string }) => <span className="arrow">{label}</span>;
-
-function Frame({ n, shown, title, children }: { n: number; shown: boolean; title: string; children: ReactNode }) {
+/** Signing, drawn: an unsigned token and a key go in, a signed token comes out. */
+function SignBench({ keyKind, keyLabel, result, forged }: { keyKind: 'secret' | 'attacker'; keyLabel: string; result: 'real' | 'fake'; forged?: boolean }) {
   return (
-    <li className={`frame ${shown ? 'shown' : ''}`}>
-      <span className="frame-n">{n}</span>
-      <div className="frame-pic">{children}</div>
-      <p>{title}</p>
-    </li>
+    <div className="bench-op">
+      <Token signed={undefined} forged={forged} />
+      <span className="op">+</span>
+      <Key kind={keyKind}>{keyLabel}</Key>
+      <span className="op">=</span>
+      <Token signed={result} forged={forged} />
+    </div>
+  );
+}
+
+/** Checking, drawn: the token's signature lined up against what the public key expects. */
+function CheckBench({ signed }: { signed: 'real' | 'fake' }) {
+  const fits = signed === 'real';
+  return (
+    <div className="bench-check">
+      <div>
+        <span>Signature on the token</span>
+        <Bars pattern={signed === 'real' ? REAL : FAKE} tone={fits ? 'secret' : 'attacker'} against={REAL} />
+      </div>
+      <div>
+        <span>What the public key expects</span>
+        <Bars pattern={REAL} tone="public" />
+      </div>
+    </div>
+  );
+}
+
+function MachineHead({ icon, name, owner }: { icon: 'laptop' | 'server'; name: string; owner: string }) {
+  return (
+    <header className="machine-head">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        {icon === 'laptop' ? <path d="M5 5h14v10H5zM2 19h20" /> : <path d="M4 4h16v6H4zM4 14h16v6H4zM7 7h.01M7 17h.01" />}
+      </svg>
+      <div>
+        <b>{name}</b>
+        <span>{owner}</span>
+      </div>
+    </header>
+  );
+}
+
+function Holds({ locked, children, note }: { locked?: boolean; children: ReactNode; note: string }) {
+  return (
+    <div className={`holds ${locked ? 'locked' : ''}`}>
+      {children}
+      <span>{note}</span>
+    </div>
+  );
+}
+
+function LoginService({ signing }: { signing?: boolean }) {
+  return (
+    <>
+      <MachineHead icon="server" name="Login service" owner="run by Google, or your company" />
+      <Holds locked note="never leaves this server">
+        <Key kind="secret">Secret key</Key>
+      </Holds>
+      <Holds note="published for anyone to copy">
+        <Key kind="public">Public key</Key>
+      </Holds>
+      {signing && <SignBench keyKind="secret" keyLabel="Secret key" result="real" />}
+    </>
+  );
+}
+
+function PayrollApp({ checking, fooled }: { checking?: 'real' | 'fake'; fooled?: boolean }) {
+  return (
+    <>
+      <MachineHead icon="server" name="Payroll app" owner="the app being logged in to" />
+      <Holds note="a copy, to check signatures with">
+        <Key kind="public">Public key</Key>
+      </Holds>
+      {checking && (
+        <>
+          <CheckBench signed={checking} />
+          <p className={`check ${checking === 'real' ? (fooled ? 'fooled' : 'fits') : 'refused'}`}>
+            {checking === 'real' ? 'It fits. Let them in.' : 'It doesn’t fit. Refused.'}
+          </p>
+        </>
+      )}
+    </>
+  );
+}
+
+/** A clickable timeline: the reader moves through the steps at their own pace. */
+function Timeline({
+  titles,
+  at,
+  onGo,
+  caption,
+  idle,
+}: {
+  titles: string[];
+  at: number;
+  onGo: (step: number) => void;
+  caption: string;
+  idle: string;
+}) {
+  const started = at > 0;
+  return (
+    <div className="timeline">
+      <ol>
+        {titles.map((title, i) => (
+          <li key={title}>
+            <button type="button" aria-current={i + 1 === at ? 'step' : undefined} disabled={!started} onClick={() => onGo(i + 1)}>
+              <span>{i + 1}</span>
+              {title}
+            </button>
+          </li>
+        ))}
+      </ol>
+      <div className="timeline-now">
+        <p aria-live="polite">{started ? caption : idle}</p>
+        <div className="timeline-nav">
+          <button type="button" disabled={at <= 1} onClick={() => onGo(at - 1)}>
+            Back
+          </button>
+          <button type="button" className="primary" disabled={!started || at >= titles.length} onClick={() => onGo(at + 1)}>
+            Next step
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -109,39 +235,38 @@ function Frame({ n, shown, title, children }: { n: number; shown: boolean; title
  * The attack on the key itself. When the key can be worked out, its real
  * characters lock in one at a time; when it can't, the search just churns.
  */
-function Cracker({ target, succeeds, running, done }: { target: string; succeeds: boolean; running: boolean; done: boolean }) {
-  const LENGTH = 24;
+function Cracker({ target, succeeds, state }: { target: string; succeeds: boolean; state: 'idle' | 'running' | 'done' }) {
+  const LENGTH = 22;
   const [text, setText] = useState('·'.repeat(LENGTH));
   const [locked, setLocked] = useState(0);
 
   useEffect(() => {
-    if (!running && !done) return;
+    if (state === 'idle') {
+      setText('·'.repeat(LENGTH));
+      setLocked(0);
+      return;
+    }
     const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const finish = () => {
       setLocked(succeeds ? LENGTH : 0);
       setText(succeeds ? target.slice(0, LENGTH) : '?'.repeat(LENGTH));
     };
-    if (done || reduced) return finish();
+    if (state === 'done' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return finish();
 
     const started = performance.now();
     const timer = window.setInterval(() => {
-      const progress = Math.min(1, (performance.now() - started) / (CRACK_MS - 400));
+      const progress = Math.min(1, (performance.now() - started) / CRACK_MS);
       const fixed = succeeds ? Math.floor(progress * LENGTH) : 0;
       let next = target.slice(0, fixed);
       for (let i = fixed; i < LENGTH; i++) next += alphabet[Math.floor(Math.random() * alphabet.length)];
       setLocked(fixed);
       setText(next);
-      if (progress >= 1) {
-        window.clearInterval(timer);
-        finish();
-      }
     }, 70);
     return () => window.clearInterval(timer);
-  }, [running, done, succeeds, target]);
+  }, [state, succeeds, target]);
 
   return (
-    <span className={`cracker ${done ? (succeeds ? 'found' : 'failed') : ''}`} aria-hidden="true">
+    <span className={`cracker ${state === 'done' ? (succeeds ? 'found' : 'failed') : ''}`} aria-hidden="true">
       <span className="locked">{text.slice(0, locked)}</span>
       <span>{text.slice(locked)}</span>
     </span>
@@ -150,149 +275,166 @@ function Cracker({ target, succeeds, running, done }: { target: string; succeeds
 
 /* ---------- The section ---------- */
 
+interface Attack {
+  step: number;
+  token: string;
+  accepted: boolean;
+  signature: Signature;
+  quantum: boolean;
+  /** Has the key search finished? It keeps its result if the reader steps back to it. */
+  searched: boolean;
+}
+
+const LOGIN_TITLES = ['Password sent', 'Token signed', 'Token returned', 'Token handed over', 'Signature checked'];
+const LOGIN_CAPTIONS = [
+  'Alice’s password goes to the login service, not to the app.',
+  'The login service checks the password, writes a token saying “this is Alice”, and signs it with its secret key. The key itself stays put.',
+  'The signed token comes back to Alice’s browser.',
+  'Her browser hands the token to the Payroll app.',
+  'The app lines the signature up against its copy of the public key. Every bar matches, so Alice is in.',
+];
+const ATTACK_TITLES = ['Public key copied', 'Secret key attacked', 'Token forged', 'Token sent', 'Signature checked'];
+
 export function LoginScene() {
   const [keys, setKeys] = useState<Keys>();
   const [email, setEmail] = useState('alice@example.com');
   const [password, setPassword] = useState('correct-horse');
-
-  // Act 1: Alice
-  const [login, setLogin] = useState<{ frame: number; token: string }>();
-  // Act 2: Mallory
+  const [login, setLogin] = useState<{ step: number; token: string }>();
   const [signature, setSignature] = useState<Signature>('old');
   const [quantum, setQuantum] = useState(false);
-  const [attack, setAttack] = useState<{ frame: number; token: string; accepted: boolean; signature: Signature; quantum: boolean }>();
+  const [attack, setAttack] = useState<Attack>();
   const [found, setFound] = useState<Record<string, boolean>>({});
-  const timers = useRef<number[]>([]);
 
   useEffect(() => {
     makeKeys().then(setKeys);
-    return () => timers.current.forEach(window.clearTimeout);
   }, []);
-
-  function schedule(steps: [delay: number, run: () => void][]) {
-    timers.current.forEach(window.clearTimeout);
-    let at = 0;
-    timers.current = steps.map(([delay, run]) => window.setTimeout(run, (at += delay)));
-  }
 
   async function onLogin(event: FormEvent) {
     event.preventDefault();
     if (!keys) return;
     const { token } = await makeToken(keys.service.old, keys, 'old');
-    setLogin({ frame: 1, token });
-    schedule([2, 3, 4].map((frame) => [FRAME_MS, () => setLogin({ frame, token })]));
+    setLogin({ step: 1, token });
   }
 
   async function startAttack() {
     if (!keys) return;
     const cracked = quantum && signature === 'old';
-    const key = cracked ? keys.service.old : keys.mallory[signature];
-    const { token, accepted } = await makeToken(key, keys, signature);
-    const run = { token, accepted, signature, quantum };
-    setAttack({ ...run, frame: 1 });
-    schedule([
-      [FRAME_MS, () => setAttack({ ...run, frame: 2 })],
-      [CRACK_MS, () => setAttack({ ...run, frame: 3 })],
-      [FRAME_MS, () => setAttack({ ...run, frame: 4 })],
-      [FRAME_MS, () => {
-        setAttack({ ...run, frame: 5 });
-        setFound((f) => ({ ...f, [`${signature}-${quantum}`]: accepted }));
-      }],
-    ]);
+    const { token, accepted } = await makeToken(cracked ? keys.service.old : keys.mallory[signature], keys, signature);
+    setAttack({ step: 1, token, accepted, signature, quantum, searched: false });
   }
 
-  const loggedIn = login?.frame === 4;
-  const loggingIn = login !== undefined && !loggedIn;
-  const attacking = attack !== undefined && attack.frame < 5;
+  function goAttack(step: number) {
+    if (!attack) return;
+    // Leaving the search step counts as letting it finish.
+    setAttack({ ...attack, step, searched: attack.searched || step > 2 });
+    if (step === 5) setFound((f) => ({ ...f, [`${attack.signature}-${attack.quantum}`]: attack.accepted }));
+  }
+
+  // The key search runs once, the first time step 2 is shown.
+  const searching = attack?.step === 2 && !attack.searched;
+  useEffect(() => {
+    if (!searching) return;
+    const timer = window.setTimeout(() => setAttack((a) => (a ? { ...a, searched: true } : a)), CRACK_MS + 200);
+    return () => window.clearTimeout(timer);
+  }, [searching]);
+
+  /* ----- Scene 1 ----- */
+  const ls = login?.step ?? 0;
+  const loginPacket: Packet | undefined =
+    ls === 1
+      ? { id: 'password', from: 'left', at: 'service', content: <span className="secretword">password</span> }
+      : ls === 3
+        ? { id: 'token-back', from: 'service', at: 'left', content: <Token signed="real" /> }
+        : ls === 4
+          ? { id: 'token-on', from: 'left', at: 'app', content: <Token signed="real" /> }
+          : undefined;
+  const loginBusy: Spot | undefined = ls === 2 ? 'service' : ls === 5 ? 'app' : undefined;
+  const loggedIn = ls === 5;
+
+  /* ----- Scene 2 ----- */
+  const as = attack?.step ?? 0;
   const cracked = attack ? attack.quantum && attack.signature === 'old' : false;
-  const crackFail = attack
+  const forgedWith = cracked ? 'real' : 'fake';
+  const attackPacket: Packet | undefined =
+    as === 1
+      ? { id: 'copy', from: 'service', at: 'left', content: <Key kind="public">Public key</Key> }
+      : as === 4
+        ? { id: 'forged', from: 'left', at: 'app', content: <Token signed={forgedWith} forged /> }
+        : undefined;
+  const attackBusy: Spot | undefined = as === 5 ? 'app' : as === 2 || as === 3 ? 'left' : undefined;
+  const whyNot = attack
     ? attack.signature === 'new'
-      ? attack.quantum
-        ? 'No known method works on this key, even for a quantum computer.'
-        : 'No known method works on this key.'
+      ? 'No known method works on this kind of key' + (attack.quantum ? ', even on a quantum computer.' : '.')
       : 'A normal computer would need billions of years.'
     : '';
+  const attackCaptions = [
+    'Mallory copies the login service’s public key. Anyone can: it is published.',
+    attack?.searched
+      ? cracked
+        ? 'Her quantum computer worked the secret key out from the public one. The login service was never touched.'
+        : `She tried to work the secret key out from the public one. ${whyNot}`
+      : 'She tries to work the secret key out from the public one…',
+    cracked
+      ? 'She writes a token saying she is Alice and signs it with the real secret key. The signature is identical to a genuine one.'
+      : 'Without the secret key, she signs a token with a key she made up. The signature comes out different.',
+    'She skips the login page and sends the token straight to the Payroll app.',
+    attack?.accepted
+      ? 'The app lines the signature up against the public key. Every bar matches. It can’t tell this token from a real one, and Mallory is in as Alice.'
+      : 'The app lines the signature up against the public key. The bars don’t match, so it refuses.',
+  ];
+  const searchState = as < 2 ? 'idle' : attack?.searched ? 'done' : 'running';
 
   return (
     <section className="block" id="how">
       <h2>What that result means</h2>
 
-      <ul className="colour-key">
-        <li>
-          <Key kind="secret">Secret key</Key> Only the login service has it. It signs every login.
-        </li>
-        <li>
-          <Key kind="public">Public key</Key> Published. Apps use it to check signatures. Anyone can copy it.
-        </li>
-      </ul>
-
-      {/* ---------- Act 1 ---------- */}
+      {/* ---------- Scene 1 ---------- */}
       <div className="act">
-        <h3 className="act-title">
-          <Person who="alice" /> logs in to Payroll
-        </h3>
-        <div className="scene">
-          <div className="browser">
-            <div className="browser-bar">
-              <span className="browser-who">Alice’s browser</span>
-              <span className="browser-url">payroll.example/{loggedIn ? 'home' : 'login'}</span>
-            </div>
-            <div className="browser-page">
-              {loggedIn ? (
-                <div className="app-home">
-                  <h3>Welcome, Alice</h3>
-                  <ul>
-                    <li>Next pay day: 15 October</li>
-                    <li>Bank account ending 4471</li>
-                    <li>Holiday left: 12 days</li>
-                  </ul>
-                  <button type="button" onClick={() => setLogin(undefined)}>
-                    Log out
-                  </button>
-                </div>
-              ) : (
-                <form className="login-form" onSubmit={onLogin}>
-                  <h3>Payroll</h3>
-                  <label>
-                    Email
-                    <input value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="off" />
-                  </label>
-                  <label>
-                    Password
-                    <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="off" />
-                  </label>
-                  <button type="submit" className="primary" disabled={!keys || loggingIn}>
-                    {loggingIn ? 'Logging in…' : 'Log in'}
-                  </button>
-                </form>
-              )}
-            </div>
-          </div>
-
-          <ol className={`strip-frames ${login ? '' : 'waiting'}`} aria-live="polite">
-            <Frame n={1} shown={(login?.frame ?? 0) >= 1} title="The login service checks Alice’s password.">
-              <Person who="alice" />
-              <Arrow label="password" />
-              <Box>Login service</Box>
-            </Frame>
-            <Frame n={2} shown={(login?.frame ?? 0) >= 2} title="It writes a token and signs it with its secret key.">
-              <Box>Login service</Box>
-              <Key kind="secret">signs</Key>
-              <MiniToken signedWith="secret" />
-            </Frame>
-            <Frame n={3} shown={(login?.frame ?? 0) >= 3} title="Alice’s browser carries the token to the app.">
-              <MiniToken signedWith="secret" />
-              <Arrow />
-              <Box>Payroll app</Box>
-            </Frame>
-            <Frame n={4} shown={(login?.frame ?? 0) >= 4} title="The app checks the signature with the public key. It fits, so Alice is in.">
-              <Box>Payroll app</Box>
-              <Key kind="public">checks</Key>
-              <span className="verdict yes">Signature fits</span>
-            </Frame>
-          </ol>
-        </div>
-        {loggedIn && (
+        <h3 className="act-title">Alice logs in to Payroll</h3>
+        <Stage
+          busy={loginBusy}
+          packet={loginPacket}
+          left={
+            <>
+              <MachineHead icon="laptop" name="Alice’s computer" owner="her browser" />
+              <div className="screen">
+                {loggedIn ? (
+                  <div className="app-home">
+                    <b className="success">Login successful</b>
+                    <button type="button" onClick={() => setLogin(undefined)}>
+                      Log out
+                    </button>
+                  </div>
+                ) : (
+                  <form className="login-form" onSubmit={onLogin}>
+                    <b>Payroll</b>
+                    <label>
+                      Email
+                      <input value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="off" />
+                    </label>
+                    <label>
+                      Password
+                      <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="off" />
+                    </label>
+                    <button type="submit" className="primary" disabled={!keys || ls > 0}>
+                      {ls > 0 ? 'Logging in…' : 'Log in'}
+                    </button>
+                  </form>
+                )}
+              </div>
+            </>
+          }
+          service={<LoginService signing={ls === 2} />}
+          app={<PayrollApp checking={ls === 5 ? 'real' : undefined} />}
+        />
+        <Timeline
+          titles={LOGIN_TITLES}
+          at={ls}
+          onGo={(step) => login && setLogin({ ...login, step })}
+          caption={LOGIN_CAPTIONS[ls - 1] ?? ''}
+          idle="Press Log in, then step through what happens."
+        />
+        {loggedIn && login && (
           <details>
             <summary>See the real token</summary>
             <TokenView token={login.token} />
@@ -300,24 +442,22 @@ export function LoginScene() {
         )}
       </div>
 
-      {/* ---------- Act 2 ---------- */}
+      {/* ---------- Scene 2 ---------- */}
       <div className="act attack">
-        <h3 className="act-title">
-          <Person who="mallory" /> is an attacker. She wants in as Alice and doesn’t have the password.
-        </h3>
+        <h3 className="act-title">Mallory, an attacker, wants in as Alice. She doesn’t have the password.</h3>
         <p className="act-plan">
-          Her plan: the app only checks the signature, so if she can make a signature that fits, she doesn’t need the
-          password. For that she needs the secret key.
+          The app only checks the signature. If Mallory can make a signature that fits, she doesn’t need the password.
+          For that she needs the secret key, which is locked inside the login service.
         </p>
 
         <div className="setup">
           <div className="switch-row">
             <span>The login service signs with</span>
             <div className="seg" role="group" aria-label="Signature kind">
-              <button type="button" aria-pressed={signature === 'old'} disabled={attacking} onClick={() => setSignature('old')}>
+              <button type="button" aria-pressed={signature === 'old'} onClick={() => setSignature('old')}>
                 Today’s signature
               </button>
-              <button type="button" aria-pressed={signature === 'new'} disabled={attacking} onClick={() => setSignature('new')}>
+              <button type="button" aria-pressed={signature === 'new'} onClick={() => setSignature('new')}>
                 Quantum-proof signature
               </button>
             </div>
@@ -325,143 +465,99 @@ export function LoginScene() {
           <div className="switch-row">
             <span>Mallory has</span>
             <div className="seg" role="group" aria-label="Attacker's computer">
-              <button type="button" aria-pressed={!quantum} disabled={attacking} onClick={() => setQuantum(false)}>
+              <button type="button" aria-pressed={!quantum} onClick={() => setQuantum(false)}>
                 A normal computer
               </button>
-              <button type="button" aria-pressed={quantum} disabled={attacking} onClick={() => setQuantum(true)}>
+              <button type="button" aria-pressed={quantum} onClick={() => setQuantum(true)}>
                 A quantum computer
               </button>
             </div>
           </div>
-          <button type="button" className="danger" disabled={!keys || attacking} onClick={() => void startAttack()}>
-            {attacking ? 'Attacking…' : 'Start the attack'}
+          <button type="button" className="danger" disabled={!keys} onClick={() => void startAttack()}>
+            {attack ? 'Start a new attack' : 'Start the attack'}
           </button>
         </div>
 
-        <div className="scene">
-          <ol className={`strip-frames ${attack ? '' : 'waiting'}`} aria-live="polite">
-            <Frame n={1} shown={(attack?.frame ?? 0) >= 1} title="She copies the login service’s public key. Anyone can.">
-              <Box>Login service</Box>
-              <Key kind="public">copy</Key>
-              <Person who="mallory" />
-            </Frame>
-            <Frame
-              n={2}
-              shown={(attack?.frame ?? 0) >= 2}
-              title={
-                (attack?.frame ?? 0) >= 3
-                  ? cracked
-                    ? 'Her quantum computer works the secret key out from the public one.'
-                    : `She tries to work the secret key out from it. ${crackFail}`
-                  : 'She tries to work the secret key out from the public one…'
-              }
-            >
-              <Key kind="public">in</Key>
-              <Cracker
-                target={keys?.oldSecret ?? ''}
-                succeeds={cracked}
-                running={attack?.frame === 2}
-                done={(attack?.frame ?? 0) >= 3}
+        <Stage
+          tone="attack"
+          busy={attackBusy}
+          packet={attackPacket}
+          left={
+            <>
+              <MachineHead
+                icon="laptop"
+                name="Mallory’s computer"
+                owner={(attack?.quantum ?? quantum) ? 'a quantum computer' : 'a normal computer'}
               />
-              {(attack?.frame ?? 0) >= 3 &&
-                (cracked ? <Key kind="secret">found</Key> : <span className="verdict no">No key</span>)}
-            </Frame>
-            <Frame
-              n={3}
-              shown={(attack?.frame ?? 0) >= 3}
-              title={
-                cracked
-                  ? 'She signs a token saying she is Alice, with the real secret key.'
-                  : 'She signs a token anyway, with a key she made herself.'
-              }
-            >
-              <Person who="mallory" />
-              <Key kind={cracked ? 'secret' : 'attacker'}>signs</Key>
-              <MiniToken signedWith={cracked ? 'secret' : 'attacker'} forged />
-            </Frame>
-            <Frame
-              n={4}
-              shown={(attack?.frame ?? 0) >= 4}
-              title={
-                (attack?.frame ?? 0) >= 5
-                  ? attack?.accepted
-                    ? 'The signature fits. The app can’t tell this token from a real one.'
-                    : 'The signature doesn’t fit the public key. The app refuses.'
-                  : 'She sends it to the app, which checks the signature…'
-              }
-            >
-              <Box>Payroll app</Box>
-              <Key kind="public">checks</Key>
-              {(attack?.frame ?? 0) >= 5 &&
-                (attack?.accepted ? (
-                  <span className="verdict breach">Signature fits</span>
-                ) : (
-                  <span className="verdict yes">Doesn’t fit</span>
-                ))}
-            </Frame>
-          </ol>
-
-          <div className="attack-side">
-            <div className="browser intruder">
-              <div className="browser-bar">
-                <span className="browser-who">Mallory’s browser</span>
-                <span className="browser-url">payroll.example/{attack?.frame === 5 && attack.accepted ? 'home' : 'login'}</span>
-              </div>
-              <div className="browser-page">
-                {attack?.frame === 5 ? (
-                  attack.accepted ? (
-                    <div className="app-home breached">
-                      <p className="breach">Mallory is in, as Alice.</p>
-                      <h3>Welcome, Alice</h3>
-                      <ul>
-                        <li>Next pay day: 15 October</li>
-                        <li>Bank account ending 4471</li>
-                      </ul>
-                    </div>
-                  ) : (
-                    <div className="app-denied">
-                      <h3>Access denied</h3>
-                      <p>This login token isn’t genuine.</p>
-                    </div>
-                  )
-                ) : (
-                  <p className="waiting-note">{attack ? 'Waiting for the app’s answer…' : 'Nothing sent yet.'}</p>
+              <div className="bench">
+                <div className={`bench-row ${as >= 2 ? 'on' : ''}`}>
+                  <span>Working the secret key out from the public key</span>
+                  {as >= 2 && <Key kind="public">Public key</Key>}
+                  <Cracker target={keys?.oldSecret ?? ''} succeeds={cracked} state={searchState} />
+                  {attack?.searched &&
+                    (cracked ? <Key kind="secret">Secret key, worked out</Key> : <em className="fail">No key. {whyNot}</em>)}
+                </div>
+                {as >= 3 && (
+                  <div className="bench-row on">
+                    <span>Forging a token</span>
+                    <SignBench
+                      keyKind={cracked ? 'secret' : 'attacker'}
+                      keyLabel={cracked ? 'Secret key' : 'Made-up key'}
+                      result={forgedWith}
+                      forged
+                    />
+                  </div>
+                )}
+                {as === 5 && attack && (
+                  <div className="bench-row on">
+                    <span>Her screen</span>
+                    {attack.accepted ? (
+                      <strong className="got-in">Login successful. She is in as Alice.</strong>
+                    ) : (
+                      <strong>Access denied</strong>
+                    )}
+                  </div>
                 )}
               </div>
-            </div>
+            </>
+          }
+          service={<LoginService />}
+          app={<PayrollApp checking={as === 5 ? forgedWith : undefined} fooled={as === 5 && attack?.accepted} />}
+        />
 
-            <table className="outcomes">
-              <caption>Attacks tried</caption>
-              <thead>
-                <tr>
-                  <td />
-                  <th scope="col">Normal computer</th>
-                  <th scope="col">Quantum computer</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(['old', 'new'] as const).map((s) => (
-                  <tr key={s}>
-                    <th scope="row">{s === 'old' ? 'Today’s signature' : 'Quantum-proof'}</th>
-                    {[false, true].map((q) => {
-                      const outcome = found[`${s}-${q}`];
-                      return (
-                        <td key={String(q)} className={outcome === undefined ? 'unknown' : outcome ? 'in' : 'out'}>
-                          {outcome === undefined ? '?' : outcome ? 'Got in' : 'Kept out'}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <Timeline
+          titles={ATTACK_TITLES}
+          at={as}
+          onGo={goAttack}
+          caption={attackCaptions[as - 1] ?? ''}
+          idle="Choose a signature and a computer, start the attack, then step through it."
+        />
 
-        <p className="fine">
-          The quantum computer is simulated, since none is big enough yet: the page reveals the login service’s actual
-          secret key, which is what one would compute. The signatures and the app’s checks are real.
-        </p>
+        <table className="outcomes">
+          <caption>Attacks you’ve run</caption>
+          <thead>
+            <tr>
+              <td />
+              <th scope="col">Normal computer</th>
+              <th scope="col">Quantum computer</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(['old', 'new'] as const).map((s) => (
+              <tr key={s}>
+                <th scope="row">{s === 'old' ? 'Today’s signature' : 'Quantum-proof signature'}</th>
+                {[false, true].map((q) => {
+                  const outcome = found[`${s}-${q}`];
+                  return (
+                    <td key={String(q)} className={outcome === undefined ? 'unknown' : outcome ? 'in' : 'out'}>
+                      {outcome === undefined ? 'Not tried' : outcome ? 'Got in' : 'Kept out'}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </section>
   );

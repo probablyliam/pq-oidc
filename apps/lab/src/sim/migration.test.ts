@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { appStatus, INITIAL_STATE, safeSteps, summarize } from './migration.ts';
+import { appStatus, describeChanges, INITIAL_STATE, phase, safeSteps, summarize } from './migration.ts';
 import type { SimApp, SimState } from './migration.ts';
 
 const withApp = (change: Partial<SimApp>): SimState => ({
@@ -46,5 +46,25 @@ describe('the migration as a whole', () => {
     const end = summarize(steps.at(-1)!);
     expect(end).toMatchObject({ quantumSafe: 4, done: true });
     expect(end.nextStep).toContain('Done.');
+  });
+});
+
+describe('the recommended order', () => {
+  it('moves through the phases in order and logs one line per change', () => {
+    const steps = safeSteps(INITIAL_STATE);
+    const phases = [phase(INITIAL_STATE), ...steps.map(phase)];
+    expect(phases[0]).toBe(1);
+    expect(phases.at(-1)).toBe(5);
+    expect([...phases].sort((a, b) => a - b).at(-1)).toBe(5);
+
+    let previous = INITIAL_STATE;
+    const log: string[] = [];
+    for (const step of steps) {
+      log.push(...describeChanges(previous, step));
+      previous = step;
+    }
+    expect(log).toHaveLength(steps.length);
+    expect(log[0]).toBe('Login service: added the quantum-proof key');
+    expect(log.at(-1)).toBe('Login service: retired the old key');
   });
 });

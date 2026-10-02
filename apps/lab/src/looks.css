@@ -1,0 +1,165 @@
+/*
+ * TEMPORARY: alternative visual directions for comparison, chosen with ?look=b or ?look=c.
+ * The default look (styles.css) is "a". Delete this file and the loader in main.tsx once one is picked.
+ */
+
+/* ---------- B: Schematic. Drafting paper, navy ink, squared corners. ---------- */
+html[data-look='b'] {
+  --paper: #ffffff;
+  --wash: #edf1f6;
+  --ink: #16304f;
+  --ink-soft: #5a6b82;
+  --rule: #c3cedb;
+  --sig: #1f5fd1;
+  --sig-wash: #e3ecfb;
+  --part-payload: #16304f;
+  --text: 'Barlow', 'Segoe UI', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+}
+html[data-look='b'] body {
+  background-color: #f3f6f9;
+  background-image:
+    linear-gradient(#e2e8ef 1px, transparent 1px), linear-gradient(90deg, #e2e8ef 1px, transparent 1px),
+    linear-gradient(#d3dce6 1px, transparent 1px), linear-gradient(90deg, #d3dce6 1px, transparent 1px);
+  background-size:
+    20px 20px,
+    20px 20px,
+    100px 100px,
+    100px 100px;
+}
+html[data-look='b'] h1,
+html[data-look='b'] h2,
+html[data-look='b'] h3,
+html[data-look='b'] .machine-head b,
+html[data-look='b'] .report-verdict {
+  font-family: 'Barlow Semi Condensed', 'Barlow', sans-serif;
+  letter-spacing: 0;
+}
+html[data-look='b'] h1 {
+  font-size: clamp(2.2rem, 4.8vw, 3.2rem);
+}
+html[data-look='b'] *:not(.pips i):not(.person i):not(.keytag):not(.findings li)::before,
+html[data-look='b'] * {
+  border-radius: 2px !important;
+}
+html[data-look='b'] .pips i,
+html[data-look='b'] .keytag {
+  border-radius: 999px !important;
+}
+html[data-look='b'] .topbar,
+html[data-look='b'] .tool-panel,
+html[data-look='b'] .act,
+html[data-look='b'] .tray,
+html[data-look='b'] .worklog,
+html[data-look='b'] .bytes {
+  background: var(--paper);
+}
+html[data-look='b'] .bytes {
+  padding: 16px;
+  border: 2px solid var(--ink);
+}
+html[data-look='b'] .machine-head span,
+html[data-look='b'] .slot-role,
+html[data-look='b'] .report-host {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+}
+html[data-look='b'] .block {
+  border-top: 2px solid var(--ink);
+}
+
+/* ---------- C: Signal. Black and warning yellow, heavy type. ---------- */
+html[data-look='c'] {
+  --ink: #0d0d0d;
+  --ink-soft: #55575c;
+  --rule: #cfd1d6;
+  --wash: #f1f1f2;
+  --mark: #ffd60a;
+  --sig: #0d0d0d;
+  --sig-wash: #fff3b0;
+  --part-signature: #0d0d0d;
+  --part-payload: #8a8d93;
+  --part-header: #cfd1d6;
+  --text: 'Archivo', 'Segoe UI', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+}
+html[data-look='c'] h1,
+html[data-look='c'] h2 {
+  font-weight: 900;
+  font-stretch: 112%;
+  letter-spacing: -0.02em;
+}
+html[data-look='c'] h1 {
+  font-size: clamp(2.3rem, 5.4vw, 3.6rem);
+}
+html[data-look='c'] .topbar {
+  background: var(--ink);
+  border-bottom: 0;
+}
+html[data-look='c'] .topbar .logo,
+html[data-look='c'] .topbar nav a {
+  color: #fff;
+}
+html[data-look='c'] .tool-top {
+  background: var(--mark);
+  box-shadow: 0 0 0 100vmax var(--mark);
+  clip-path: inset(0 -100vmax);
+}
+html[data-look='c'] .tool-top .sub {
+  color: var(--ink);
+}
+html[data-look='c'] .tool-panel,
+html[data-look='c'] .act,
+html[data-look='c'] .card,
+html[data-look='c'] .tray,
+html[data-look='c'] .worklog,
+html[data-look='c'] .machine {
+  background: #fff;
+  border: 3px solid var(--ink);
+  border-radius: 0;
+  box-shadow: 6px 6px 0 var(--ink);
+}
+html[data-look='c'] .machine.busy {
+  box-shadow: 6px 6px 0 var(--mark);
+}
+html[data-look='c'] .act.attack {
+  border-color: var(--bad);
+  box-shadow: 6px 6px 0 var(--bad);
+}
+html[data-look='c'] .card.safe {
+  background: var(--good-wash);
+}
+html[data-look='c'] .card.locked {
+  background: var(--bad-wash);
+}
+html[data-look='c'] button {
+  border-radius: 0;
+  border-width: 3px;
+}
+html[data-look='c'] .scan-row input {
+  border-radius: 0;
+  border-width: 3px;
+}
+html[data-look='c'] a,
+html[data-look='c'] button.link,
+html[data-look='c'] details > summary {
+  color: var(--ink);
+}
+html[data-look='c'] .tabs button[aria-selected='true'] {
+  box-shadow: inset 0 -5px 0 var(--mark);
+}
+html[data-look='c'] .block {
+  border-top: 4px solid var(--ink);
+}
+html[data-look='c'] .keytag.public {
+  color: #1d4ed8;
+  background: #e4ebfd;
+}
+html[data-look='c'] .slot.new,
+html[data-look='c'] .part {
+  border-color: var(--ink);
+}
+html[data-look='c'] .part[aria-pressed='true'],
+html[data-look='c'] .part[aria-pressed='true']:hover:not(:disabled) {
+  background: var(--ink);
+}

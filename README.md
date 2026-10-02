@@ -22,20 +22,20 @@ It checks the login signature only. It doesn't test the encrypted connection to 
 
 <table>
 <tr>
-<td width="50%"><img src="docs/media/login-walkthrough.png" alt="A login form beside four frames showing what happens behind it: password checked, token signed with the secret key, token carried to the app, signature checked with the public key."></td>
-<td width="50%"><img src="docs/media/attack.png" alt="An attacker's four steps: copy the public key, work out the secret key with a quantum computer, sign a fake token, and get in as Alice."></td>
+<td width="50%"><img src="docs/media/login-walkthrough.png" alt="Three machines: Alice's computer, the login service holding a secret key that never leaves it, and the Payroll app. The login service is signing a token; a five-step timeline sits underneath."></td>
+<td width="50%"><img src="docs/media/attack.png" alt="The same machines with an attacker's computer: her quantum computer has worked out the secret key, she forged a token, and the app's check shows every bar matching."></td>
 </tr>
 <tr>
-<td><b>What the result means.</b> Log in with a familiar form and see what happens behind it, frame by frame.</td>
-<td><b>The attack.</b> An attacker tries to get in without the password. You choose the signature and her computer, and watch whether the secret key can be worked out.</td>
+<td><b>What the result means.</b> Log in, then step through what happens between the three machines: what travels, what gets signed, and what never leaves the login service.</td>
+<td><b>The attack.</b> Choose the signature and the attacker's computer, then step through her attempt, including the secret key being worked out and the app's check lining the signature up.</td>
 </tr>
 <tr>
-<td width="50%"><img src="docs/media/catch-bytes.png" alt="One square per byte: the token with the quantum-proof signature is 4,844 bytes and doesn't fit in a cookie."></td>
-<td width="50%"><img src="docs/media/switch-game.png" alt="A parts tray above the login service and four apps; Payroll got the new signature too early and its users are locked out."></td>
+<td width="50%"><img src="docs/media/catch-bytes.png" alt="One square per byte: the token with the quantum-proof signature is about 4,800 bytes and doesn't fit in a cookie, followed by three reasons the switch is slow."></td>
+<td width="50%"><img src="docs/media/switch-game.png" alt="A grid of four apps under one login service after switching everything at once: three apps have locked their users out, each with the reason."></td>
 </tr>
 <tr>
-<td><b>The catch.</b> The quantum-proof signature is about fifty times longer, and the token stops fitting in a cookie.</td>
-<td><b>Make the switch.</b> Drag new parts into the login service and four apps. Fit one too early and its users are locked out.</td>
+<td><b>Why hasn’t everyone switched?</b> The quantum-proof signature is about fifty times bigger, and every app has to change first.</td>
+<td><b>Why not just flip a switch?</b> Try it on a small company and three of four apps lock people out. Then do it in the right order.</td>
 </tr>
 </table>
 
@@ -84,7 +84,7 @@ Beyond that:
 - **Two independent verifiers.** The TypeScript verifier and a separate [Python verifier](interop/python) (built on `pyca/cryptography`) must agree on every honest token and reject six kinds of forgery with identical codes (`npm run interop`).
 - **A real browser.** Chrome silently dropped the 4,895-byte cookie holding the new token; the end-to-end tests reproduce that behaviour.
 - **A real cluster.** CI deploys the service to Kubernetes, signs in through both apps, then switches an unprepared app too early and expects its sign-in to fail.
-- **69 automated tests**, including the classic token attacks and protocol abuse (see [Security](#security)).
+- **70 automated tests**, including the classic token attacks and protocol abuse (see [Security](#security)).
 
 ## Has this been done before?
 
@@ -191,7 +191,7 @@ CI also runs CodeQL, `npm audit`, and Dependabot.
 ## Development
 
 ```bash
-npm test            # 69 tests
+npm test            # 70 tests
 npm run lint && npm run typecheck
 npm run prove       # the evidence above (needs the Python venv)
 npm run interop     # Python <-> Node, both directions

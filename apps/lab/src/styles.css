@@ -35,7 +35,7 @@
 
   --text: 'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif;
   --mono: 'Atkinson Hyperlegible Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
-  --page: 60rem;
+  --page: 72rem;
 
   color-scheme: light;
 }
@@ -808,6 +808,435 @@ table.outcomes td.in {
   color: var(--paper);
 }
 
+/* ---------- The machines diagram ---------- */
+.stage {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 250px;
+  row-gap: 18px;
+  align-items: center;
+}
+.wires {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.wires line {
+  stroke: var(--rule);
+  stroke-width: 3;
+  stroke-dasharray: 2 9;
+  stroke-linecap: round;
+}
+.machine {
+  position: relative;
+  z-index: 1;
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  background: var(--paper);
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+  transition: box-shadow 0.4s ease;
+}
+.machine.busy {
+  box-shadow: 0 0 0 5px var(--mark);
+}
+.stage.attack .m-left {
+  border-color: var(--bad);
+}
+.m-left {
+  grid-row: 1 / span 2;
+}
+/* Where things arrive and leave: just outside each machine, on the wire. */
+.dock {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  top: 50%;
+}
+.m-left .dock {
+  right: -78px;
+}
+.m-service .dock,
+.m-app .dock {
+  left: -78px;
+}
+.packet {
+  position: absolute;
+  z-index: 3;
+  transform: translate(-50%, -50%);
+  transition:
+    left 1.5s ease-in-out,
+    top 1.5s ease-in-out;
+  background: var(--paper);
+  border-radius: 8px;
+  box-shadow: 0 0 0 6px var(--paper);
+}
+.secretword {
+  display: inline-block;
+  font: 600 0.85rem var(--mono);
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--ink);
+  color: var(--paper);
+  letter-spacing: 0.02em;
+}
+.machine-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.machine-head svg {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.stage.attack .m-left .machine-head svg {
+  stroke: var(--bad);
+}
+.stage.attack .m-left .machine-head b {
+  color: var(--bad);
+}
+.machine-head div {
+  display: grid;
+  line-height: 1.25;
+}
+.machine-head span {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+.holds {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+.holds.locked {
+  /* The vault: what is in here never crosses a wire. */
+  border: 2px solid var(--good);
+  background: repeating-linear-gradient(135deg, var(--good-wash) 0 8px, var(--paper) 8px 16px);
+  color: var(--good);
+  font-weight: 600;
+}
+.screen {
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  padding: 14px;
+  background: var(--wash);
+}
+.screen .login-form,
+.screen .app-home {
+  gap: 9px;
+}
+.check {
+  font-weight: 800;
+  font-size: 0.95rem;
+}
+.check.fits {
+  color: var(--good);
+}
+.check.fooled {
+  color: var(--bad);
+}
+.steps-list {
+  margin: 0;
+  padding-left: 24px;
+  display: grid;
+  gap: 4px;
+  max-width: 46rem;
+}
+.steps-list li {
+  color: var(--rule);
+  transition: color 0.4s ease;
+}
+.steps-list li.done {
+  color: var(--ink-soft);
+}
+.steps-list li.now {
+  color: var(--ink);
+  font-weight: 700;
+}
+.bench {
+  display: grid;
+  gap: 8px;
+}
+.bench-row {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 8px 10px;
+  opacity: 0.45;
+  transition: opacity 0.4s ease;
+}
+.bench-row.on {
+  opacity: 1;
+}
+.bench-row > span:first-child {
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}
+.bench-row em {
+  font-style: normal;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+}
+.bench-row strong.got-in {
+  color: var(--bad);
+}
+.attack-foot {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 22px;
+  align-items: start;
+}
+@media (max-width: 860px) {
+  .attack-foot {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* Stack the machines with the person's computer in the middle, so both wires stay short. */
+  .stage {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 64px;
+  }
+  .m-service {
+    order: 1;
+  }
+  .m-left {
+    order: 2;
+    grid-row: auto;
+  }
+  .m-app {
+    order: 3;
+  }
+  .dock {
+    left: auto;
+    right: 70px;
+  }
+  .m-service .dock {
+    left: auto;
+    top: auto;
+    bottom: -32px;
+  }
+  .m-app .dock {
+    left: auto;
+    top: -32px;
+  }
+  .m-left .dock {
+    right: 70px;
+    top: 22px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .packet,
+  .machine,
+  .steps-list li,
+  .bench-row {
+    transition: none;
+  }
+}
+
+/* ---------- Signatures as bars, signing and checking ---------- */
+.bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 18px;
+}
+.bars i {
+  width: 5px;
+  border-radius: 1px;
+  background: currentColor;
+}
+.bars i.hi {
+  height: 18px;
+}
+.bars i.lo {
+  height: 8px;
+}
+.bars.secret {
+  color: var(--good);
+}
+.bars.attacker {
+  color: var(--bad);
+}
+.bars.public {
+  color: var(--sig);
+}
+.bars i.match {
+  background: var(--good);
+}
+.bars i.miss {
+  background: var(--bad);
+}
+.minitoken .bars {
+  margin-top: 4px;
+}
+.unsigned {
+  margin-top: 4px;
+  border: 1px dashed var(--ink-soft);
+  border-radius: 3px;
+  padding: 0 5px;
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+}
+.bench-op {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--wash);
+}
+.bench-op .op {
+  font-weight: 800;
+  font-size: 1.1rem;
+}
+.bench-op .minitoken {
+  padding: 4px 6px;
+  font-size: 0.72rem;
+}
+.bench-op .keytag {
+  font-size: 0.78rem;
+  padding: 2px 7px 2px 5px;
+}
+.bench-op .keytag svg {
+  width: 22px;
+}
+.bench-check {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border-radius: 6px;
+  background: var(--wash);
+}
+.bench-check div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+.success {
+  color: var(--good);
+  font-size: 1.25rem;
+}
+
+/* ---------- The step-through timeline ---------- */
+.timeline {
+  display: grid;
+  gap: 12px;
+}
+.timeline ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+.timeline ol button {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  font-size: 0.9rem;
+  padding: 8px 10px;
+  border-color: var(--rule);
+  color: var(--ink-soft);
+}
+.timeline ol button span {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--wash);
+  font-size: 0.82rem;
+}
+.timeline ol button[aria-current='step'] {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+}
+.timeline ol button[aria-current='step'] span {
+  background: var(--paper);
+  color: var(--ink);
+}
+.act.attack .timeline ol button[aria-current='step'] {
+  border-color: var(--bad);
+  background: var(--bad);
+}
+.act.attack .timeline ol button[aria-current='step'] span {
+  color: var(--bad);
+}
+.timeline-now {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+}
+.timeline-now p {
+  font-size: 1.1rem;
+  max-width: 48rem;
+}
+.timeline-nav {
+  display: flex;
+  gap: 8px;
+}
+.act > table.outcomes {
+  max-width: 34rem;
+}
+@media (max-width: 760px) {
+  .timeline ol {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .timeline-now {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---------- Why not yet ---------- */
+.reasons {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: reason;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 18px 28px;
+}
+.reasons li {
+  counter-increment: reason;
+  border-top: 3px solid var(--ink);
+  padding-top: 10px;
+}
+.reasons li b {
+  display: block;
+}
+.reasons li b::before {
+  content: counter(reason) '. ';
+}
+
 /* ---------- 3. The catch ---------- */
 .bytes {
   margin: 0;
@@ -887,8 +1316,8 @@ table.outcomes td.in {
 }
 .score-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  margin-left: auto;
 }
 .board {
   display: grid;
@@ -896,9 +1325,6 @@ table.outcomes td.in {
   gap: 12px;
 }
 @media (max-width: 640px) {
-  .tray {
-    position: static;
-  }
   .board {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -938,93 +1364,156 @@ table.outcomes td.in {
 .card-why {
   font-size: 0.93rem;
 }
-.tray {
-  /* Stays in reach while you drag a part down to an app further along the page. */
-  position: sticky;
-  top: 56px;
-  z-index: 2;
-  background: var(--paper);
-  border: 2px dashed var(--sig);
-  border-radius: 10px;
-  padding: 12px 14px;
-  display: grid;
-  gap: 8px;
-}
-.tray-label {
-  font-size: 0.93rem;
-  color: var(--ink-soft);
-}
-.parts {
+/* ---------- The switch: one row per app, three columns, old is grey and new is blue ---------- */
+.switch-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  align-items: center;
+  gap: 8px 10px;
 }
-.part {
+.switch-score {
+  margin-left: 6px;
+}
+.switch-score .locked {
+  color: var(--bad);
+}
+.grid-board {
+  display: grid;
+  gap: 12px;
+}
+.service-row {
+  display: grid;
+  grid-template-columns: 9rem auto minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: var(--wash);
+}
+.service-row .dep,
+.depends {
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+}
+.depends {
+  padding-left: 14px;
+  border-left: 3px dotted var(--rule);
+  margin-left: 4.5rem;
+}
+.matrix {
+  display: grid;
+  gap: 6px;
+}
+.matrix-head,
+.matrix-row {
+  display: grid;
+  grid-template-columns: 7rem repeat(3, minmax(0, 1fr)) minmax(0, 1.25fr);
+  gap: 8px;
+  align-items: stretch;
+}
+.matrix-head {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+  padding-inline: 12px;
+}
+.matrix-row {
+  border: 2px solid var(--rule);
+  border-radius: 10px;
+  padding: 10px 12px;
+  align-items: center;
+}
+.matrix-row.safe {
+  border-color: var(--good);
+  background: var(--good-wash);
+}
+.matrix-row.locked {
+  border-color: var(--bad);
+  background: var(--bad-wash);
+}
+/* A part. Grey with a dashed edge is the old part; solid blue is the new one. */
+.cell {
   display: grid;
   gap: 1px;
   text-align: left;
-  border-color: var(--sig);
-  background: var(--sig-wash);
-  cursor: grab;
-}
-.part:hover:not(:disabled) {
-  background: var(--sig-wash);
-}
-.part span {
-  font-weight: 400;
-  font-size: 0.82rem;
-  color: var(--ink-soft);
-}
-.part[aria-pressed='true'],
-.part[aria-pressed='true']:hover:not(:disabled) {
-  background: var(--sig);
-  border-color: var(--sig);
-  color: var(--paper);
-}
-.part[aria-pressed='true'] span {
-  color: var(--paper);
-}
-.slots {
-  display: grid;
-  gap: 8px;
-}
-.card.service .slots {
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-}
-.slot {
-  display: grid;
-  gap: 1px;
-  justify-items: start;
-  border: 2px dashed var(--rule);
-  border-radius: 6px;
   padding: 8px 10px;
+  border: 2px dashed var(--ink-soft);
   background: var(--paper);
+  color: var(--ink-soft);
+  font-weight: 400;
+}
+.cell b {
+  color: var(--ink);
   font-size: 0.93rem;
 }
-.slot-role {
-  font-size: 0.8rem;
-  color: var(--ink-soft);
+.cell span {
+  font-size: 0.82rem;
 }
-.slot.old b {
-  color: var(--ink-soft);
+.cell.old:not(:disabled) span,
+.cell.empty:not(:disabled) span {
+  color: var(--sig);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
-.slot.new {
-  border-style: solid;
-  border-color: var(--sig);
+.cell.new {
+  border: 2px solid var(--sig);
+  background: var(--sig-wash);
+  color: var(--sig);
+}
+.cell.new:hover:not(:disabled) {
   background: var(--sig-wash);
 }
-.slot.open {
-  border-color: var(--sig);
-  background: var(--mark);
-  cursor: pointer;
-}
-.slot.gone b {
+.cell.gone b {
   text-decoration: line-through;
 }
-button.mini {
-  margin-top: 5px;
-  font-size: 0.82rem;
-  padding: 3px 9px;
+.cell:disabled {
+  opacity: 1;
+  cursor: default;
+}
+.result {
+  display: grid;
+  gap: 2px;
+  font-size: 0.88rem;
+}
+.result b {
+  color: var(--ink-soft);
+}
+.matrix-row.safe .result b {
+  color: var(--good);
+}
+.matrix-row.locked .result {
+  color: var(--bad);
+}
+.matrix-row.locked .result b {
+  color: var(--bad);
+}
+.switch-done {
+  background: var(--good-wash);
+  color: var(--good);
+  font-weight: 600;
+  padding: 12px 14px;
+  border-radius: 8px;
+  max-width: 52rem;
+}
+@media (max-width: 820px) {
+  .service-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .service-row > b,
+  .service-row .dep {
+    grid-column: 1 / -1;
+  }
+  .depends {
+    margin-left: 0;
+  }
+  .matrix-head {
+    display: none;
+  }
+  .matrix-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 /* ---------- 5. More ---------- */

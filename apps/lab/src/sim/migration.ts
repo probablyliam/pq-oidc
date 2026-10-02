@@ -100,15 +100,41 @@ function nextStep(state: SimState, statuses: { app: SimApp; status: AppStatus }[
   return 'Done. No login here can be forged with a quantum computer.';
 }
 
+/** A small company: one login service, and four apps its staff sign in to through it. */
 export const INITIAL_STATE: SimState = {
   publishedKeys: { ES256: true, 'ML-DSA-65': false },
   apps: [
-    { id: 'payroll', name: 'Payroll', libraryUpgraded: false, tokenInCookie: true, alg: 'ES256' },
-    { id: 'wiki', name: 'Team Wiki', libraryUpgraded: false, tokenInCookie: false, alg: 'ES256' },
-    { id: 'expenses', name: 'Expenses', libraryUpgraded: true, tokenInCookie: true, alg: 'ES256' },
-    { id: 'portal', name: 'Customer Portal', libraryUpgraded: true, tokenInCookie: false, alg: 'ES256' },
+    { id: 'email', name: 'Email', libraryUpgraded: false, tokenInCookie: true, alg: 'ES256' },
+    { id: 'chat', name: 'Chat', libraryUpgraded: false, tokenInCookie: false, alg: 'ES256' },
+    { id: 'payroll', name: 'Payroll', libraryUpgraded: true, tokenInCookie: true, alg: 'ES256' },
+    { id: 'files', name: 'Files', libraryUpgraded: true, tokenInCookie: false, alg: 'ES256' },
   ],
 };
+
+/** One line per difference between two states, for the work log. */
+export function describeChanges(before: SimState, after: SimState): string[] {
+  const lines: string[] = [];
+  if (!before.publishedKeys['ML-DSA-65'] && after.publishedKeys['ML-DSA-65']) lines.push('Login service: added the quantum-proof key');
+  if (before.publishedKeys.ES256 && !after.publishedKeys.ES256) lines.push('Login service: retired the old key');
+  if (!before.publishedKeys.ES256 && after.publishedKeys.ES256) lines.push('Login service: brought the old key back');
+  for (const app of after.apps) {
+    const was = before.apps.find((a) => a.id === app.id);
+    if (!was) continue;
+    if (!was.libraryUpgraded && app.libraryUpgraded) lines.push(`${app.name}: updated so it can check the new signature`);
+    if (was.tokenInCookie && !app.tokenInCookie) lines.push(`${app.name}: moved the login token out of the cookie`);
+    if (was.alg !== app.alg) {
+      lines.push(app.alg === 'ML-DSA-65' ? `${app.name}: switched to the quantum-proof signature` : `${app.name}: switched back to today’s signature`);
+    }
+  }
+  return lines;
+}
+
+/** Where the company is in the recommended order: 1 add key, 2 prepare apps, 3 switch apps, 4 retire old key, 5 done. */
+export function phase(state: SimState): 1 | 2 | 3 | 4 | 5 {
+  if (!state.publishedKeys['ML-DSA-65']) return 1;
+  if (state.apps.every((a) => a.alg === 'ML-DSA-65')) return state.publishedKeys.ES256 ? 4 : 5;
+  return state.apps.some((a) => a.alg === 'ES256' && a.libraryUpgraded && !a.tokenInCookie) ? 3 : 2;
+}
 
 /** The safe order of operations, used by the "Show me" button. Each step returns a new state. */
 export function safeSteps(start: SimState): SimState[] {

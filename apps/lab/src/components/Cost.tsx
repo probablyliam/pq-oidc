@@ -57,8 +57,11 @@ export function Cost() {
 
   return (
     <section className="block" id="catch">
-      <h2>The catch: the quantum-proof signature is huge</h2>
-      <p className="sub">The same login token, signed both ways just now in your browser. One square is one byte.</p>
+      <h2>So why hasn’t everyone switched?</h2>
+      <p className="sub">
+        The quantum-proof signature is about fifty times bigger. Here is one login token signed both ways, just now, in
+        your browser. One square is one byte.
+      </p>
 
       {pair ? (
         <figure className="bytes">
@@ -86,12 +89,20 @@ export function Cost() {
         <p className="explain">Signing…</p>
       )}
 
-      <p className="note">
-        A browser cookie holds 4,096 bytes, and many apps keep your login token in one. The new token is{' '}
-        {pair ? fmt.format(over) : '…'} bytes too long, so the browser <mark>drops it without telling anyone</mark>: the
-        login looks like it worked, then you’re signed out. Apps also need new code before they can read the new
-        signature. That is why nobody can switch everything at once.
-      </p>
+      <ol className="reasons">
+        <li>
+          <b>It doesn’t fit.</b> Many apps keep your login token in a browser cookie, which holds 4,096 bytes. The new
+          token is {pair ? fmt.format(over) : '…'} bytes over, and the browser <mark>drops it without telling anyone</mark>.
+        </li>
+        <li>
+          <b>Every app has to change first.</b> An app that hasn’t been updated can’t check the new signature, so it
+          turns everyone away.
+        </li>
+        <li>
+          <b>It can’t happen all at once.</b> One login service serves many apps, each run by a different team. They
+          have to move over one at a time.
+        </li>
+      </ol>
     </section>
   );
 }
