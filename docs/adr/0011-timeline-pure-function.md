@@ -33,3 +33,15 @@ The owner's review of the first version: "a really janky animation", a player "f
 - **One control.** Play or pause, and a timeline to drag, with the landmarks named under it. Back, Next, Replay and the speed buttons are gone. The score is authored slowly and shown at a fixed 3x.
 
 `draw` keeps no state beyond a cache of what it last wrote, so the property this decision was made for still holds: the picture depends only on `t`. The tests are unchanged in kind, and now also assert that a watched-only score and an attack score share every beat of the login, so one can replace the other mid-way without anything on the stage moving.
+
+## Second revision: a lab of states, not a timeline at all
+
+The scrubber version still "read too much like a video". The owner wanted something that "feels more interactive and like a lab": toggle what the site uses (with a classical/PQC tag beside each type), log in, see each step revealed, and "be the hacker" in a panel where switching her computer runs the same attempt that fails for an ordinary one and, for the parts still classical, solves the maths for a quantum one and shows what it does next.
+
+So the timeline and `sceneAt` are retired. In their place (`apps/web/src/lab/`):
+
+- **State, not a clock.** The page is a function of three toggles (key exchange, certificate, token — each chosen on its own), the typed login, and the attacker's computer. There is no playhead; changing a toggle re-runs the real cryptography (`runSession`, which reuses the keys of the parts that did not change) and the view follows.
+- **Reveal, not playback.** The three processes are always on the page: ghosted before login, and on login each rises in turn with a small SVG diagram (`Diagram.tsx`). The motion is a one-shot CSS reveal triggered by the login, not a sequence that plays on its own.
+- **One attempt, two endings.** Each attacker job runs the same short attempt (a working state, then a result) for either computer. An ordinary computer always fails; a quantum computer solves the maths for a classical target — the readout churns hex and settles on the recovered key (`Cracker.tsx`) — then the diagram shows the takeover (the recording's lock opens, a forged token is stamped). Against ML-KEM or ML-DSA it stays blocked. Every outcome is a real decryption or signature check from `runAttack`; only the computer is hypothetical.
+
+The reason the first decision was made — that the picture is a pure function of state, checkable without a running animation — holds more simply here: the state is the toggles, and `session.test.ts` asserts the cryptography behind each cell (a typed password is read back only on a classical key exchange, a forgery is accepted only against a classical signature).

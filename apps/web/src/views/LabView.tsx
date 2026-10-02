@@ -2,12 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Tag } from '../components/Tag.tsx';
 import { Cracker } from '../lab/Cracker.tsx';
+import { AttackScene, ProcessScene } from '../lab/Diagram.tsx';
+import type { Job, Phase } from '../lab/Diagram.tsx';
 import { cleanLogin, DEFAULT_SETUP, hex, KEX, LOGIN_LIMITS, passwordIn, runAttack, runSession, SIG } from '../lab/session.ts';
 import type { Attack, Computer, Kex, Login, Session, Setup, Sig } from '../lab/session.ts';
 import { href, navigate } from '../router.ts';
 import type { Route } from '../router.ts';
 
-/** The three public-key choices a site makes, each switchable on its own. */
 const CHOICES = [
   { key: 'kex' as const, label: 'Key exchange', options: [['x25519', KEX.x25519], ['hybrid', KEX.hybrid]] as const },
   { key: 'cert' as const, label: 'Site’s certificate', options: [['ecdsa', SIG.ecdsa], ['mldsa', SIG.mldsa]] as const },
@@ -22,7 +23,8 @@ const setupFromRoute = (route: Route): Setup => ({
   token: isSig(route.query.get('token')) ? (route.query.get('token') as Sig) : DEFAULT_SETUP.token,
 });
 
-/** A labelled value, with its bytes shown as hex. The grammar: dotted border = post-quantum, solid = classical. */
+const prefersReducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 function Value({ label, bytes, note, pq }: { label: string; bytes: string; note?: string; pq?: boolean }) {
   return (
     <div className={`val ${pq ? 'pq' : ''}`}>
@@ -33,53 +35,76 @@ function Value({ label, bytes, note, pq }: { label: string; bytes: string; note?
   );
 }
 
-/** One of the three processes behind the login, filled once the visitor has logged in. */
-function Process({ n, title, pq, children }: { n: number; title: string; pq: boolean; children: React.ReactNode }) {
+/** One of the three processes. Shown ghosted before login, revealed with its diagram after. */
+function Process({ n, title, sub, pq, live, scene, children }: { n: number; title: string; sub: React.ReactNode; pq: boolean; live: boolean; scene: React.ReactNode; children: React.ReactNode }) {
   return (
-    <section className={`process ${pq ? 'pq' : ''}`}>
+    <section className={`process ${pq ? 'pq' : ''} ${live ? 'live' : 'ghost'}`} style={{ ['--i' as string]: n - 1 }}>
       <header>
         <span className="process-n">{n}</span>
-        <h3>{title}</h3>
+        <div>
+          <h3>{title}</h3>
+          <p className="process-sub">{sub}</p>
+        </div>
       </header>
-      {children}
+      {scene}
+      {live && <div className="process-body">{children}</div>}
     </section>
   );
 }
 
-/** One thing the attacker tries, with the "working it out" readout and the outcome. */
-function AttackRow({ n, title, done, computer, target, solved, won, wonText, lostText }: {
+const JOBS: { job: Job; title: string }[] = [
+  { job: 'recording', title: 'Read your password from the recording' },
+  { job: 'site', title: 'Pretend to be the site' },
+  { job: 'token', title: 'Forge a sign-in token' },
+];
+
+/** One attacker job. The same attempt runs for either computer; it settles on won or lost. */
+function AttackRow({ n, job, title, computer, attackKey, won, target, pq, wonText, lostText }: {
   n: number;
+  job: Job;
   title: string;
-  done: boolean;
   computer: Computer;
-  target: string;
-  solved: boolean;
+  /** Changes whenever the session or the computer does, so the attempt replays. */
+  attackKey: string;
   won: boolean;
+  target: string;
+  pq: boolean;
   wonText: string;
   lostText: string;
 }) {
+  const [phase, setPhase] = useState<Phase>('idle');
+  useEffect(() => {
+    if (prefersReducedMotion()) {
+      setPhase(won ? 'won' : 'lost');
+      return;
+    }
+    setPhase('working');
+    // The work takes a beat; a quantum success runs a touch longer so the "solve" lands last.
+    const t = setTimeout(() => setPhase(won ? 'won' : 'lost'), won ? 1500 : 1100);
+    return () => clearTimeout(t);
+  }, [attackKey, won]);
+
   return (
-    <section className={`attack-row ${done ? (won ? 'won' : 'lost') : ''}`}>
+    <section className={`attack-row phase-${phase}`}>
       <header>
         <span className="process-n">{n}</span>
         <h4>{title}</h4>
-        {done && <span className={`outcome ${won ? 'won' : 'lost'}`}>{won ? 'Taken over' : 'Blocked'}</span>}
+        {(phase === 'won' || phase === 'lost') && <span className={`outcome ${phase}`}>{phase === 'won' ? 'Taken over' : 'Blocked'}</span>}
       </header>
-      {done && (
-        <>
-          <Cracker target={target} active={computer === 'quantum'} solved={solved} />
-          <p className="attack-text">{won ? wonText : lostText}</p>
-        </>
-      )}
+      <AttackScene job={job} phase={phase} pq={pq} />
+      <Cracker target={target} active={phase === 'working' || phase === 'won'} solved={phase === 'won'} />
+      <p className="attack-text">{phase === 'working' ? (computer === 'quantum' ? 'Running the math…' : 'Trying every key…') : phase === 'won' ? wonText : phase === 'lost' ? lostText : ''}</p>
     </section>
   );
 }
 
 /**
  * The login lab. The visitor sets what the site uses, logs in with a made-up
- * password, and sees the three processes that run, with real values. A second
- * panel is the attacker: switch the computer she has and watch which processes
- * she can take over. Nothing plays on its own; everything follows the toggles.
+ * password, and the three processes reveal with real values. A second panel is
+ * the attacker: switch her computer and each job runs the same attempt, which
+ * fails for an ordinary computer and, for the parts that are still classical,
+ * succeeds for a quantum one and shows what she does next. Nothing plays on its
+ * own; every change follows a toggle.
  */
 export function LabView({ route }: { route: Route }) {
   const setup = setupFromRoute(route);
@@ -88,7 +113,6 @@ export function LabView({ route }: { route: Route }) {
   const [session, setSession] = useState<Session>();
   const [attack, setAttack] = useState<Attack>();
   const [computer, setComputer] = useState<Computer>('ordinary');
-  // The login the visitor committed to by pressing Log in; a toggle re-runs with it.
   const committed = useRef<Login>(undefined);
   const last = useRef<Session>(undefined);
 
@@ -117,7 +141,6 @@ export function LabView({ route }: { route: Route }) {
     if (committed.current) void logIn(committed.current);
   }, [setupKey]);
 
-  // The attacker's result follows the session and the computer she has.
   useEffect(() => {
     if (!session) return setAttack(undefined);
     let fresh = true;
@@ -132,7 +155,30 @@ export function LabView({ route }: { route: Route }) {
   }, [route.query]);
 
   const who = session?.login.username ?? '';
+  const live = Boolean(session);
   const stolen = attack?.key.decryptedLogin ? passwordIn(attack.key.decryptedLogin) : '';
+  const attackKey = `${setupKey}-${computer}-${session ? 'in' : 'out'}`;
+  const wonFor: Record<Job, boolean> = {
+    recording: attack?.key.decryptedLogin !== undefined,
+    site: attack?.site.accepted ?? false,
+    token: attack?.token.accepted ?? false,
+  };
+  const targetFor: Record<Job, string> = {
+    recording: session ? hex(session.held.client.secretKey, 12) : '',
+    site: session ? hex(session.held.certPrivate, 12) : '',
+    token: session ? hex(session.held.tokenPrivate, 12) : '',
+  };
+  const lostFor = (job: Job, pq: boolean): string =>
+    computer === 'quantum' && pq
+      ? { recording: 'The ML-KEM half has no known quantum attack, so the recording stays sealed.', site: 'ML-DSA has no known quantum attack. A browser rejects her.', token: 'ML-DSA has no known quantum attack. Her forgery is rejected.' }[job]
+      : { recording: 'An ordinary computer cannot work out the private half. The recording stays sealed.', site: 'An ordinary computer cannot recover the certificate key. A browser rejects her.', token: 'An ordinary computer cannot recover the signing key. Her forgery is rejected.' }[job];
+  const wonFor2 = (job: Job): string =>
+    ({
+      recording: `She re-derived the key and opened the recording. Your password: ${stolen}.`,
+      site: 'She recovered the certificate’s private key, so she can sign as the site. A browser accepts her.',
+      token: `She recovered the signing key and wrote a token that says she is ${who}. The site accepts it.`,
+    })[job];
+  const jobPq: Record<Job, boolean> = { recording: KEX[setup.kex].pq, site: SIG[setup.cert].pq, token: SIG[setup.token].pq };
 
   return (
     <section className="sheet lab">
@@ -176,95 +222,67 @@ export function LabView({ route }: { route: Route }) {
         )}
       </div>
 
-      {session && (
-        <>
-          <div className="processes">
-            <Process n={1} title="Key exchange" pq={KEX[setup.kex].pq}>
-              <p className="process-sub">
-                {KEX[setup.kex].name} <Tag kind={KEX[setup.kex].pq ? 'PQC' : 'classical'} />
-              </p>
-              <Value label="Browser sends" bytes={hex(session.clientShare, 7)} note="public" />
-              <Value label="Server sends" bytes={hex(session.serverShare, 7)} note="public" />
-              <Value label="Shared secret" bytes={hex(session.sharedSecret, 7)} note="never sent" pq={KEX[setup.kex].pq} />
-              <p className="process-note">Your password rides inside a channel keyed from this secret.</p>
-              <Value label="Encrypted login" bytes={hex(session.loginRecord.subarray(5), 9)} note="on the wire" />
-            </Process>
-
-            <Process n={2} title="Site proves who it is" pq={SIG[setup.cert].pq}>
-              <p className="process-sub">
-                {SIG[setup.cert].name} <Tag kind={SIG[setup.cert].pq ? 'PQC' : 'classical'} />
-              </p>
-              <Value label="Signature over the handshake" bytes={hex(session.certificateVerify, 9)} note={`${session.certificateVerify.length.toLocaleString('en-US')} bytes`} pq={SIG[setup.cert].pq} />
-              <p className={`check ${session.certificateVerifyValid ? 'ok' : 'bad'}`}>{session.certificateVerifyValid ? 'Browser checked it: this is the real payroll.example' : 'Did not verify'}</p>
-            </Process>
-
-            <Process n={3} title="Sign-in token" pq={SIG[setup.token].pq}>
-              <p className="process-sub">
-                {SIG[setup.token].name} <Tag kind={SIG[setup.token].pq ? 'PQC' : 'classical'} />
-              </p>
-              <Value label={`Token for ${who}`} bytes={hex(new TextEncoder().encode(session.token), 9)} note={`${session.token.length.toLocaleString('en-US')} bytes`} pq={SIG[setup.token].pq} />
-              <p className={`check ${session.tokenValid ? 'ok' : 'bad'}`}>{session.tokenValid ? 'Signed by the site; only it can make one' : 'Did not verify'}</p>
-            </Process>
-          </div>
-
-          <div className="attacker">
-            <header className="attacker-head">
-              <div>
-                <h2>Be the attacker</h2>
-                <p className="sub">She copied everything that crossed the network. What she can do with it depends on her computer.</p>
-              </div>
-              <div className="seg" role="group" aria-label="The attacker’s computer">
-                <button type="button" aria-pressed={computer === 'ordinary'} onClick={() => setComputer('ordinary')}>
-                  Ordinary computer
-                </button>
-                <button type="button" aria-pressed={computer === 'quantum'} onClick={() => setComputer('quantum')}>
-                  Quantum computer
-                </button>
-              </div>
-            </header>
-
-            {attack && (
-              <div className="attack-rows">
-                <AttackRow
-                  n={1}
-                  title="Read your password from the recording"
-                  done
-                  computer={computer}
-                  target={hex(session.held.client.secretKey, 10)}
-                  solved={attack.key.ecdhRecovered && attack.key.decryptedLogin !== undefined}
-                  won={attack.key.decryptedLogin !== undefined}
-                  wonText={`She worked out the browser’s private half, re-derived the key, and opened the recording. Your password: ${stolen}.`}
-                  lostText={computer === 'quantum' && KEX[setup.kex].pq ? 'She recovered the classical half, but the ML-KEM half has no known quantum attack. The recording stays sealed.' : 'An ordinary computer cannot work out the private half. The recording stays sealed.'}
-                />
-                <AttackRow
-                  n={2}
-                  title="Pretend to be the site"
-                  done
-                  computer={computer}
-                  target={hex(session.held.certPrivate, 10)}
-                  solved={attack.site.keyRecovered}
-                  won={attack.site.accepted}
-                  wonText="She recovered the certificate’s private key, so she can sign as the site. A browser would accept her."
-                  lostText={computer === 'quantum' && SIG[setup.cert].pq ? 'The certificate uses ML-DSA. No quantum attack recovers its key. A browser rejects her.' : 'An ordinary computer cannot recover the certificate key. A browser rejects her.'}
-                />
-                <AttackRow
-                  n={3}
-                  title="Forge a sign-in token"
-                  done
-                  computer={computer}
-                  target={hex(session.held.tokenPrivate, 10)}
-                  solved={attack.token.keyRecovered}
-                  won={attack.token.accepted}
-                  wonText={`She recovered the signing key and wrote a token that says she is ${who}. The site accepts it, and never saw a password.`}
-                  lostText={computer === 'quantum' && SIG[setup.token].pq ? 'The token is signed with ML-DSA. No quantum attack recovers the key. Her forgery is rejected.' : 'An ordinary computer cannot recover the signing key. Her forgery is rejected.'}
-                />
-              </div>
+      <ol className="processes" aria-label="What happens when you log in">
+        <li>
+          <Process n={1} title="Key exchange" live={live} pq={KEX[setup.kex].pq} scene={<ProcessScene step="kex" pq={KEX[setup.kex].pq} live={live} />} sub={<>{KEX[setup.kex].name} <Tag kind={KEX[setup.kex].pq ? 'PQC' : 'classical'} /></>}>
+            {session && (
+              <>
+                <Value label="Shared secret" bytes={hex(session.sharedSecret, 7)} note="never sent" pq={KEX[setup.kex].pq} />
+                <Value label="Your login, encrypted" bytes={hex(session.loginRecord.subarray(5), 8)} note="on the wire" />
+              </>
             )}
-            <p className="attacker-foot">
-              The cipher itself is never the target: a quantum computer only weakens AES-256 slightly. What falls is the public-key step around it. <a href={href('')}>Scan a real sign-in page</a> to see which of these a site is exposed to.
-            </p>
-          </div>
-        </>
+          </Process>
+        </li>
+        <li>
+          <Process n={2} title="Site proves who it is" live={live} pq={SIG[setup.cert].pq} scene={<ProcessScene step="cert" pq={SIG[setup.cert].pq} live={live} />} sub={<>{SIG[setup.cert].name} <Tag kind={SIG[setup.cert].pq ? 'PQC' : 'classical'} /></>}>
+            {session && (
+              <>
+                <Value label="Signature over the handshake" bytes={hex(session.certificateVerify, 8)} note={`${session.certificateVerify.length.toLocaleString('en-US')} bytes`} pq={SIG[setup.cert].pq} />
+                <p className={`check ${session.certificateVerifyValid ? 'ok' : 'bad'}`}>{session.certificateVerifyValid ? 'This is the real payroll.example' : 'Did not verify'}</p>
+              </>
+            )}
+          </Process>
+        </li>
+        <li>
+          <Process n={3} title="Sign-in token" live={live} pq={SIG[setup.token].pq} scene={<ProcessScene step="token" pq={SIG[setup.token].pq} live={live} />} sub={<>{SIG[setup.token].name} <Tag kind={SIG[setup.token].pq ? 'PQC' : 'classical'} /></>}>
+            {session && (
+              <>
+                <Value label={`Token for ${who}`} bytes={hex(new TextEncoder().encode(session.token), 8)} note={`${session.token.length.toLocaleString('en-US')} bytes`} pq={SIG[setup.token].pq} />
+                <p className={`check ${session.tokenValid ? 'ok' : 'bad'}`}>{session.tokenValid ? 'Only the site can make one' : 'Did not verify'}</p>
+              </>
+            )}
+          </Process>
+        </li>
+      </ol>
+
+      {session && attack && (
+        <div className="attacker">
+          <header className="attacker-head">
+            <div>
+              <h2>Be the attacker</h2>
+              <p className="sub">She copied everything that crossed the network. Pick her computer and watch each attempt.</p>
+            </div>
+            <div className="seg big" role="group" aria-label="The attacker’s computer">
+              <button type="button" aria-pressed={computer === 'ordinary'} onClick={() => setComputer('ordinary')}>
+                Ordinary computer
+              </button>
+              <button type="button" aria-pressed={computer === 'quantum'} onClick={() => setComputer('quantum')}>
+                Quantum computer
+              </button>
+            </div>
+          </header>
+
+          <ol className="attack-rows">
+            {JOBS.map(({ job, title }, i) => (
+              <li key={job}>
+                <AttackRow n={i + 1} job={job} title={title} computer={computer} attackKey={attackKey} won={wonFor[job]} target={targetFor[job]} pq={jobPq[job]} wonText={wonFor2(job)} lostText={lostFor(job, jobPq[job])} />
+              </li>
+            ))}
+          </ol>
+          <p className="attacker-foot">
+            The cipher itself is never the target: a quantum computer only weakens AES-256 slightly. What falls is the public-key step around it. <a href={href('')}>Scan a real sign-in page</a> to see which of these a site is exposed to.
+          </p>
+        </div>
       )}
     </section>
   );

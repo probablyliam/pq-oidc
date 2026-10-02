@@ -76,7 +76,7 @@ describe('what kind of address was scanned', () => {
       page: { kind: 'other', evidence: [] },
     } as unknown as Parameters<typeof plainSummary>[0];
     const summary = plainSummary(report);
-    expect(summary.page).toEqual({ kind: 'other', note: 'No sign-in found on this page.', leadsTo: undefined });
+    expect(summary.page).toEqual({ kind: 'other', note: 'Not a sign-in page. A scan can still check the connection and the site’s identity below.', leadsTo: undefined });
     expect(summary.answers.find((a) => a.id === 'sign-in')).toMatchObject({ status: 'unknown', short: 'No sign-in found' });
   });
 });

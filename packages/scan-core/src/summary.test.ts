@@ -75,8 +75,8 @@ describe('the three answers', () => {
   });
 
   it('says what kind of address each one is', () => {
-    expect(summary('classical').page).toMatchObject({ kind: 'sign-in-service', note: 'A sign-in service: other sites send people here to log in.' });
-    expect(summary('hybrid-only').page).toMatchObject({ kind: 'sign-in-page', note: 'A sign-in page: it asks for a password.' });
+    expect(summary('classical').page).toMatchObject({ kind: 'sign-in-service', note: 'A sign-in service: other sites send people here to log in. A scan can also check how it signs you in, not just the connection.' });
+    expect(summary('hybrid-only').page).toMatchObject({ kind: 'sign-in-page', note: 'A sign-in page. A scan can also check how it signs you in, not just the connection.' });
   });
 
   it('each answer links to the part of the explanation that shows it', () => {
