@@ -185,10 +185,10 @@ CI also runs CodeQL, `npm audit`, and Dependabot.
 
 ## Design decisions
 
-1. [Build on node-oidc-provider instead of writing an OIDC server](docs/decisions/0001-use-node-oidc-provider.md)
-2. [Use ML-DSA-65 (and why not SLH-DSA, FN-DSA or composite signatures yet)](docs/decisions/0002-ml-dsa-65.md)
-3. [Migrate one app at a time with per-client signing algorithms](docs/decisions/0003-per-client-algorithm.md)
-4. [Keep tokens server-side; cookies hold only a session ID](docs/decisions/0004-server-side-sessions.md)
+1. [Build on node-oidc-provider instead of writing an OIDC server](docs/adr/0001-use-node-oidc-provider.md)
+2. [Use ML-DSA-65 (and why not SLH-DSA, FN-DSA or composite signatures yet)](docs/adr/0002-ml-dsa-65.md)
+3. [Migrate one app at a time with per-client signing algorithms](docs/adr/0003-per-client-algorithm.md)
+4. [Keep tokens server-side; cookies hold only a session ID](docs/adr/0004-server-side-sessions.md)
 
 ## Development
 

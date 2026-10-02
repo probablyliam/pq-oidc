@@ -25,7 +25,7 @@ The PQ-Ready App deliberately tries the naive approach on every sign-in and repo
 
 An app that stores the ID token in a cookie would appear to log in successfully and then log the user straight back out.
 
-**Fix used here:** keep the token server-side and put a 32-character session ID in the cookie ([ADR 0004](decisions/0004-server-side-sessions.md)).
+**Fix used here:** keep the token server-side and put a 32-character session ID in the cookie ([ADR 0004](adr/0004-server-side-sessions.md)).
 
 **Knock-on effects to check in a real migration:**
 

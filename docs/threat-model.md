@@ -45,7 +45,7 @@ Trust boundaries are crossed at the browser (everything it sends is attacker-con
 
 | # | Threat | Mitigation | Evidence |
 |---|---|---|---|
-| S1 | **A quantum computer forges ID tokens.** Shor's algorithm recovers the ES256 private key from the published public key. | Apps migrate to ML-DSA-65 (FIPS 204), which has no known quantum attack. Once every app is migrated, the ES256 key is retired and removed from app allowlists. | `PQ_ID_TOKEN_ALG`, [ADR 0002](decisions/0002-ml-dsa-65.md), [ADR 0003](decisions/0003-per-client-algorithm.md) |
+| S1 | **A quantum computer forges ID tokens.** Shor's algorithm recovers the ES256 private key from the published public key. | Apps migrate to ML-DSA-65 (FIPS 204), which has no known quantum attack. Once every app is migrated, the ES256 key is retired and removed from app allowlists. | `PQ_ID_TOKEN_ALG`, [ADR 0002](adr/0002-ml-dsa-65.md), [ADR 0003](adr/0003-per-client-algorithm.md) |
 | S2 | Attacker sends an unsigned token (`alg: none`). | Verifier rejects `none` before anything else, and it is never on the allowlist. | `verify.ts`, test *rejects an unsigned token* |
 | S3 | Algorithm confusion: attacker signs with HS256 using the public key as the HMAC secret. | Per-app algorithm allowlist; keys are matched by `kid` **and** `alg`. | test *rejects algorithm confusion* |
 | S4 | Attacker embeds their own key in the token header (`jwk`, `jku`, `x5u`). | Keys come only from the provider's JWKS; header keys are ignored. | test *ignores an attacker key embedded in the token header* |
