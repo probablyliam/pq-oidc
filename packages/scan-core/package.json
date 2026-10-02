@@ -1,0 +1,19 @@
+{
+  "name": "@pq-oidc/scan-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The scanner: SSRF-safe target handling, a TLS handshake observer, certificate and HTTP transport checks, and the assessment that labels each finding.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./report": "./src/report.ts",
+    "./registry": "./src/tls/registry.ts",
+    "./keyschedule": "./src/tls/keyschedule.ts",
+    "./policy": "./src/net/policy.ts",
+    "./testing": "./src/testing/index.ts"
+  },
+  "dependencies": {
+    "@noble/hashes": "2.4.0",
+    "@pq-oidc/token-kit": "0.1.0"
+  }
+}
