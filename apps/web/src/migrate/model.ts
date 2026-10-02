@@ -419,8 +419,16 @@ export function seedFromScan(report: ScanReport): State {
   const tokens = layer('token-signing');
   const edge: State['edge'] = kex?.exposure === 'no-known-attack' ? 'hybrid-required' : kex?.exposure === 'depends-on-client' ? 'hybrid-offered' : 'classical';
   const tokensSeen = tokens !== undefined && tokens.exposure !== 'undetermined';
+  // Tokens that are already signed with ML-DSA mean the apps behind them were made ready first.
+  const tokenWork: Partial<State> =
+    tokens?.exposure === 'no-known-attack'
+      ? { keys: 'pq', signing: { webapp: 'pq', api: 'pq' }, webappLibrary: true, webappSession: true, apiLibrary: true }
+      : tokens?.headline.startsWith('Migrating')
+        ? { keys: 'both', apiLibrary: true }
+        : {};
   return {
     ...INITIAL,
+    ...tokenWork,
     looked: tokensSeen ? ['edge', 'auth'] : ['edge'],
     edge,
     seen: {
