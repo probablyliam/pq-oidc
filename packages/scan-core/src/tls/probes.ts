@@ -149,6 +149,9 @@ export async function probeTls(pinned: PinnedTarget, options: ProbeOptions = {})
       groupSupport.push({ ...base, supported: true, evidence: `HelloRetryRequest selecting ${groupName(group)}` });
     } else if (outcome === 'alert') {
       groupSupport.push({ ...base, supported: false, evidence: `refused with alert ${asked.seen.alert?.name}` });
+    } else if (outcome === 'closed') {
+      // Some stacks (Microsoft's front ends, for one) hang up instead of sending an alert when no offered group is usable.
+      groupSupport.push({ ...base, supported: false, evidence: 'refused: the server closed the connection without a TLS alert' });
     } else {
       unanswered++;
       groupSupport.push({ ...base, supported: undefined, evidence: `no usable answer (${outcome}${asked.seen.detail ? `: ${asked.seen.detail}` : ''})` });

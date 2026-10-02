@@ -8,8 +8,8 @@ Decisions with reasoning live in [`docs/adr/`](adr/). Nothing here is pushed to 
 | Phase | What | Status |
 |---|---|---|
 | 0 | Inspect, run, assess, plan | done |
-| 1 | Scan core: target policy, SSRF-safe resolver and connector | pending |
-| 2 | Real analysis: TLS handshake observer, certificates, HTTP transport, OIDC metadata, report | pending |
+| 1 | Scan core: target policy, SSRF-safe resolver and connector | done |
+| 2 | Real analysis: TLS handshake observer, certificates, HTTP transport, OIDC metadata, report | done |
 | 3 | Token analysis with real verification | pending |
 | 4 | API service, job model, persistence, worker, OIDC sign-in, authorization | pending |
 | 5 | Results UI: layered report, history, compare, token page | pending |
@@ -21,7 +21,9 @@ Decisions with reasoning live in [`docs/adr/`](adr/). Nothing here is pushed to 
 
 ## Next steps
 
-Start Phase 1: create `packages/scan-core` with the address classifier, target policy and pinned resolver, and the bypass tests.
+Phase 3: extend `packages/token-kit` with an isomorphic token analyzer (`analyze.ts`) and signature verification against a JWKS, with tests for `alg: none`, HMAC/confusion, header-supplied keys and ML-DSA. Then Phase 4: `services/api` and `services/worker`.
+
+Useful commands: `npm test`, `npm run scan -- <url>` (set `SCAN_LAB_ORIGINS` for lab servers), `npx tsc -p tsconfig.json --noEmit`, `npx eslint .`.
 
 ---
 
@@ -169,3 +171,14 @@ Filled in at the end of each phase.
 
 - **Verified**: the existing suite passes (82 tests); the site runs and was driven in headless Edge; Node 25.9 bundles OpenSSL 3.5.5 with ML-KEM and ML-DSA; hybrid group not observable through Node's TLS API (tested against a public site and local servers); local TLS servers with hybrid groups, TLS 1.2-only, RSA key transport and an ML-DSA-65 certificate work using only Node.
 - **Unverified**: Docker build, Compose and the kind deployment (no Docker on this machine).
+
+### Phases 1 and 2 (scan core)
+
+- **Verified by tests** (`packages/scan-core`, 265 tests):
+  - Address classification for every blocked IPv4/IPv6 range, including IPv4-mapped, NAT64 and 6to4 forms; numeric host forms; `localhost` variants; mixed DNS answers; a rebinding resolver (one lookup, every socket to the pinned address).
+  - The TLS 1.3 key schedule reproduces every intermediate value of the RFC 8448 trace; the observer replays that trace, decrypts the flight and verifies CertificateVerify and Finished.
+  - Complete handshakes against OpenSSL 3.5.5 servers in X25519, P-256, P-384, X25519MLKEM768, SecP256r1MLKEM768, SecP384r1MLKEM1024, MLKEM768 and MLKEM1024 (Finished verifies, so both sides derived the same secret); ECDSA, RSA-PSS and ML-DSA-65 CertificateVerify; TLS 1.2 ECDHE and RSA key transport; group enumeration by HelloRetryRequest.
+  - Whole scans of seven lab configurations give the expected findings; redirects to metadata, loopback, internal names, other ports and schemes are reported and not followed; an internal `jwks_uri` is not fetched; size cap, timeout and deadline hold.
+- **Verified by running against public sites** (2026-10-02, four sites, one scan each plus one repeat): accounts.google.com (X25519MLKEM768 negotiated, MLKEM1024 also accepted, Finished verified against BoringSSL), www.cloudflare.com (X25519MLKEM768), login.microsoftonline.com (secp384r1 after a HelloRetryRequest, RSA certificate, resets instead of alerting on unknown groups), github.com (x25519, AES-128-GCM, no OIDC metadata).
+- **Not verified / limits**: QUIC; servers behind client-certificate requirements; groups outside the registry; behaviour through an HTTP proxy (the scanner connects directly); IPv6 targets (code path tested with literals, not with a live IPv6 server).
+- **Found and fixed along the way**: PEM encoder emitted a blank line at exact multiples of 64 characters; a reset in reply to a group-only ClientHello is now reported as a refusal rather than "unknown".

@@ -110,7 +110,7 @@ describe('the other layers', () => {
     expect(finding('classical', 'http.hsts')).toMatchObject({ tone: 'good', title: 'HSTS tells browsers to use HTTPS only, for 365 days' });
     expect(finding('classical', 'http.cookies')).toMatchObject({ tone: 'good' });
     expect(finding('tls12', 'http.hsts')).toMatchObject({ tone: 'caution', title: 'No HSTS header' });
-    expect(finding('tls12', 'http.cookies')).toMatchObject({ tone: 'bad', title: 'Cookie session can be sent over plain HTTP' });
+    expect(finding('tls12', 'http.cookies')).toMatchObject({ tone: 'caution', title: 'Cookie session can be sent over plain HTTP' });
     expect(finding('tls12', 'http.exposure')).toMatchObject({ kind: 'inference' });
     // Cookie values are never kept.
     expect(JSON.stringify(report('classical'))).not.toContain('abc');

@@ -527,12 +527,15 @@ export function assess(seen: Observations): Assessment {
         id: 'http.cookies',
         layer: 'transport-policy',
         kind: 'observation',
-        tone: insecure.length > 0 ? 'bad' : 'good',
+        tone: insecure.length > 0 ? 'caution' : 'good',
         title:
           insecure.length > 0
             ? `Cookie ${list(insecure.map((c) => c.name))} can be sent over plain HTTP`
             : `Cookies set by this page are restricted to HTTPS`,
-        detail: insecure.length > 0 ? 'A cookie without the Secure attribute is sent on plain-HTTP requests too, where anyone on the network path can read it.' : 'Every cookie has the Secure attribute.',
+        detail:
+          insecure.length > 0
+            ? 'A cookie without the Secure attribute is sent on plain-HTTP requests too, where anyone on the network path can read it. Whether that matters depends on what the cookie is for, which a scan cannot tell: for a session cookie it means the session can be stolen.'
+            : 'Every cookie has the Secure attribute.',
         evidence: transport.cookies.map((c) => ({
           label: c.name,
           value: [c.secure ? 'Secure' : 'not Secure', c.httpOnly ? 'HttpOnly' : 'readable by scripts', c.sameSite ? `SameSite=${c.sameSite}` : 'no SameSite'].join(', '),
