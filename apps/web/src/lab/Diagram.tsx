@@ -1,114 +1,120 @@
 /**
- * The small SVG scenes in the lab. Each is a function of what the site uses
- * and of a phase, so it is a picture of a state, not an animation playing on
- * its own: CSS reveals and transitions carry it between states when a toggle
- * changes. A dotted texture means post-quantum, a solid fill means a secret,
- * red means the attacker holds it. Same grammar as the rest of the site.
+ * The small SVG scenes in the lab. Each is a picture of a state, not an
+ * animation playing on its own: the CSS reveals and transitions carry it
+ * between states when a toggle changes. The grammar is the site's: solid
+ * means private, outline means public, a dotted texture means post-quantum,
+ * red means the attacker holds it.
  *
- * Every scene is laid out on the same grid: 240 wide, the two ends at the
- * edges (browser 6..54, server 186..234), the thing the step produces centred
- * at x = 120, and anything paired placed at mirror positions about it. A
- * result mark (check or cross) is centred on the thing it judges.
+ * Every scene is laid out on one grid, 240 units wide and 104 high: the two
+ * ends at the edges (browser 6..58, server 182..234), the thing the step
+ * produces centred at x = 120, and anything paired at mirror positions about
+ * it. Each glyph is drawn around its own origin, so placing it is one
+ * translate and nothing sits off its centre.
  */
 
 const MID = 120;
+const Y = 46;
 
-/** A key: outline for public, filled for private, dotted ring for post-quantum. Its visual centre is 4.5 right of `x`. */
-function Key({ x, y, solid, pq, hostile }: { x: number; y: number; solid?: boolean; pq?: boolean; hostile?: boolean }) {
+/** A key: round bow at the origin, bar to the right. Outline for public, filled for private; dotted ring for post-quantum. */
+function Key({ x, y, solid, pq, hostile, flip }: { x: number; y: number; solid?: boolean; pq?: boolean; hostile?: boolean; flip?: boolean }) {
   const stroke = hostile ? 'var(--k-attacker)' : 'var(--k-session)';
   return (
-    <g transform={`translate(${x} ${y})`}>
-      <circle cx="0" cy="0" r="6" fill={solid ? stroke : 'var(--paper)'} stroke={stroke} strokeWidth="2" />
-      <path d="M5 0h10m-4 0v4m4-4v3" stroke={stroke} strokeWidth="2" fill="none" strokeLinecap="round" />
-      {pq && <circle cx="0" cy="0" r="9.5" fill="none" stroke={stroke} strokeWidth="1.3" strokeDasharray="1.5 2" />}
+    <g transform={`translate(${x} ${y})${flip ? ' scale(-1 1)' : ''}`}>
+      {pq && <circle r="10.5" fill="none" stroke={stroke} strokeWidth="1.4" strokeDasharray="1.6 2.2" />}
+      <circle r="6.5" fill={solid ? stroke : 'var(--paper)'} stroke={stroke} strokeWidth="2.2" />
+      <path d="M6.5 0h12m-4 0v4.5m4-4.5v3.5" fill="none" stroke={stroke} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
     </g>
   );
 }
-/** Where to put a key so that its visual centre lands on `cx`. */
-const keyAt = (cx: number) => cx - 4.5;
 
-/** A padlock, centred on (x, y). Open reveals what it protected; dotted shackle = post-quantum. */
+/** A padlock centred at the origin. Open lifts the shackle; dotted shackle = post-quantum. */
 function Lock({ x, y, open, pq, tone = 'secret', scale = 1 }: { x: number; y: number; open?: boolean; pq?: boolean; tone?: 'secret' | 'good' | 'bad'; scale?: number }) {
   const body = tone === 'secret' ? 'var(--signal)' : tone === 'good' ? 'var(--good)' : 'var(--bad)';
   return (
     <g transform={`translate(${x} ${y}) scale(${scale})`}>
-      <path d={open ? 'M-6-6a6 6 0 0 1 12 0' : 'M-6-2v-4a6 6 0 0 1 12 0v4'} fill="none" stroke="var(--ink)" strokeWidth="2" strokeDasharray={pq ? '2 2' : undefined} />
-      <rect x="-8" y="-2" width="16" height="13" rx="2" fill={body} stroke="var(--ink)" strokeWidth="2" />
+      <path d={open ? 'M-6.5 -2v-6a6.5 6.5 0 0 1 13 0v1' : 'M-6.5 -2v-5a6.5 6.5 0 0 1 13 0v5'} fill="none" stroke="var(--ink)" strokeWidth="2.2" strokeLinecap="round" strokeDasharray={pq ? '2 2.2' : undefined} />
+      <rect x="-9" y="-2" width="18" height="14" rx="2.5" fill={body} stroke="var(--ink)" strokeWidth="2.2" />
+      <circle cy="5" r="1.8" fill="var(--ink)" />
     </g>
   );
 }
 
-/** A check mark centred on (x, y). */
-const Check = ({ x, y }: { x: number; y: number }) => <path d={`M${x - 7} ${y}l5 5 9-11`} />;
+/** A green disc with a check, centred at the origin: the mark the browser or the site puts on something it accepted. */
+const Stamp = ({ x, y }: { x: number; y: number }) => (
+  <g className="stamp" transform={`translate(${x} ${y})`}>
+    <circle r="9" fill="var(--good)" />
+    <path d="M-4.2 0.3l3 3 5.6-6.4" fill="none" stroke="var(--paper)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+  </g>
+);
 
 export type Step = 'kex' | 'cert' | 'token';
 
 /** The diagram at the top of a process card: browser and server at the ends, what the step makes in the middle. */
 export function ProcessScene({ step, pq, live }: { step: Step; pq: boolean; live: boolean }) {
   return (
-    <svg className={`scene ${live ? 'live' : 'ghost'}`} viewBox="0 0 240 92" role="img" aria-hidden="true">
+    <svg className={`scene ${live ? 'live' : 'ghost'}`} viewBox="0 0 240 104" role="img" aria-hidden="true">
       <g className="ends">
-        <rect className="node" x="6" y="30" width="48" height="32" rx="4" />
-        <text className="node-t" x="30" y="50">
+        <rect className="node" x="6" y={Y - 16} width="52" height="32" rx="5" />
+        <text className="node-t" x="32" y={Y + 4}>
           browser
         </text>
-        <rect className="node" x="186" y="30" width="48" height="32" rx="4" />
-        <text className="node-t" x="210" y="50">
+        <rect className="node" x="182" y={Y - 16} width="52" height="32" rx="5" />
+        <text className="node-t" x="208" y={Y + 4}>
           server
         </text>
       </g>
       {step === 'kex' && (
         <g>
-          {/* Two shares cross, one each way; the secret they make sits between the wires. */}
-          <path className="wire draw" d="M54 40H186" />
-          <path className="wire draw d2" d="M186 52H54" />
+          {/* One wire. The two public halves meet in the middle, pointing at each other; the secret they make sits below. */}
+          <path className="wire draw" d={`M58 ${Y}H182`} />
           <g className="pop">
-            <Key x={keyAt(MID + 34)} y={40} />
+            <Key x={MID - 46} y={Y} />
           </g>
           <g className="pop d2">
-            <Key x={keyAt(MID - 34)} y={52} />
+            <Key x={MID + 46} y={Y} flip />
           </g>
           <g className="pop d3">
-            <Lock x={MID} y={46.5} pq={pq} />
+            <Lock x={MID} y={Y + 2} pq={pq} />
           </g>
-          <text className="scene-tag" x={MID} y="76">
+          <text className="scene-tag" x={MID} y="92">
             shared secret
           </text>
         </g>
       )}
       {step === 'cert' && (
         <g>
-          <path className="wire draw" d="M186 46H54" />
-          <g transform={`translate(${MID - 24} 31)`}>
+          <path className="wire draw" d={`M182 ${Y}H58`} />
+          <g transform={`translate(${MID} ${Y})`}>
             <g className="pop d2">
-              <rect className="card" x="0" y="0" width="48" height="30" rx="3" strokeDasharray={pq ? '3 2' : undefined} />
-              <path className="sig" d="M7 10h22M7 16h30M7 22h16" />
+              <rect className="card" x="-28" y="-19" width="56" height="38" rx="4" strokeDasharray={pq ? '3 2.5' : undefined} />
+              <circle className="seal" cx="-16" cy="-6" r="5.5" />
+              <path className="sig" d="M-6 -8h26M-6 -2h20M-20 7h40M-20 13h26" />
+            </g>
+            <g className="pop d3">
+              <Stamp x={22} y={14} />
             </g>
           </g>
-          <g className="pop d3 check">
-            <Check x={MID} y={46} />
-          </g>
-          <text className="scene-tag" x={MID} y="76">
+          <text className="scene-tag" x={MID} y="92">
             verified
           </text>
         </g>
       )}
       {step === 'token' && (
         <g>
-          <path className="wire draw" d="M186 46H54" />
-          <g transform={`translate(${MID - 24} 31)`}>
+          <path className="wire draw" d={`M182 ${Y}H58`} />
+          <g transform={`translate(${MID} ${Y})`}>
             <g className="pop">
-              <rect className="card" x="0" y="0" width="48" height="30" rx="3" strokeDasharray={pq ? '3 2' : undefined} />
-              <rect className="t-h" x="6" y="7" width="9" height="5" />
-              <rect className="t-p" x="18" y="7" width="14" height="5" />
-              <rect className="t-s" x="35" y="7" width="7" height="5" />
-              <path className="sig" d="M7 19h34M7 24h20" />
+              <rect className="card" x="-28" y="-19" width="56" height="38" rx="4" strokeDasharray={pq ? '3 2.5' : undefined} />
+              <rect className="t-h" x="-20" y="-11" width="11" height="6" rx="1" />
+              <rect className="t-p" x="-6" y="-11" width="17" height="6" rx="1" />
+              <rect className="t-s" x="14" y="-11" width="6" height="6" rx="1" />
+              <path className="sig" d="M-20 2h40M-20 8h28M-20 14h18" />
+            </g>
+            <g className="pop d3">
+              <Stamp x={22} y={14} />
             </g>
           </g>
-          <g className="pop d3 check">
-            <Check x={MID} y={46} />
-          </g>
-          <text className="scene-tag" x={MID} y="76">
+          <text className="scene-tag" x={MID} y="92">
             signed by the site
           </text>
         </g>
@@ -129,40 +135,41 @@ export function AttackScene({ job, phase, pq }: { job: Job; phase: Phase; pq: bo
   const won = phase === 'won';
   const lost = phase === 'lost';
   const working = phase === 'working';
-  const Y = 39;
+  const y = 40;
   return (
-    <svg className={`a-scene phase-${phase}`} viewBox="0 0 240 78" role="img" aria-hidden="true">
-      {/* What she starts with: a copy she took off the wire. Same box, 40 by 30, at both ends. */}
-      <g className="hostile-src">
-        <rect className="box" x="10" y={Y - 15} width="40" height="30" rx="3" />
-        <path className="box-hatch" d={`M10 ${Y - 15}h40v30H10z`} />
+    <svg className={`a-scene phase-${phase}`} viewBox="0 0 240 80" role="img" aria-hidden="true">
+      {/* What she starts with: a copy she took off the wire. */}
+      <g className="hostile-src" transform={`translate(30 ${y})`}>
+        <rect className="box" x="-20" y="-15" width="40" height="30" rx="4" />
+        <path className="box-hatch" d="M-20 -15h40v30h-40z" />
+        <path className="box-lines" d="M-11 -5h22M-11 1h22M-11 7h14" />
       </g>
-      <g className="work">
-        <circle className="ring r1" cx={MID} cy={Y} r="22" />
-        <circle className="ring r2" cx={MID} cy={Y} r="15" />
-        {working && <circle className="spark" cx={MID} cy={Y - 22} r="3" />}
+      <g className="work" transform={`translate(${MID} ${y})`}>
+        <circle className="ring r1" r="22" />
+        <circle className="ring r2" r="15" />
+        {working && <circle className="spark" cy="-22" r="3.2" />}
         {won && (
           <g className="got">
-            <Key x={keyAt(MID)} y={Y} solid hostile />
+            <Key x={-6} y={0} solid hostile />
           </g>
         )}
         {lost && (
           <g className="nope">
-            <path d={`M${MID - 10} ${Y - 10}l20 20m0-20l-20 20`} />
+            <path d="M-9 -9l18 18m0-18l-18 18" />
           </g>
         )}
       </g>
-      <g className="out">
+      <g className="out" transform={`translate(210 ${y})`}>
         {job === 'recording' ? (
-          <Lock x={210} y={Y + 0.8} open={won} tone={won ? 'bad' : 'good'} pq={pq} scale={1.6} />
+          <Lock x={0} y={-1} open={won} tone={won ? 'bad' : 'good'} pq={pq} scale={1.5} />
         ) : (
-          <g transform={`translate(190 ${Y - 15})`}>
-            <rect className={`card ${won ? 'forged' : 'held'}`} x="0" y="0" width="40" height="30" rx="3" />
-            {won ? <path className="stamp-bad" d="M11 15h18" /> : <path className="stamp-ok" d="M13 15l5 5 9-11" />}
+          <g>
+            <rect className={`card ${won ? 'forged' : 'held'}`} x="-20" y="-15" width="40" height="30" rx="4" />
+            {won ? <path className="stamp-bad" d="M-9 0h18" /> : <path className="stamp-ok" d="M-7 0.5l4.5 4.5 9.5-10.5" />}
           </g>
         )}
       </g>
-      <path className={`flow ${won ? 'won' : ''}`} d={`M50 ${Y}H98M142 ${Y}H190`} />
+      <path className={`flow ${won ? 'won' : ''}`} d={`M50 ${y}H98M142 ${y}H190`} />
     </svg>
   );
 }

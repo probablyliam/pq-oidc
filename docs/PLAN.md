@@ -15,7 +15,7 @@ Decisions with reasoning live in [`docs/adr/`](adr/).
 | 5 | Results UI | done, then reworked: verdict first, technical detail folded away (ADR 0012) |
 | 6 | Login explainer | done, then reworked twice into the login lab (ADR 0011) |
 | 7 | Migration exercise | cut at the owner's request (ADR 0014); model and tests remain in history at `411c1d6` |
-| 8 | Docker, Compose, Helm (NetworkPolicy), CI, Pages | done; the cluster job runs in CI only (no Docker on this machine) |
+| 8 | Docker, Compose, Helm (NetworkPolicy), CI; live site on Vercel | done; the cluster job runs in CI only (no Docker on this machine); Pages retired (ADR 0016) |
 | 9 | Hardening | partly: dependency audit in CI, phone layouts checked; no independent security review, no accessibility pass |
 | 10 | README, threat model, final report | done |
 
@@ -165,11 +165,12 @@ One persistent stage (browser, network, server, and an attacker recording the ne
 | 12 | Finding kinds instead of a score | [0012](adr/0012-finding-kinds-no-score.md) |
 | 13 | Technology deliberately not added | [0013](adr/0013-not-added.md) |
 | 14 | No accounts: anonymous scans, limits, one-day retention; migration page cut | [0014](adr/0014-no-accounts.md) |
+| 16 | The live site runs the scanner inside a Vercel Function, no database | [0016](adr/0016-hosted-on-vercel-no-database.md) |
 | 15 | Given a site, find its sign-in (its own link, then the usual addresses) and assess that | [0015](adr/0015-find-the-sign-in.md) |
 
 ## Open questions
 
-None blocking. "Scanning requires sign-in" was an assumption made without the owner, and it was wrong (ADR 0014). Still assumed: one scan covers one origin; the public GitHub Pages build stays a static mode showing saved results.
+None blocking. "Scanning requires sign-in" was an assumption made without the owner, and it was wrong (ADR 0014). Still assumed: one scan covers one origin. The static-mode build on GitHub Pages is gone: the live site scans (ADR 0016).
 
 ## Verified vs. unverified
 

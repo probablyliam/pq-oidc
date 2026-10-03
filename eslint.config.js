@@ -3,7 +3,7 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['**/node_modules/**', '**/dist/**', 'coverage/**'] },
+  { ignores: ['**/node_modules/**', '**/dist/**', 'coverage/**', 'api/**'] }, // api/ holds the bundled Vercel function, generated from services/vercel
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

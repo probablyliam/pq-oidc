@@ -4,7 +4,6 @@ import { DEFAULT_POLICY, parseTarget, TargetRejected } from '@pq-oidc/scan-core/
 import { api, ApiError } from '../api.ts';
 import type { Meta, Scan } from '../api.ts';
 import { Report } from '../components/Report.tsx';
-import { navigate } from '../router.ts';
 import type { Route } from '../router.ts';
 
 /** Two sign-in services, which publish their signing keys, and one ordinary login, which does not: both kinds of answer. */
@@ -20,67 +19,51 @@ const TEST_SERVERS: Record<string, string> = {
   '9447': 'Expired certificate',
 };
 
+/** What the page is doing: nothing yet, a scan under way, or a result (or a refusal) on screen. */
+type Phase = { kind: 'idle' } | { kind: 'running'; target: string; step: string } | { kind: 'done'; scan: Scan } | { kind: 'refused'; target: string; message: string };
+
 interface Props {
   route: Route;
-  /** Null when there is no scan service behind this page. */
+  /** Null when no scan service answered. The form still shows; a scan explains itself if it cannot start. */
   meta: Meta | null;
 }
 
-function ScanForm({ meta, initial }: { meta: Meta; initial: string }) {
+function ScanForm({ meta, initial, busy, onScan }: { meta: Meta | null; initial: string; busy: boolean; onScan: (target: string) => void }) {
   const [input, setInput] = useState(initial);
   const [error, setError] = useState<string>();
-  const [busy, setBusy] = useState(false);
   useEffect(() => setInput(initial), [initial]);
 
-  async function scan(target: string) {
+  function scan(target: string) {
     setError(undefined);
     if (!target) return;
     // The same check the service makes, so a refusal is explained before anything is sent.
     try {
-      parseTarget(target, { allowedPorts: meta.allowedPorts ?? DEFAULT_POLICY.allowedPorts, labOrigins: meta.labOrigins });
+      parseTarget(target, { allowedPorts: meta?.allowedPorts ?? DEFAULT_POLICY.allowedPorts, labOrigins: meta?.labOrigins ?? [] });
     } catch (reason) {
       if (reason instanceof TargetRejected) return setError(reason.message);
       throw reason;
     }
-    setBusy(true);
-    try {
-      const started = await api.createScan(target);
-      navigate(`scan/${started.id}`);
-    } catch (reason) {
-      setError(reason instanceof ApiError ? reason.message : 'The scan could not be started.');
-    } finally {
-      setBusy(false);
-    }
+    onScan(target);
   }
-
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    void scan(input.trim());
+    scan(input.trim());
   };
   // A pick fills the box and runs: one press, one result.
   const pick = (target: string) => {
     setInput(target);
-    void scan(target);
+    scan(target);
   };
 
   return (
     <form className="scan-form" onSubmit={submit}>
       <label htmlFor="target" className="sr-only">
-        Address of a sign-in page
+        Address of a site or its sign-in page
       </label>
       <div className="scan-row">
-        <input
-          id="target"
-          type="text"
-          value={input}
-          onChange={(event) => setInput(event.target.value)}
-          placeholder="accounts.example.com"
-          spellCheck={false}
-          autoComplete="url"
-          autoCapitalize="none"
-        />
+        <input id="target" type="text" value={input} onChange={(event) => setInput(event.target.value)} placeholder="accounts.example.com" spellCheck={false} autoComplete="url" autoCapitalize="none" />
         <button type="submit" className="primary" disabled={busy || !input.trim()}>
-          {busy ? 'Starting…' : 'Scan'}
+          {busy ? 'Scanning…' : 'Scan'}
         </button>
       </div>
       {error && (
@@ -93,18 +76,18 @@ function ScanForm({ meta, initial }: { meta: Meta; initial: string }) {
           <dt>Try a sign-in service, or a site</dt>
           <dd>
             {SITES.map((target) => (
-              <button key={target} type="button" className="pick" onClick={() => pick(target)}>
-                {target.split('/')[0]}
+              <button key={target} type="button" className="pick" disabled={busy} onClick={() => pick(target)}>
+                {target}
               </button>
             ))}
           </dd>
         </div>
-        {meta.labOrigins.length > 0 && (
+        {meta && meta.labOrigins.length > 0 && (
           <div>
             <dt>Or a local test server</dt>
             <dd>
               {meta.labOrigins.map((origin) => (
-                <button key={origin} type="button" className="pick" onClick={() => pick(origin)}>
+                <button key={origin} type="button" className="pick" disabled={busy} onClick={() => pick(origin)}>
                   {TEST_SERVERS[new URL(origin).port] ?? new URL(origin).host}
                 </button>
               ))}
@@ -116,53 +99,56 @@ function ScanForm({ meta, initial }: { meta: Meta; initial: string }) {
   );
 }
 
-/** A scan that is queued or running, then its result. */
-function LiveScan({ id }: { id: string }) {
-  const [scan, setScan] = useState<Scan>();
-  const [error, setError] = useState<string>();
-
-  useEffect(() => {
-    const controller = new AbortController();
-    setScan(undefined);
-    setError(undefined);
-    api.waitForScan(id, setScan, controller.signal).catch((reason: unknown) => {
-      if (!controller.signal.aborted) setError(reason instanceof ApiError && reason.status === 404 ? 'This result has gone. Scan the address again.' : 'The result could not be loaded.');
-    });
-    return () => controller.abort();
-  }, [id]);
-
-  if (error) return <p className="notice bad">{error}</p>;
-  if (!scan) return <p className="fine">Loading…</p>;
-  if (scan.status === 'failed') {
-    return (
-      <div className="verdict verdict-unknown">
-        <p className="verdict-host">{scan.target}</p>
-        <h2>Could not scan this</h2>
-        <p className="verdict-why" role="alert">
-          {scan.error?.message ?? 'The scan failed.'}
-        </p>
-      </div>
-    );
-  }
-  if (scan.status !== 'succeeded' || !scan.report || !('schema' in scan.report)) {
+function Outcome({ phase }: { phase: Exclude<Phase, { kind: 'idle' }> }) {
+  if (phase.kind === 'running') {
     return (
       <div className="verdict verdict-pending" aria-live="polite">
-        <p className="verdict-host">{scan.target}</p>
+        <p className="verdict-host">{phase.target}</p>
         <h2>Scanning…</h2>
         <p className="verdict-why step">
           <i className="pulse" aria-hidden="true" />
-          {scan.status === 'queued' ? 'Waiting for a scanner' : (scan.progress ?? 'Starting')}
+          {phase.step}
         </p>
       </div>
     );
   }
-  return <Report report={scan.report} />;
+  if (phase.kind === 'refused' || phase.scan.status === 'failed') {
+    const message = phase.kind === 'refused' ? phase.message : (phase.scan.error?.message ?? 'The scan failed.');
+    return (
+      <div className="verdict verdict-unknown">
+        <p className="verdict-host">{phase.kind === 'refused' ? phase.target : phase.scan.target}</p>
+        <h2>Could not scan this</h2>
+        <p className="verdict-why" role="alert">
+          {message}
+        </p>
+      </div>
+    );
+  }
+  const report = phase.scan.report;
+  if (!report || !('schema' in report)) return null;
+  return <Report report={report} />;
 }
 
 export function ScanView({ route, meta }: Props) {
-  const scanId = route.path[0] === 'scan' ? route.path[1] : undefined;
+  const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
+  const running = useRef<AbortController>(undefined);
   const ask = useRef<HTMLDivElement>(null);
   const lastTop = useRef<number>(undefined);
+  const showing = phase.kind !== 'idle';
+
+  async function scan(target: string) {
+    running.current?.abort();
+    const controller = (running.current = new AbortController());
+    setPhase({ kind: 'running', target, step: 'Starting' });
+    try {
+      const scan = await api.scan(target, 'scan', (step) => setPhase({ kind: 'running', target, step }), controller.signal);
+      if (!controller.signal.aborted) setPhase({ kind: 'done', scan });
+    } catch (reason) {
+      if (controller.signal.aborted) return;
+      setPhase({ kind: 'refused', target, message: reason instanceof ApiError ? reason.message : 'The scan could not be started.' });
+    }
+  }
+  useEffect(() => () => running.current?.abort(), []);
 
   // The question sits in the middle of the page until a scan starts, then at the top with the result
   // below. Measure where it was and slide it from there, so the move reads as the page making room.
@@ -180,37 +166,23 @@ export function ScanView({ route, meta }: Props) {
       panel.style.transform = '';
     });
     return () => cancelAnimationFrame(frame);
-  }, [scanId]);
+  }, [showing]);
 
   return (
-    <section className={`sheet scan ${scanId ? 'scanning' : 'idle'}`}>
+    <section className={`sheet scan ${showing ? 'scanning' : 'idle'}`}>
       <div className="ask" ref={ask}>
-        {!scanId && (
+        {!showing && (
           <>
             <h1>Is this login quantum-safe?</h1>
             <p className="sub">Paste a site, or its sign-in page.</p>
           </>
         )}
-        {meta ? (
-          <ScanForm meta={meta} initial={route.query.get('target') ?? ''} />
-        ) : (
-          <div className="notice static-note">
-            <p>
-              Scanning opens its own connections to the site you name, which a web page cannot do, so this copy of the site cannot scan. The token checker and the login lab work
-              here as they are.
-            </p>
-            <p>
-              To scan, run the project on your own machine (Node.js 25):
-              <code>git clone https://github.com/probablyliam/pq-oidc && cd pq-oidc && npm install && npm start</code>
-              then open <code>localhost:8080</code>.
-            </p>
-          </div>
-        )}
+        <ScanForm meta={meta} initial={route.query.get('target') ?? ''} busy={phase.kind === 'running'} onScan={(target) => void scan(target)} />
       </div>
 
-      {scanId && meta && (
-        <div className="result" key={scanId}>
-          <LiveScan id={scanId} />
+      {phase.kind !== 'idle' && (
+        <div className="result" key={phase.kind === 'running' ? `run-${phase.target}` : 'result'}>
+          <Outcome phase={phase} />
         </div>
       )}
     </section>

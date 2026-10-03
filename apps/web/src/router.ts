@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 
 /**
- * Hash routing: "#/scans/abc?x=1". The site is served as static files (and from
- * a sub-path on GitHub Pages), so the server never has to know about routes.
+ * Hash routing: "#/lab?kex=hybrid". The site is served as static files, so the
+ * server never has to know about routes.
  */
 export interface Route {
   /** Path segments: "#/scans/abc" is ["scans", "abc"]. */

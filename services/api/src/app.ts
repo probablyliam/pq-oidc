@@ -17,6 +17,7 @@ import { parseTarget, TargetRejected } from '@pq-oidc/scan-core/policy';
 import { ENGINE_VERSION } from '@pq-oidc/scan-core/report';
 import type { ApiConfig } from './config.ts';
 import { clientAddress, HttpError, readJson, requestIdFor, Router, sendError, sendJson } from './http.ts';
+import type { Context } from './http.ts';
 import type { Logger } from './log.ts';
 import { Metrics } from './metrics.ts';
 import { createStaticHandler } from './static.ts';
@@ -111,7 +112,8 @@ export function createApi(options: ApiOptions) {
     }),
   );
 
-  routes.on('POST', '/api/v1/scans', async (ctx) => {
+  /** Checks a request and queues its scan. Returns the row, the earlier row it is answered with, or undefined after a refusal was thrown. */
+  async function queueScan(ctx: Context): Promise<{ row: ScanRow } | { row: ScanRow; reused: true }> {
     requireSameOrigin(ctx.req);
     const body = await readJson(ctx.req, MAX_REQUEST_BYTES);
     const kind: JobKind = body.kind === 'issuer-keys' ? 'issuer-keys' : 'scan';
@@ -132,7 +134,7 @@ export function createApi(options: ApiOptions) {
     const existing = config.reuseMs > 0 ? store.findRecent(kind, target.url.href, at - config.reuseMs) : undefined;
     if (existing) {
       reused.inc({ kind });
-      return sendJson(ctx.res, 200, { scan: presentScan(existing), reused: true });
+      return { row: existing, reused: true };
     }
 
     const client = clientOf(ctx.req);
@@ -157,7 +159,48 @@ export function createApi(options: ApiOptions) {
     const row = store.createScan({ id: randomUUID(), client, kind, input: body.target.trim().slice(0, 2048), targetUrl: target.url.href, targetHost: service }, at);
     created.inc({ kind });
     ctx.log.info('scan queued', { scanId: row.id, host: target.hostname, kind });
-    sendJson(ctx.res, 202, { scan: presentScan(row) }, { Location: `/api/v1/scans/${row.id}` });
+    return { row };
+  }
+
+  routes.on('POST', '/api/v1/scans', async (ctx) => {
+    const queued = await queueScan(ctx);
+    if ('reused' in queued) return sendJson(ctx.res, 200, { scan: presentScan(queued.row), reused: true });
+    sendJson(ctx.res, 202, { scan: presentScan(queued.row) }, { Location: `/api/v1/scans/${queued.row.id}` });
+  });
+
+  /**
+   * What the web app uses: one request that streams each step as the worker reports it, then
+   * the finished scan, as newline-delimited JSON. The job behind it is an ordinary queued scan.
+   */
+  routes.on('POST', '/api/v1/scan', async (ctx) => {
+    const queued = await queueScan(ctx);
+    if (!queued) return;
+    const { res } = ctx;
+    if ('reused' in queued) return sendJson(res, 200, { scan: presentScan(queued.row), reused: true });
+    res.writeHead(200, { 'Content-Type': 'application/x-ndjson', 'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no' });
+    const line = (value: unknown) => res.write(`${JSON.stringify(value)}
+`);
+    let closed = false;
+    res.on('close', () => (closed = true));
+    let lastStep: string | undefined;
+    for (;;) {
+      const row = store.getScan(queued.row.id);
+      if (!row || closed) break;
+      if (row.status === 'queued' && lastStep === undefined) {
+        lastStep = 'Waiting for a scanner';
+        line({ progress: lastStep });
+      }
+      if (row.progress && row.progress !== lastStep) {
+        lastStep = row.progress;
+        line({ progress: lastStep });
+      }
+      if (row.status === 'succeeded' || row.status === 'failed') {
+        line({ scan: presentScan(row) });
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+    res.end();
   });
 
   // A scan's ID is its only key: 122 random bits. Whoever has the link can read the result until it expires.

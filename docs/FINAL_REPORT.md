@@ -30,7 +30,7 @@ The brief said never push to a remote. The owner lifted that on 2026-10-02 ("upd
 - **No independent security review** of the address boundary or the TLS parser took place. Two reviews were started by delegated agents and stopped at the owner's request to save tokens; the plan says to do it by reading.
 - **No accessibility pass** with a screen reader; reduced-motion paths exist and were not tried by a person who needs them.
 - **Firefox and Safari** were not used; everything was driven in Edge (Chromium).
-- **The live site** (GitHub Pages) runs the app in static mode: the token checker and the lab work, scanning needs `npm start`. There is no free hosting for a service that opens raw TLS connections without an account the owner does not have.
+- **The live site** moved from GitHub Pages (static, no scanning) to Vercel on the owner's account on 2026-10-02 (ADR 0016): the scanner runs inside a Vercel Function, streaming its progress, with no database. The function and its limits are unit-tested against the lab servers and the bundle is checked in CI; the first deployment on Vercel itself happens when the owner imports the repository, so it is not yet verified there.
 
 ## Known gaps worth closing next
 

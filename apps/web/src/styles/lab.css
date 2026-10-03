@@ -41,10 +41,11 @@
   line-height: 1.2;
 }
 
-/* The login card: where the visitor actually logs in. */
+/* The login card: a sign-in form like any other, which is the point. */
 .screen-card {
-  max-width: 34rem;
-  padding: 16px 18px;
+  width: 100%;
+  max-width: 24rem;
+  padding: 18px 22px 20px;
   background: var(--paper);
   border: 2px solid var(--ink);
   border-radius: 3px;
@@ -54,28 +55,35 @@
   color: var(--ink-soft);
 }
 .demo-login {
-  display: flex;
-  gap: 8px;
-  margin-top: 10px;
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+.demo-login label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.86rem;
+  color: var(--ink-soft);
 }
 .demo-login input {
-  flex: 1;
-  min-width: 0;
+  width: 100%;
   padding: 9px 10px;
   font-size: 0.95rem;
 }
-.demo-login input:last-of-type {
-  flex-grow: 1.3;
+.demo-login input[type='password'] {
+  letter-spacing: 0.12em;
 }
 .demo-login button {
-  white-space: nowrap;
+  margin-top: 4px;
+  width: 100%;
+  padding: 10px;
 }
 .screen-in {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 14px;
-  margin-top: 10px;
+  margin-top: 12px;
 }
 .screen-in b {
   font: 700 1.2rem var(--head);
@@ -220,26 +228,32 @@
   stroke-width: 2;
 }
 .scene .node-t {
-  fill: var(--ink-soft);
-  font: 600 10px var(--text);
+  fill: var(--ink);
+  font: 600 10.5px var(--text);
   text-anchor: middle;
 }
 .scene .wire {
   fill: none;
   stroke: var(--ink-soft);
   stroke-width: 2;
-  stroke-dasharray: 4 4;
+  stroke-dasharray: 5 4;
 }
 .scene .card {
   fill: var(--paper);
   stroke: var(--k-cert);
-  stroke-width: 2;
+  stroke-width: 2.2;
+}
+.scene .seal {
+  fill: var(--k-cert-wash);
+  stroke: var(--k-cert);
+  stroke-width: 1.8;
 }
 .scene .sig {
   stroke: var(--k-cert);
-  stroke-width: 1.6;
+  stroke-width: 1.8;
   stroke-linecap: round;
   fill: none;
+  opacity: 0.8;
 }
 .scene .t-h {
   fill: #6b7686;
@@ -250,69 +264,44 @@
 .scene .t-s {
   fill: var(--k-token);
 }
-.scene .check path {
-  fill: none;
-  stroke: var(--good);
-  stroke-width: 3;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
 .scene .scene-tag {
   fill: var(--ink-soft);
-  font: 600 9px var(--text);
+  font: 600 10px var(--text);
   text-anchor: middle;
 }
-.scene .g-pq circle {
-  /* post-quantum keys read dotted via the ring drawn in the component */
-}
 
-/* Anything that pops in scales about its own centre, not the corner of the drawing. */
-.scene .pop,
-.scene .check,
-.a-scene .got,
-.a-scene .nope,
-.a-scene .out {
-  transform-box: fill-box;
-  transform-origin: center;
-}
-
-/* The ghost scene sits quiet until login; then its parts draw and pop in. */
+/* Before login the scene is drawn in full, in grey: a step that has not happened yet, not a faded one. */
 .scene.ghost {
-  opacity: 0.4;
+  filter: grayscale(1);
+  opacity: 0.55;
 }
 .scene.ghost .pop,
-.scene.ghost .check {
-  opacity: 0.5;
+.scene.ghost .stamp {
+  opacity: 0.6;
 }
 .scene.live .wire.draw {
   stroke-dasharray: 150;
   stroke-dashoffset: 150;
   animation: draw 0.5s ease forwards;
 }
-.scene.live .wire.draw.d2 {
-  animation-delay: 0.15s;
-}
 @keyframes draw {
   to {
     stroke-dashoffset: 0;
   }
 }
+/* Things arrive by fading in where they belong; nothing scales or slides from elsewhere. */
 .scene.live .pop {
-  animation: pop 0.4s ease both;
+  animation: arrive 0.35s ease both;
 }
 .scene.live .pop.d2 {
   animation-delay: 0.3s;
 }
 .scene.live .pop.d3 {
-  animation-delay: 0.5s;
+  animation-delay: 0.55s;
 }
-.scene.live .check {
-  animation: pop 0.4s ease both 0.6s;
-}
-@keyframes pop {
+@keyframes arrive {
   from {
     opacity: 0;
-    transform: scale(0.6);
   }
 }
 
@@ -422,6 +411,13 @@
   opacity: 0.25;
   stroke-dasharray: 2 3;
 }
+.a-scene .box-lines {
+  fill: none;
+  stroke: var(--paper);
+  stroke-width: 2;
+  stroke-linecap: round;
+  opacity: 0.55;
+}
 .a-scene .ring {
   fill: none;
   stroke: var(--rule);
@@ -429,7 +425,9 @@
 }
 .a-scene.phase-working .ring {
   stroke: var(--k-attacker);
-  transform-origin: 120px 39px;
+  stroke-dasharray: 18 8;
+  transform-box: fill-box;
+  transform-origin: center;
   animation: spin 0.9s linear infinite;
 }
 .a-scene.phase-working .ring.r2 {
@@ -443,18 +441,16 @@
 }
 .a-scene .spark {
   fill: var(--k-attacker);
-  transform-origin: 120px 39px;
-  animation: spin 0.6s linear infinite;
 }
 .a-scene .got {
-  animation: pop 0.35s ease both;
+  animation: arrive 0.35s ease both;
 }
 .a-scene .nope path {
   fill: none;
   stroke: var(--good);
   stroke-width: 3;
   stroke-linecap: round;
-  animation: pop 0.3s ease both;
+  animation: arrive 0.3s ease both;
 }
 .a-scene .flow {
   fill: none;
@@ -503,7 +499,7 @@
 .a-scene.phase-won .out,
 .a-scene.phase-lost .out {
   opacity: 1;
-  animation: pop 0.35s ease both;
+  animation: arrive 0.35s ease both;
 }
 
 /* Her working: one real value per line, marked by whether that step went her way. */
@@ -606,7 +602,6 @@
   .attacker,
   .scene.live .wire.draw,
   .scene.live .pop,
-  .scene.live .check,
   .a-scene .got,
   .a-scene .nope path,
   .a-scene.phase-won .out,

@@ -1,0 +1,10 @@
+{
+  "name": "@pq-oidc/vercel",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The scanner as one Vercel Function: a scan runs inside the request and streams its progress; no database. Bundled to api/v1/scan.js.",
+  "type": "module",
+  "dependencies": {
+    "@pq-oidc/scan-core": "0.1.0"
+  }
+}

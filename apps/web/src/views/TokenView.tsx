@@ -238,8 +238,7 @@ export function TokenView({ meta }: { meta: Meta | null }) {
     if (!issuer) return;
     setKeys({ status: 'fetching' });
     try {
-      const job = await api.createScan(issuer, 'issuer-keys');
-      const done = await api.waitForScan(job.id, () => {}, new AbortController().signal);
+      const done = await api.scan(issuer, 'issuer-keys');
       const result = done.report && 'kind' in done.report ? done.report : undefined;
       if (!result?.jwks) return setKeys({ status: 'blocked', reason: done.error?.message ?? result?.error ?? 'The scanner could not read the issuer’s keys.' });
       await applyKeys({ label: `${result.jwksUri} (fetched by the scanner)`, jwks: result.jwks, declaredIssuer: result.issuerMatches ? undefined : result.declaredIssuer });

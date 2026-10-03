@@ -318,8 +318,14 @@ export function LabView({ route }: { route: Route }) {
             </p>
           ) : (
             <form className="demo-login" onSubmit={submit} autoComplete="off">
-              <input type="text" aria-label="Username: make one up" placeholder="any name" value={login.username} maxLength={LOGIN_LIMITS.username} onChange={(e) => setLogin({ ...login, username: e.target.value })} spellCheck={false} autoCapitalize="none" autoComplete="off" />
-              <input type="text" aria-label="Password: make one up" placeholder="any password" value={login.password} maxLength={LOGIN_LIMITS.password} onChange={(e) => setLogin({ ...login, password: e.target.value })} spellCheck={false} autoCapitalize="none" autoComplete="off" />
+              <label>
+                <span>Username</span>
+                <input type="text" aria-label="Username: make one up" placeholder="make one up" value={login.username} maxLength={LOGIN_LIMITS.username} onChange={(e) => setLogin({ ...login, username: e.target.value })} spellCheck={false} autoCapitalize="none" autoComplete="off" />
+              </label>
+              <label>
+                <span>Password</span>
+                <input type="password" aria-label="Password: make one up" placeholder="make one up" value={login.password} maxLength={LOGIN_LIMITS.password} onChange={(e) => setLogin({ ...login, password: e.target.value })} autoComplete="off" />
+              </label>
               <button type="submit" className="primary">
                 Log in
               </button>

@@ -73,6 +73,7 @@ Trust is crossed at the visitor (every address is attacker-controlled), at every
 
 ## Residual risks
 
+- **On Vercel** (the live site, ADR 0016) there is no worker split and no NetworkPolicy: the function that parses a target's bytes is the one that answers the visitor. It holds nothing but the request in hand. The limits live in the memory of a function instance, so they are best-effort across instances and restarts; what protects third parties and the host is the address policy and the per-connection bounds, which do not depend on memory.
 - The per-visitor limit is only as good as the client address. Behind a proxy, set `TRUST_PROXY=true`; visitors behind one NAT share an allowance.
 - A result link is a bearer secret for an hour. It contains only what the scanned server shows to everyone.
 - The NetworkPolicy is a manifest; it protects nothing on a cluster whose CNI does not enforce policies (kind's default does not).

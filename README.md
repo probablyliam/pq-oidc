@@ -4,6 +4,8 @@
 [![CodeQL](https://github.com/probablyliam/pq-oidc/actions/workflows/codeql.yml/badge.svg)](https://github.com/probablyliam/pq-oidc/actions/workflows/codeql.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
+### ▶ [pq-oidc.vercel.app](https://pq-oidc.vercel.app)
+
 Paste a site. The scanner finds its login, opens real TLS connections to it with its own TLS client, reads what the server sends and publishes, and answers three questions in plain words, with the evidence underneath for anyone who wants to check it.
 
 <p align="center"><img src="docs/media/scan-result.png" width="800" alt="The result for accounts.google.com: Partly quantum-safe. Recording the connection: no, in an up-to-date browser (X25519MLKEM768 with classical fallback). Pretending to be the site: not today (ECDSA P-256). Faking a sign-in: not today (RSA 2048-bit)."></p>
@@ -16,9 +18,9 @@ Paste a site. The scanner finds its login, opens real TLS connections to it with
 
 Every statement in the technical details is marked **observed** (read off the connection or a published document), **inferred** (a conclusion, with the reasoning) or **could not determine**. There is no score: the verdict is a stated function of those three layers ([ADR 0012](docs/adr/0012-finding-kinds-no-score.md)).
 
-## Run it
+## Run it yourself
 
-The scanner opens its own connections, which a web page cannot do, so it runs as a small service on your machine. Needs [Node.js 25](https://nodejs.org); everything installs into the project folder.
+The live site runs the scanner inside a Vercel Function ([ADR 0016](docs/adr/0016-hosted-on-vercel-no-database.md)): a scan runs in the request, streams its progress back, and is kept nowhere. To run the same thing on your machine (Node.js 24.7 or newer; everything installs into the project folder):
 
 ```bash
 git clone https://github.com/probablyliam/pq-oidc.git
@@ -29,9 +31,7 @@ npm start          # http://localhost:8080
 
 `npm start` runs the API, a worker, and seven local test servers with known configurations (classical, hybrid, post-quantum, TLS 1.2, RSA key transport, an expired certificate) so there is something to scan that is yours. Type a bare site such as `github.com`: the scanner follows the site's own "Sign in" link, or tries the usual addresses, and assesses where a password would go ([ADR 0015](docs/adr/0015-find-the-sign-in.md)).
 
-The site at [probablyliam.github.io/pq-oidc](https://probablyliam.github.io/pq-oidc/) is the same web app without a scan service behind it: the token checker and the login lab work there, scanning does not.
-
-**Docker:** `docker compose up --build`. **Kubernetes:** [`deploy/helm/pq-oidc`](deploy/helm/pq-oidc) runs the API and the worker as separate pods, with a NetworkPolicy that keeps the worker off private ranges and gives the API no egress at all. CI deploys it to a kind cluster and scans through it.
+**Docker:** `docker compose up --build`. **Kubernetes:** [`deploy/helm/pq-oidc`](deploy/helm/pq-oidc) runs the API and a worker as separate pods, with a NetworkPolicy that keeps the worker off private ranges and gives the API no egress at all; CI deploys it to a kind cluster and scans through it. **Vercel:** import the repository; `vercel.json` builds the web app and deploys the function in [`api/`](api), which is bundled from [`services/vercel`](services/vercel).
 
 ## The login lab
 
@@ -60,7 +60,7 @@ Verified on 2026-10-02 against local OpenSSL 3.5 servers in every group above, a
 
 The scanner connects to addresses strangers type in, so the address boundary is the most carefully built part ([ADR 0007](docs/adr/0007-ssrf-defence.md), [`packages/scan-core/src/net`](packages/scan-core/src/net)): `https` only, ports 443 and 8443, no credentials in the URL, every name resolved once and every address checked against the private, loopback, link-local and metadata ranges (including IPv4-mapped, NAT64 and 6to4 forms of them) before the socket is pinned to that address; redirects, discovered links and `jwks_uri` all go through the same checks; size caps and deadlines on everything. The tests include the classic bypasses (decimal and octal IPs, `localhost` variants, DNS rebinding, redirects to the cloud metadata service).
 
-There are no accounts ([ADR 0014](docs/adr/0014-no-accounts.md)): limits per visitor (a keyed hash of the address), per scanned service, and on the queue stand in for them; cross-site requests are refused; a result is kept for an hour behind a random ID, then deleted. The worker, the only part that connects out, holds no data; the API, which holds the results, connects nowhere ([ADR 0008](docs/adr/0008-api-worker-sqlite.md)). In Kubernetes a NetworkPolicy enforces that split in the network as well.
+There are no accounts and nothing is stored ([ADR 0014](docs/adr/0014-no-accounts.md), [ADR 0016](docs/adr/0016-hosted-on-vercel-no-database.md)): limits per visitor, per scanned service and on scans in flight stand in for them, and cross-site requests are refused. Self-hosted, the worker, the only part that connects out, holds no data and the API connects nowhere ([ADR 0008](docs/adr/0008-api-worker-sqlite.md)); in Kubernetes a NetworkPolicy enforces that split in the network as well.
 
 The full threat model, with each mitigation linked to the test that proves it: [docs/threat-model.md](docs/threat-model.md).
 
@@ -81,13 +81,14 @@ What it showed ([docs/findings.md](docs/findings.md)): the token grows 8.8× (a 
 ```
 packages/scan-core   the scanner: address policy, TLS observer, certificates, HTTP, OIDC discovery, assessment, plain-words summary
 packages/token-kit   JOSE: analysis, verification, readiness, exact size projection (shared by the browser and the CLI)
-services/api         scan jobs and results (SQLite), limits, the web app's static files; no outbound connections
-services/worker      claims jobs, runs scans; the only component that connects to targets
+services/vercel      the scanner as one function: scan in the request, progress streamed, nothing stored (bundled to api/)
+services/api         self-hosted: scan jobs (SQLite), limits, the web app's static files; no outbound connections
+services/worker      self-hosted: claims jobs, runs scans; the only component that connects to targets
 apps/web             React: scan results, the token checker, the login lab
 packages/provider    the ML-DSA-65 OpenID Connect provider; packages/rp its two demo apps
 interop/python       an independent RFC 9964 verifier
 deploy/helm          the chart; Dockerfile and docker-compose.yml at the root
-docs/adr             fifteen decision records; docs/PLAN.md the plan and what is verified
+docs/adr             sixteen decision records; docs/PLAN.md the plan and what is verified
 ```
 
 No build step for the server code: Node.js runs the TypeScript sources directly.
@@ -95,8 +96,9 @@ No build step for the server code: Node.js runs the TypeScript sources directly.
 ## Development
 
 ```bash
-npm test                 # 475 tests: address bypasses, the key schedule against RFC 8448, whole scans of the lab servers,
-                         # the service's limits and leases, token attacks, the lab's cryptography
+npm test                 # 489 tests: address bypasses, the key schedule against RFC 8448, whole scans of the lab servers,
+                         # the Vercel function and the service's limits and leases, token attacks, the lab's cryptography
+npm run vercel:bundle    # regenerate api/v1/scan.js from services/vercel (CI checks it is current)
 npm run lint && npm run typecheck
 npm run dev              # the web app with hot reload, the API and worker beside it
 npm run scan -- <url>    # a scan from the terminal, as JSON with --json

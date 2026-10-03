@@ -220,6 +220,35 @@ describe('targets are checked before anything is queued', () => {
   });
 });
 
+describe('the streaming scan the web app uses', () => {
+  it('streams each step as the worker reports it, then the finished scan, as newline-delimited JSON', async () => {
+    const lab = await startLabServer(labProfile('hybrid'));
+    const live = await startService({ labOrigins: [lab.origin] });
+    const running = startWorker({ apiUrl: live.internalUrl, token: WORKER_TOKEN, workerId: 'stream-worker', policy: { allowedPorts: [443, 8443], labOrigins: [lab.origin] }, pollMs: 50 });
+    try {
+      const response = await fetch(`${live.publicUrl}/api/v1/scan`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: live.publicUrl },
+        body: JSON.stringify({ target: lab.origin }),
+      });
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toBe('application/x-ndjson');
+      const lines = (await response.text()).trim().split('\n').map((l) => JSON.parse(l) as { progress?: string; scan?: { status: string; report?: { reachable: boolean } } });
+      // A lab scan finishes in tens of milliseconds, so how many steps are relayed depends on timing;
+      // whatever comes before the result must be a step, and the result comes last, once.
+      expect(lines.slice(0, -1).every((l) => typeof l.progress === 'string')).toBe(true);
+      expect(lines.filter((l) => l.scan)).toHaveLength(1);
+      expect(lines.at(-1)?.scan).toMatchObject({ status: 'succeeded', report: { reachable: true } });
+      // The same checks guard it: a private address is refused before anything is queued.
+      const refused = await fetch(`${live.publicUrl}/api/v1/scan`, { method: 'POST', headers: { 'content-type': 'application/json', origin: live.publicUrl }, body: JSON.stringify({ target: 'https://127.0.0.1/' }) });
+      expect(refused.status).toBe(422);
+    } finally {
+      await running.stop();
+      await Promise.all([lab.close(), live.close()]);
+    }
+  }, 60_000);
+});
+
 describe('limits, since there are no accounts to hold anyone to', () => {
   it('limits how many scans one address can start per window, without affecting anyone else', async () => {
     const limited = await startService({ limits: { scansPerWindow: 3 } });
