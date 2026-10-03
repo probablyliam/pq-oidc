@@ -73,7 +73,7 @@ function ScanForm({ meta, initial }: { meta: Meta; initial: string }) {
           type="text"
           value={input}
           onChange={(event) => setInput(event.target.value)}
-          placeholder="accounts.example.com"
+          placeholder="netflix.com"
           spellCheck={false}
           autoComplete="url"
           autoCapitalize="none"
@@ -187,7 +187,7 @@ export function ScanView({ route, meta }: Props) {
         {!scanId && (
           <>
             <h1>Is this login quantum-safe?</h1>
-            <p className="sub">Paste the address of a sign-in page.</p>
+            <p className="sub">Paste a site, or its sign-in page.</p>
           </>
         )}
         {meta ? (

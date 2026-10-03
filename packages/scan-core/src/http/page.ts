@@ -34,6 +34,44 @@ export function findUsernameField(html: string): string | undefined {
   return undefined;
 }
 
+/** The usual places a sign-in lives, tried in this order when a page does not link to one. */
+export const SIGN_IN_PATHS = ['/login', '/signin', '/sign-in', '/account/login', '/auth/login', '/users/sign_in'];
+
+/**
+ * Links on a page that lead to a sign-in, best first: one that says "sign in"
+ * or "log in" outranks one whose address merely looks like it. Only https
+ * links are returned, resolved against the page's address; whoever follows
+ * them puts each through the policy first.
+ */
+export function findSignInLinks(html: string, base: URL, limit = 3): string[] {
+  const scored = new Map<string, number>();
+  // A link's text can sit inside nested spans with long class names (GitHub's "Sign in" runs to ~500 characters), so the window is generous.
+  for (const [, attrs = '', inner = ''] of html.matchAll(/<a\b([^>]*)>([\s\S]{0,2000}?)<\/a>/gi)) {
+    const href = /\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(attrs);
+    const raw = (href?.[1] ?? href?.[2] ?? href?.[3] ?? '').trim();
+    if (!raw || /^(?:javascript|mailto|tel):|^#/i.test(raw)) continue;
+    let url: URL;
+    try {
+      url = new URL(raw, base);
+    } catch {
+      continue;
+    }
+    if (url.protocol !== 'https:') continue;
+    url.hash = '';
+    const text = inner.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    const label = `${text} ${/\baria-label\s*=\s*"([^"]*)"/i.exec(attrs)?.[1] ?? ''} ${/\btitle\s*=\s*"([^"]*)"/i.exec(attrs)?.[1] ?? ''}`;
+    const byText = /\b(?:sign|log)\s?-?in\b/i.test(label) ? 2 : /\b(?:my )?account\b/i.test(label) ? 1 : 0;
+    const byPath = /(?:^|\/)(?:sign-?in|log-?in|login|auth|account)(?:\/|$)/i.test(url.pathname) ? 1 : 0;
+    if (byText + byPath === 0) continue;
+    const score = byText * 2 + byPath;
+    scored.set(url.href, Math.max(scored.get(url.href) ?? 0, score));
+  }
+  return [...scored.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([href]) => href);
+}
+
 /** A path that is a sign-in endpoint by convention: OAuth's authorize endpoint, or the usual names. */
 export function signInPath(url: URL): string | undefined {
   return /(?:^|\/)(?:authorize|signin|sign-in|login|log-in|sso|saml2?)(?:\/|$)/i.test(url.pathname) ? url.pathname : undefined;

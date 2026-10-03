@@ -168,6 +168,7 @@ One persistent stage (browser, network, server, and an attacker recording the ne
 | 12 | Finding kinds instead of a score | [0012](adr/0012-finding-kinds-no-score.md) |
 | 13 | Technology deliberately not added | [0013](adr/0013-not-added.md) |
 | 14 | No accounts: anonymous scans, limits, one-day retention; migration page cut | [0014](adr/0014-no-accounts.md) |
+| 15 | Given a site, find its sign-in (its own link, then the usual addresses) and assess that | [0015](adr/0015-find-the-sign-in.md) |
 
 ## Open questions
 

@@ -4,7 +4,32 @@ import type { PinnedTarget } from '../net/resolve.ts';
 import type { OidcSummary } from '../report.ts';
 import { plainSummary } from '../summary.ts';
 import type { FollowResult, HttpResponse } from './fetch.ts';
-import { findPasswordField, findUsernameField, signInPath, summarizePage } from './page.ts';
+import { findPasswordField, findSignInLinks, findUsernameField, signInPath, summarizePage } from './page.ts';
+
+describe('links to a sign-in on a page that is not one', () => {
+  const base = new URL('https://www.example.com/browse');
+
+  it('follows what the link says over what its address looks like, resolving relative addresses', () => {
+    const html = `<nav><a href="/pricing">Pricing</a><a class="x" href="/account">My account</a><a href="/login">Sign In</a><a href="https://auth.example.net/start">Log in</a></nav>`;
+    expect(findSignInLinks(html, base)).toEqual(['https://www.example.com/login', 'https://auth.example.net/start', 'https://www.example.com/account']);
+  });
+
+  it('ignores sign-up, sign-out, scripts, mail and plain-http links, and drops fragments', () => {
+    const html = `<a href="/signup">Sign up</a><a href="/logout">Log out</a><a href="javascript:login()">Sign in</a><a href="mailto:a@b">Log in</a><a href="http://example.com/login">Log in</a><a href="/login#top">Sign in</a>`;
+    expect(findSignInLinks(html, base)).toEqual(['https://www.example.com/login']);
+  });
+
+  it('reads a link whose text is buried in nested spans with long class names, as on GitHub', () => {
+    const cls = (n: number) => Array.from({ length: n }, (_, i) => `Primer_Brand__Button-module__Button--variant-${i}___x${i}Q`).join(' ');
+    const html = `<a class="${cls(4)}" href="/login" data-analytics-event="{&quot;action&quot;:&quot;sign_in&quot;}"><span class="${cls(3)}"><span class="${cls(6)}">Sign in</span></span></a>`;
+    expect(html.length).toBeGreaterThan(600);
+    expect(findSignInLinks(html, base)).toEqual(['https://www.example.com/login']);
+  });
+
+  it('finds nothing on a page with no such link', () => {
+    expect(findSignInLinks('<a href="/watch">Watch</a><p>Log in to your feelings</p>', base)).toEqual([]);
+  });
+});
 
 const pinned = {} as PinnedTarget;
 const noOidc: OidcSummary = { found: false, tried: [] };
@@ -114,12 +139,13 @@ describe('what kind of address was scanned', () => {
   it('the plain summary names the kind, and does not ask about a sign-in that is not there', () => {
     const report = {
       reachable: true,
+      target: { url: 'https://video.example.com/' },
       layers: [{ id: 'key-establishment', exposure: 'no-known-attack', headline: 'Hybrid: X25519MLKEM768' }],
       findings: [],
       page: { kind: 'other', evidence: [] },
     } as unknown as Parameters<typeof plainSummary>[0];
     const summary = plainSummary(report);
-    expect(summary.page).toEqual({ kind: 'other', note: 'Not a sign-in page. A scan can still check the connection and the site’s identity below.', leadsTo: undefined });
+    expect(summary.page).toEqual({ kind: 'other', note: 'Not a sign-in page, and no sign-in was found at the usual addresses. If the site has a login, paste its address. A scan can still check the connection and the site’s identity below.', leadsTo: undefined });
     expect(summary.answers.find((a) => a.id === 'sign-in')).toMatchObject({ status: 'unknown', short: 'No sign-in found' });
   });
 });

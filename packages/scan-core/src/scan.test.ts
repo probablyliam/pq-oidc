@@ -252,3 +252,48 @@ describe('a hostile target cannot steer the scanner', () => {
     expect(result.findings.some((f) => f.kind === 'undetermined')).toBe(true);
   });
 });
+
+describe('finding the sign-in when given a page that is not one', () => {
+  // The hybrid-only server publishes no OpenID metadata, so what it is rests on its page alone; the hybrid one does publish some.
+  const a = () => lab.get('hybrid-only')!;
+  const b = () => lab.get('hybrid')!;
+  const scan = (url: string) => runScan(url, { policy, lookup });
+  const searches = (r: ScanReport) => r.page!.evidence.filter((e) => e.label === 'Looked for a sign-in').map((e) => e.value);
+
+  it('follows the site’s own "Sign in" link', async () => {
+    const r = await scan(`${a().origin}/site`);
+    expect(r.page).toMatchObject({ kind: 'sign-in-page', how: 'password-field', found: { by: 'link', url: `${a().origin}/login` } });
+    expect(r.target).toMatchObject({ input: `${a().origin}/site`, url: `${a().origin}/login`, origin: a().origin });
+    expect(r.entered).toBeUndefined();
+    expect(searches(r)).toEqual([`${a().origin}/login: found, by the site’s own link`]);
+  });
+
+  it('tries the usual addresses when the page links nowhere', async () => {
+    const r = await scan(`${a().origin}/plain`);
+    expect(r.page).toMatchObject({ kind: 'sign-in-page', found: { by: 'convention', url: `${a().origin}/login` } });
+    expect(searches(r)).toEqual([`${a().origin}/login: found, at a usual address`]);
+  });
+
+  it('refuses links the policy forbids, says so, and carries on', async () => {
+    const r = await scan(`${a().origin}/site-bad`);
+    // The plain-http link is not even a candidate: only https links are collected from a page.
+    expect(searches(r)).toEqual(['https://127.0.0.1:8443/login: refused (address-not-allowed)', `${a().origin}/login: found, at a usual address`]);
+    expect(r.page?.found).toMatchObject({ by: 'convention' });
+  });
+
+  it('a site that sends visitors to a sign-in on another origin is assessed there, and says what was entered', async () => {
+    const r = await scan(`${a().origin}/redirect/to?u=${encodeURIComponent(`${b().origin}/login`)}`);
+    expect(r.target.origin).toBe(b().origin);
+    expect(r.entered).toEqual({ url: `${a().origin}/redirect/to?u=${encodeURIComponent(`${b().origin}/login`)}`, origin: a().origin });
+    expect(r.page).toMatchObject({ kind: 'sign-in-service', how: 'metadata', found: { by: 'redirect', url: `${b().origin}/login` } });
+    expect(r.related.find((o) => o.origin === a().origin)?.role).toBe('the address you entered; its sign-in is here');
+    // The TLS facts are the sign-in origin's: the hybrid server, not the classical one that was typed.
+    expect(r.layers.find((l) => l.id === 'key-establishment')?.headline).toMatch(/^Hybrid/);
+  });
+
+  it('a sign-in page given directly is not searched for', async () => {
+    const r = await scan(`${a().origin}/login`);
+    expect(r.page?.found).toBeUndefined();
+    expect(searches(r)).toEqual([]);
+  });
+});

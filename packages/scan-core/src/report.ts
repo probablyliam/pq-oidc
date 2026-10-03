@@ -180,6 +180,8 @@ export interface PageSummary {
   kind: 'sign-in-service' | 'sign-in-page' | 'leads-to-sign-in' | 'other';
   /** What the kind rests on, strongest first: published metadata, a password field, a username field, the address alone. */
   how?: 'metadata' | 'password-field' | 'username-field' | 'address';
+  /** Set when the address given was not a sign-in and the scanner found one: by the site's own link, at a usual address, or where the site redirected. */
+  found?: { by: 'link' | 'convention' | 'redirect'; url: string };
   /** The origin the address redirected to, when it left the scanned one. */
   leadsTo?: string;
   evidence: { label: string; value: string }[];
@@ -221,6 +223,8 @@ export interface ScanReport {
   oidc: OidcSummary;
   /** Absent in reports from engine 1.0. */
   page?: PageSummary;
+  /** The address that was typed, when the sign-in it led to is on another origin and that is what `target` describes. */
+  entered?: { url: string; origin: string };
   related: RelatedOrigin[];
   layers: LayerSummary[];
   findings: Finding[];

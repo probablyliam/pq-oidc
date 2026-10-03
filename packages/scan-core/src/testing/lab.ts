@@ -205,6 +205,10 @@ export async function startLabServer(profile: LabProfile, port = 0): Promise<Lab
     if (path === '/redirect/other-port') return redirect(`https://localhost:22/`);
     if (path === '/redirect/loop') return redirect('/redirect/loop');
     if (path === '/redirect/once') return redirect('/');
+    // Pages that are not sign-ins, for the sign-in search: one links to the login, one has no links, one links somewhere forbidden.
+    if (path === '/site') return send(200, 'text/html; charset=utf-8', '<!doctype html><title>Lab</title><nav><a href="/pricing">Pricing</a> <a href="/login">Sign in</a></nav><p>Welcome.</p>');
+    if (path === '/plain') return send(200, 'text/html; charset=utf-8', '<!doctype html><title>Lab</title><p>Nothing to see.</p>');
+    if (path === '/site-bad') return send(200, 'text/html; charset=utf-8', '<!doctype html><title>Lab</title><a href="https://127.0.0.1:8443/login">Sign in</a> <a href="http://example.com/login">Log in</a>');
     if (path.startsWith('/redirect/to?u=')) return redirect(decodeURIComponent(path.slice('/redirect/to?u='.length)));
     // Metadata that points the key set at the cloud metadata service.
     if (path === '/evil/.well-known/openid-configuration') {

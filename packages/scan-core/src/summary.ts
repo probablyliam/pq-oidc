@@ -54,7 +54,8 @@ export interface PlainSummary {
   alsoNoticed: string[];
 }
 
-function describePage(page: PageSummary): PlainPage {
+/** `host` is the one the report is about; `entered` is the one typed, when that differs. */
+function describePage(page: PageSummary, host: string, entered?: string): PlainPage {
   const elsewhere = page.leadsTo ? new URL(page.leadsTo).host : undefined;
   const seen = {
     'password-field': 'it asks for a password',
@@ -62,11 +63,17 @@ function describePage(page: PageSummary): PlainPage {
     address: 'the address is a sign-in endpoint; its form is built by script',
     metadata: 'it publishes how it signs people in',
   }[page.how ?? 'password-field'];
+  const you = entered ? `You entered ${entered}. ` : '';
+  const where = page.found ? `${host}${new URL(page.found.url).pathname.replace(/\/$/, '')}` : host;
+  const by = page.found ? ` (${{ link: 'the site’s own Sign in link', convention: 'one of the usual addresses', redirect: 'where the site sends visitors' }[page.found.by]})` : '';
+  const located = page.found !== undefined || entered !== undefined;
   const note = {
-    'sign-in-service': 'A sign-in service: other sites send people here to log in. A scan can also check how it signs you in, not just the connection.',
-    'sign-in-page': `A sign-in page: ${seen}.`,
-    'leads-to-sign-in': `This address sends visitors on to sign in at ${elsewhere}.`,
-    other: elsewhere ? `Not a sign-in page. This address sends visitors on to ${elsewhere}. A scan can still check the connection and the site’s identity below.` : 'Not a sign-in page. A scan can still check the connection and the site’s identity below.',
+    'sign-in-service': located
+      ? `${you}Its sign-in is at ${where}${by}, a sign-in service. A scan can also check how it signs you in, not just the connection.`
+      : 'A sign-in service: other sites send people here to log in. A scan can also check how it signs you in, not just the connection.',
+    'sign-in-page': located ? `${you}Its sign-in is at ${where}${by}: ${seen}.` : `A sign-in page: ${seen}.`,
+    'leads-to-sign-in': `${you}This address sends visitors on to sign in at ${elsewhere}.`,
+    other: `${you}Not a sign-in page, and no sign-in was found at the usual addresses${elsewhere ? `; it sends visitors on to ${elsewhere}` : ''}. If the site has a login, paste its address. A scan can still check the connection and the site’s identity below.`,
   }[page.kind];
   return { kind: page.kind, note, leadsTo: page.leadsTo };
 }
@@ -127,7 +134,7 @@ export function plainSummary(report: ScanReport): PlainSummary {
 
   // ---- Can someone fake a sign-in? The token signature decides, when it can be seen at all.
   const token = exposure('token-signing');
-  const page = report.reachable && report.page ? describePage(report.page) : undefined;
+  const page = report.reachable && report.page ? describePage(report.page, new URL(report.target.url).host, report.entered ? new URL(report.entered.url).host : undefined) : undefined;
   const migrating = layer('token-signing')?.headline.startsWith('Migrating') ?? false;
   const signIn: PlainAnswer = {
     id: 'sign-in',
