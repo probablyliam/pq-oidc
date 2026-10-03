@@ -73,7 +73,7 @@ function ScanForm({ meta, initial }: { meta: Meta; initial: string }) {
           type="text"
           value={input}
           onChange={(event) => setInput(event.target.value)}
-          placeholder="netflix.com"
+          placeholder="accounts.example.com"
           spellCheck={false}
           autoComplete="url"
           autoCapitalize="none"

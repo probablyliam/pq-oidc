@@ -164,8 +164,8 @@ export function plainSummary(report: ScanReport): PlainSummary {
             }
           : {
             status: 'unknown',
-            short: 'Cannot tell from outside',
-            answer: 'This site does not publish how it signs sign-ins, so a scan cannot see it. If the site gives you a token, the token checker can.',
+            short: 'Nothing published to check',
+            answer: 'Only sites that publish their sign-in keys can be checked here, as Google and Microsoft do. This site keeps its sign-in to itself, so a scan has nothing to read. If you have a token from it, paste it into the token checker.',
           }),
   };
 
@@ -184,7 +184,7 @@ export function plainSummary(report: ScanReport): PlainSummary {
   } else if (impersonation.status === 'safe' && signIn.status !== 'later') {
     verdict = 'safe';
     headline = 'Quantum-safe';
-    explanation = signIn.status === 'unknown' ? 'Everything a scan can see is quantum-safe. How it signs sign-ins is not visible from outside.' : 'Nothing a scan can see here could be broken by a quantum computer.';
+    explanation = signIn.status === 'unknown' ? 'Everything a scan can see is quantum-safe. The site publishes nothing about its sign-in keys, so those could not be checked.' : 'Nothing a scan can see here could be broken by a quantum computer.';
   } else {
     verdict = 'partly';
     headline = 'Partly quantum-safe';

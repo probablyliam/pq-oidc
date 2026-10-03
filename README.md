@@ -27,7 +27,7 @@ npm install
 npm start          # http://localhost:8080
 ```
 
-`npm start` runs the API, a worker, and seven local test servers with known configurations (classical, hybrid, post-quantum, TLS 1.2, RSA key transport, an expired certificate) so there is something to scan that is yours. Type `netflix.com` or `github.com`: the scanner follows the site's own "Sign in" link, or tries the usual addresses, and assesses where a password would go ([ADR 0015](docs/adr/0015-find-the-sign-in.md)).
+`npm start` runs the API, a worker, and seven local test servers with known configurations (classical, hybrid, post-quantum, TLS 1.2, RSA key transport, an expired certificate) so there is something to scan that is yours. Type a bare site such as `github.com`: the scanner follows the site's own "Sign in" link, or tries the usual addresses, and assesses where a password would go ([ADR 0015](docs/adr/0015-find-the-sign-in.md)).
 
 The site at [probablyliam.github.io/pq-oidc](https://probablyliam.github.io/pq-oidc/) is the same web app without a scan service behind it: the token checker and the login lab work there, scanning does not.
 

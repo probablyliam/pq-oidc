@@ -71,7 +71,7 @@ describe('the three answers', () => {
   it('sign-in: read from published keys, and "cannot tell" when nothing is published', () => {
     expect(answer('hybrid', 'sign-in')).toMatchObject({ status: 'later', technical: 'RSA 2048-bit' });
     expect(answer('pq', 'sign-in')).toMatchObject({ status: 'safe' });
-    expect(answer('hybrid-only', 'sign-in')).toMatchObject({ status: 'unknown', short: 'Cannot tell from outside', technical: '' });
+    expect(answer('hybrid-only', 'sign-in')).toMatchObject({ status: 'unknown', short: 'Nothing published to check', technical: '' });
   });
 
   it('says what kind of address each one is', () => {

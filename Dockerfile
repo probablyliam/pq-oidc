@@ -37,10 +37,9 @@ COPY packages/rp/package.json packages/rp/
 COPY apps/web/package.json apps/web/
 COPY services/api/package.json services/api/
 COPY services/worker/package.json services/worker/
-# Production dependencies of the server packages only: no web app, no test tooling.
-RUN npm ci --omit=dev --ignore-scripts \
-      --workspace packages/scan-core --workspace services/api --workspace services/worker \
-      --workspace packages/provider --workspace packages/rp
+# Production dependencies only. Every workspace is installed so the links between them
+# (services/api -> @pq-oidc/scan-core -> @pq-oidc/token-kit) all exist; a --workspace filter leaves some out.
+RUN npm ci --omit=dev --ignore-scripts
 
 FROM node:25-slim
 ENV NODE_ENV=production \
