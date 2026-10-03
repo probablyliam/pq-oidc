@@ -448,7 +448,7 @@ footer.site p {
 }
 .picks > div {
   display: grid;
-  grid-template-columns: 11rem 1fr;
+  grid-template-columns: 13rem 1fr;
   gap: 4px 14px;
   align-items: baseline;
 }

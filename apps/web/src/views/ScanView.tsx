@@ -7,7 +7,8 @@ import { Report } from '../components/Report.tsx';
 import { navigate } from '../router.ts';
 import type { Route } from '../router.ts';
 
-const SITES = ['accounts.google.com', 'login.microsoftonline.com', 'github.com/login'];
+/** Two sign-in services, which publish their signing keys, and one ordinary login, which does not: both kinds of answer. */
+const SITES = ['accounts.google.com', 'login.microsoftonline.com', 'github.com'];
 /** Local test servers are known by their port (see `npm run lab`). */
 const TEST_SERVERS: Record<string, string> = {
   '9441': 'Classical',
@@ -89,7 +90,7 @@ function ScanForm({ meta, initial }: { meta: Meta; initial: string }) {
       )}
       <dl className="picks">
         <div>
-          <dt>Try a site</dt>
+          <dt>Try a sign-in service, or a site</dt>
           <dd>
             {SITES.map((target) => (
               <button key={target} type="button" className="pick" onClick={() => pick(target)}>
