@@ -100,6 +100,7 @@ export async function runScan(input: string, options: ScanOptions = {}): Promise
       if (!(error instanceof TargetRejected)) throw error;
       searched.push({ label: 'Looked for a sign-in', value: `${url}: refused (${error.code})` });
     };
+    progress('Searching for the login page');
     let fetches = 0;
     for (const candidate of candidates) {
       if (fetches >= MAX_SIGN_IN_FETCHES || Date.now() >= deadline) break;
@@ -112,7 +113,6 @@ export async function runScan(input: string, options: ScanOptions = {}): Promise
         refused(candidate.url, error);
         continue;
       }
-      progress(`Looking for the sign-in at ${target.hostname}${target.url.pathname}`);
       fetches++;
       let attempt: Landing;
       try {
@@ -126,6 +126,7 @@ export async function runScan(input: string, options: ScanOptions = {}): Promise
         found = { by: candidate.by, url: end.response.url };
         landing = attempt;
         searched.push({ label: 'Looked for a sign-in', value: `${candidate.url}: found, ${candidate.by === 'link' ? 'by the site’s own link' : 'at a usual address'}` });
+        progress(`Found the login at ${end.target.hostname}${end.target.url.pathname}`);
         break;
       }
       searched.push({ label: 'Looked for a sign-in', value: `${candidate.url}: ${end ? `HTTP ${end.response.status}, ` : ''}not a sign-in` });

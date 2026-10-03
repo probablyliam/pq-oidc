@@ -38,7 +38,10 @@ export type Verdict = 'not-safe' | 'partly' | 'safe' | 'unknown';
 /** What the address is, in one sentence: the scanner looks at any address, and a login is only one kind. */
 export interface PlainPage {
   kind: PageSummary['kind'];
+  /** The full account of what the address is, for the technical details. */
   note: string;
+  /** One short line for the top of the result: where the login was found, or that none was. Nothing when the address given was itself the login. */
+  line?: string;
   /** Where visitors are sent on to, when that is another origin. */
   leadsTo?: string;
 }
@@ -75,7 +78,8 @@ function describePage(page: PageSummary, host: string, entered?: string): PlainP
     'leads-to-sign-in': `${you}This address sends visitors on to sign in at ${elsewhere}.`,
     other: `${you}Not a sign-in page, and no sign-in was found at the usual addresses${elsewhere ? `; it sends visitors on to ${elsewhere}` : ''}. If the site has a login, paste its address. A scan can still check the connection and the site’s identity below.`,
   }[page.kind];
-  return { kind: page.kind, note, leadsTo: page.leadsTo };
+  const line = page.found ? `Found login: ${where}` : page.kind === 'other' ? 'No login found here' : undefined;
+  return { kind: page.kind, note, line, leadsTo: page.leadsTo };
 }
 
 const strip = (headline: string) => headline.replace(/^(Classical|Hybrid|Post-quantum|Migrating): /, '');

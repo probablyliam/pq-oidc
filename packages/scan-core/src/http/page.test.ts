@@ -145,7 +145,18 @@ describe('what kind of address was scanned', () => {
       page: { kind: 'other', evidence: [] },
     } as unknown as Parameters<typeof plainSummary>[0];
     const summary = plainSummary(report);
-    expect(summary.page).toEqual({ kind: 'other', note: 'Not a sign-in page, and no sign-in was found at the usual addresses. If the site has a login, paste its address. A scan can still check the connection and the site’s identity below.', leadsTo: undefined });
+    expect(summary.page).toEqual({ kind: 'other', line: 'No login found here', note: 'Not a sign-in page, and no sign-in was found at the usual addresses. If the site has a login, paste its address. A scan can still check the connection and the site’s identity below.', leadsTo: undefined });
+    // When the login was found elsewhere, the top of the result says only where; the account of how goes with the technical details.
+    const found = plainSummary({
+      ...report,
+      target: { url: 'https://www.example.com/login' },
+      entered: { url: 'https://example.com/', origin: 'https://example.com' },
+      page: { kind: 'sign-in-page', how: 'password-field', found: { by: 'link', url: 'https://www.example.com/login' }, evidence: [] },
+    } as unknown as Parameters<typeof plainSummary>[0]);
+    expect(found.page?.line).toBe('Found login: www.example.com/login');
+    expect(found.page?.note).toBe('You entered example.com. Its sign-in is at www.example.com/login (the site’s own Sign in link): it asks for a password.');
+    // A login given directly gets no line at all.
+    expect(plainSummary({ ...report, page: { kind: 'sign-in-page', how: 'password-field', evidence: [] } } as unknown as Parameters<typeof plainSummary>[0]).page?.line).toBeUndefined();
     expect(summary.answers.find((a) => a.id === 'sign-in')).toMatchObject({ status: 'unknown', short: 'No sign-in found' });
   });
 });

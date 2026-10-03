@@ -207,17 +207,7 @@ export function Report({ report }: { report: ScanReport }) {
     <article className="report">
       <header className={`verdict verdict-${summary.verdict}`}>
         <p className="verdict-host">{host}</p>
-        {summary.page && (
-          <p className="verdict-page">
-            {summary.page.note}
-            {summary.page.leadsTo && (
-              <>
-                {' '}
-                <a href={href('', { target: summary.page.leadsTo })}>Scan {new URL(summary.page.leadsTo).host}</a>
-              </>
-            )}
-          </p>
-        )}
+        {summary.page?.line && <p className="verdict-page">{summary.page.line}</p>}
         <h2>{summary.headline}</h2>
         <p className="verdict-why">{summary.explanation}</p>
         <p className="verdict-meta">Scanned {ago(report.startedAt)}.</p>
