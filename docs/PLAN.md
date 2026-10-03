@@ -15,7 +15,7 @@ Decisions with reasoning live in [`docs/adr/`](adr/).
 | 5 | Results UI | done, then reworked: verdict first, technical detail folded away (ADR 0012) |
 | 6 | Login explainer | done, then reworked twice into the login lab (ADR 0011) |
 | 7 | Migration exercise | cut at the owner's request (ADR 0014); model and tests remain in history at `411c1d6` |
-| 8 | Docker, Compose, Helm (NetworkPolicy), CI; live site on Vercel | done; the cluster job runs in CI only (no Docker on this machine); Pages retired (ADR 0016) |
+| 8 | Docker, Compose, Helm (NetworkPolicy), CI; live site on Vercel | done; https://pq-oidc.vercel.app deployed 2026-10-03 from `main`, scans verified live; the cluster job runs in CI only (no Docker on this machine); Pages retired (ADR 0016) |
 | 9 | Hardening | partly: dependency audit in CI, phone layouts checked; no independent security review, no accessibility pass |
 | 10 | README, threat model, final report | done |
 
@@ -72,8 +72,8 @@ Useful commands: `npm start` (scanner, worker and test servers; open http://loca
 ### 5. Target architecture
 
 ```
-Browser ── SPA (apps/web) ──────────────┐  static build also runs alone on GitHub Pages
-                                        │  (learning + token analysis; scans show recorded samples)
+Browser ── SPA (apps/web) ──────────────┐  live at https://pq-oidc.vercel.app, where /api/v1/scan
+                                        │  is one Vercel Function (services/vercel) instead of api+worker
               same origin: /api, /auth  ▼
         ┌──────────────────────────────────────────────┐
         │ api (services/api)                           │  no internet egress
