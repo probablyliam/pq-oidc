@@ -66,7 +66,7 @@ function Process({ n, title, sub, pq, live, scene, children }: { n: number; titl
 }
 
 const JOBS: { job: Job; title: string }[] = [
-  { job: 'recording', title: 'Read your password from the recording' },
+  { job: 'recording', title: 'Read your recorded password' },
   { job: 'site', title: 'Pretend to be the site' },
   { job: 'token', title: 'Forge a sign-in token' },
 ];

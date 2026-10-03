@@ -27,11 +27,18 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
 }
+/* Every option is the same height whether its label takes one line or two, so the three groups line up. */
 .control .seg button {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: center;
+  gap: 2px 5px;
+  min-height: 54px;
+  padding: 6px 8px;
   text-align: center;
-  padding: 9px 8px;
   font-size: 0.9rem;
+  line-height: 1.2;
 }
 
 /* The login card: where the visitor actually logs in. */
