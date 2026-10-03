@@ -3,7 +3,7 @@ import { defineConfig } from 'vite';
 
 // GitHub Pages serves the site from /<repo>/, so that build sets BASE_PATH=/pq-oidc/.
 // In development the API runs on its own port; the dev server forwards to it so the
-// page, the API and the session cookie share one origin, as they do in production.
+// page and the API share one origin, as they do when the API serves the built app.
 const api = process.env.API_URL ?? 'http://localhost:8080';
 
 export default defineConfig({
@@ -17,7 +17,6 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': api,
-      '/auth': api,
     },
   },
 });

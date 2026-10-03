@@ -1,37 +1,71 @@
 # docker compose up --build
+#   Scanner (web app + API)   http://localhost:8080
+#   Worker                    claims scans from the API over the internal network; no port
+#
+# The ML-DSA identity provider and its two demo apps are a separate profile:
+#   docker compose --profile oidc up --build
+#   Provider      http://localhost:3000
 #   Legacy App    http://localhost:3001  (ES256 ID tokens)
 #   PQ-Ready App  http://localhost:3002  (ML-DSA-65 ID tokens)
-#   Provider      http://localhost:3000
 #
-# Browsers reach the provider at localhost:3000, but inside a container
-# "localhost" is the container itself. So the apps use INTERNAL_ISSUER
-# (http://provider:3000) for server-to-server calls, while tokens still
-# carry the public issuer URL.
+# Browsers reach services at localhost, but inside a container "localhost" is the
+# container itself, so containers address each other by service name.
 
-x-demo-secrets: &demo-secrets
-  # Demo values only. Real deployments inject secrets (see the Helm chart).
-  LEGACY_CLIENT_SECRET: legacy-app-demo-secret
-  PQ_CLIENT_SECRET: pq-app-demo-secret
+x-hardened: &hardened
+  read_only: true
+  security_opt: ['no-new-privileges:true']
+  cap_drop: [ALL]
+  tmpfs: ['/tmp']
 
 services:
-  provider:
+  api:
     build: .
     image: pq-oidc:local
+    <<: *hardened
     environment:
-      <<: *demo-secrets
+      PUBLIC_URL: http://localhost:8080
+      # Shared with the worker. Change it for anything beyond a laptop; the image refuses the built-in demo value.
+      WORKER_TOKEN: ${WORKER_TOKEN:-compose-local-worker-token-change-me-000000}
+      TRUST_PROXY: 'false'
+    ports: ['8080:8080']
+    # The internal listener (8081) is reachable from the worker only: it is not published.
+    volumes: ['scans:/data']
+
+  worker:
+    image: pq-oidc:local
+    command: ['node', 'services/worker/src/server.ts']
+    <<: *hardened
+    environment:
+      API_INTERNAL_URL: http://api:8081
+      WORKER_TOKEN: ${WORKER_TOKEN:-compose-local-worker-token-change-me-000000}
+      WORKER_CONCURRENCY: '2'
+    # The image's health check probes an HTTP port; the worker has none.
+    healthcheck: { disable: true }
+    depends_on:
+      api: { condition: service_healthy }
+
+  provider:
+    profiles: [oidc]
+    image: pq-oidc:local
+    command: ['node', 'packages/provider/src/server.ts']
+    <<: *hardened
+    environment:
+      PORT: '3000'
       ISSUER: http://localhost:3000
       LEGACY_REDIRECT_URI: http://localhost:3001/callback
       PQ_REDIRECT_URI: http://localhost:3002/callback
       # Try the premature migration: set this to ML-DSA-65 and sign in to Legacy App.
       LEGACY_ID_TOKEN_ALG: ${LEGACY_ID_TOKEN_ALG:-ES256}
+      # Demo values only. Real deployments inject secrets (see the Helm chart).
+      LEGACY_CLIENT_SECRET: legacy-app-demo-secret
+      PQ_CLIENT_SECRET: pq-app-demo-secret
     ports: ['3000:3000']
-    read_only: true
-    security_opt: ['no-new-privileges:true']
-    cap_drop: [ALL]
 
   legacy-app:
+    profiles: [oidc]
     image: pq-oidc:local
     command: ['node', 'packages/rp/src/server.ts']
+    <<: *hardened
     environment:
       RP_PRESET: legacy
       PORT: '3001'
@@ -43,13 +77,12 @@ services:
     ports: ['3001:3001']
     depends_on:
       provider: { condition: service_healthy }
-    read_only: true
-    security_opt: ['no-new-privileges:true']
-    cap_drop: [ALL]
 
   pq-app:
+    profiles: [oidc]
     image: pq-oidc:local
     command: ['node', 'packages/rp/src/server.ts']
+    <<: *hardened
     environment:
       RP_PRESET: pq
       PORT: '3002'
@@ -61,6 +94,6 @@ services:
     ports: ['3002:3002']
     depends_on:
       provider: { condition: service_healthy }
-    read_only: true
-    security_opt: ['no-new-privileges:true']
-    cap_drop: [ALL]
+
+volumes:
+  scans:

@@ -193,9 +193,17 @@ export function ScanView({ route, meta }: Props) {
         {meta ? (
           <ScanForm meta={meta} initial={route.query.get('target') ?? ''} />
         ) : (
-          <p className="notice">
-            Scanning is done by a small service that runs beside this page, and it is not running here. Start the project with <code>npm start</code> to scan.
-          </p>
+          <div className="notice static-note">
+            <p>
+              Scanning opens its own connections to the site you name, which a web page cannot do, so this copy of the site cannot scan. The token checker and the login lab work
+              here as they are.
+            </p>
+            <p>
+              To scan, run the project on your own machine (Node.js 25):
+              <code>git clone https://github.com/probablyliam/pq-oidc && cd pq-oidc && npm install && npm start</code>
+              then open <code>localhost:8080</code>.
+            </p>
+          </div>
         )}
       </div>
 

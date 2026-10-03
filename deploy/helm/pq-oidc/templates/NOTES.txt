@@ -1,6 +1,16 @@
 pq-oidc is running.
+{{- if .Values.scanner.enabled }}
 
-Reach it from your machine with port-forwards (the defaults assume localhost):
+The scanner, from your machine (the defaults assume localhost):
+
+  kubectl port-forward svc/{{ .Release.Name }}-api 8080:8080 &
+  open {{ .Values.scanner.publicUrl }}
+
+Scans run in the worker pod; its NetworkPolicy keeps it off private ranges and other pods.
+{{- end }}
+{{- if .Values.oidc.enabled }}
+
+The identity provider and demo apps:
 
   kubectl port-forward svc/{{ include "pq-oidc.providerName" . }} {{ .Values.provider.port }}:{{ .Values.provider.port }} &
 {{- range $name, $app := .Values.apps }}{{ if $app.enabled }}
@@ -14,3 +24,4 @@ Then open:
 
 Migrate an app by changing its algorithm, for example:
   helm upgrade {{ .Release.Name }} deploy/helm/pq-oidc --reuse-values --set apps.legacy.idTokenAlg=ML-DSA-65
+{{- end }}

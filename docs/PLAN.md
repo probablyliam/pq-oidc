@@ -1,7 +1,7 @@
 # Plan
 
-Source of truth for the rebuild on branch `scanner-platform`. Re-read at the start of each phase.
-Decisions with reasoning live in [`docs/adr/`](adr/). Nothing here is pushed to a remote.
+Source of truth for the rebuild, done on branch `scanner-platform` and merged to `main` on 2026-10-02 at the owner's request.
+Decisions with reasoning live in [`docs/adr/`](adr/).
 
 ## Status
 
@@ -9,30 +9,27 @@ Decisions with reasoning live in [`docs/adr/`](adr/). Nothing here is pushed to 
 |---|---|---|
 | 0 | Inspect, run, assess, plan | done |
 | 1 | Scan core: target policy, SSRF-safe resolver and connector | done |
-| 2 | Real analysis: TLS handshake observer, certificates, HTTP transport, OIDC metadata, report | done |
+| 2 | Real analysis: TLS handshake observer, certificates, HTTP transport, OIDC metadata, report | done; finding the login from a bare site added later (ADR 0015) |
 | 3 | Token analysis with real verification | done |
 | 4 | API service, job model, persistence, worker | done, then reworked: no accounts (ADR 0014) |
 | 5 | Results UI | done, then reworked: verdict first, technical detail folded away (ADR 0012) |
-| 6 | Login explainer | done, then reworked: the visitor types and logs in (ADR 0011) |
+| 6 | Login explainer | done, then reworked twice into the login lab (ADR 0011) |
 | 7 | Migration exercise | cut at the owner's request (ADR 0014); model and tests remain in history at `411c1d6` |
-| 8 | Docker, Helm (NetworkPolicy), CI | pending |
-| 9 | Hardening: security review, accessibility, mobile, performance, test gaps | pending |
-| 10 | Final review against the definition of done, `FINAL_REPORT.md`, README | pending |
+| 8 | Docker, Compose, Helm (NetworkPolicy), CI, Pages | done; the cluster job runs in CI only (no Docker on this machine) |
+| 9 | Hardening | partly: dependency audit in CI, phone layouts checked; no independent security review, no accessibility pass |
+| 10 | README, threat model, final report | done |
 
 ## Next steps
 
-**Direction changed on 2026-10-02 after the owner tried the first version.** Their feedback, which overrides the original brief where the two disagree: no sign-in and no saved scans; a result a normal person can read, with the technical detail available underneath; a login explainer you do rather than watch, with one simple control; no migration page. The model is VirusTotal: paste something, get an answer. All four are done and waiting for the owner to try (ADRs 0011, 0012, 0014).
+Everything the owner asked for is in. What remains, in the order it is worth doing:
 
-Next, in this order:
+1. **Watch the first CI run on `main`.** The image build, the kind deployment, the scan through the cluster and the Pages deploy have never run before this push; fix what they find.
+2. **Independent security review** of the address boundary (`packages/scan-core/src/net`), the TLS parser against hostile input (`packages/scan-core/src/tls`), and the API's limits. Done by reading, not by delegating.
+3. **A browser test in the repository** (`tests/browser/`, playwright-core, `msedge` locally and `chrome` in CI): scan a lab server and read the verdict; the token page; the lab's reveal and attack sequence, which were verified by hand with the scripts in the untracked `.shots/`.
+4. **Accessibility pass**: focus order, contrast, labels for the lab's diagrams, reduced motion (the code paths exist; they were not tried with a screen reader).
+5. **Bundle size**: the web app is one 560 kB script; the lab's cryptography could load on demand.
 
-1. **The owner's reaction to the reworked version.** Pace of the explainer (one constant, `RATE` in `apps/web/src/learn/Player.tsx`), wording of the verdicts, anything else that reads as too much.
-2. **Security review of the backend, done by reading it rather than by delegating:** the SSRF boundary (`packages/scan-core/src/net`), the TLS parser's handling of hostile input, and the anonymous API's limits.
-3. **Browser test in the repository.** `tests/browser/`: drive the built app with `playwright-core` (channel `msedge` locally, `chrome` in CI): scan a lab server and read the verdict; token page; type a login and assert the typed password reaches the attacker's panel on a classical site and not on a hybrid one. Regenerate `docs/screenshots/` from it (working shots are in the untracked `.shots/`).
-4. **Phase 8, infrastructure.** Dockerfile (add `services/`, `packages/scan-core`, build `apps/web`), `docker-compose.yml`, Helm: api (PVC for SQLite, one replica), worker, NetworkPolicies (worker: internet egress minus private ranges; api: no egress at all), `.env.example`, CI jobs (tests, web build, kind deploy, NetworkPolicy check), Pages workflow path `apps/web`. None of this can be run on this machine; render and schema-check the chart with tools kept outside the repo.
-5. **Phase 9, hardening.** `npm audit`; accessibility pass (focus order, contrast, the stage's labels for screen readers); bundle size (code-split the explainer); the attacker table on a phone.
-6. **Phase 10.** Rewrite `README.md` (it still describes the old site), update `docs/threat-model.md` for the scanner, API and worker, write `docs/FINAL_REPORT.md`, copy screenshots to `docs/screenshots/`.
-
-Useful commands: `npm start` (scanner, worker and test servers; open http://localhost:8080), `npm run dev`, `npm run lab`, `npm run oidc` (the ML-DSA identity provider, separate from the scanner), `npm test`, `npm run scan -- <url>`, `npm run typecheck`, `npx eslint .`.
+Useful commands: `npm start` (scanner, worker and test servers; open http://localhost:8080), `npm run dev`, `npm run lab`, `npm run oidc` (the ML-DSA identity provider, separate from the scanner), `npm test`, `npm run scan -- <url>`, `npm run typecheck`, `npx eslint .`, `node scripts/probe-page.ts <url>` (what the scanner sees on a page).
 
 ---
 

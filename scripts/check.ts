@@ -2,7 +2,7 @@
  * `npm run check -- <issuer URL>`   post-quantum readiness of any OIDC provider
  * `npm run check -- <JWT>`          what happens to a token when it is re-signed with ML-DSA
  *
- * Same analysis as the Token Lab, without browser CORS limits.
+ * The same key analysis the scanner makes, from the terminal and without browser CORS limits.
  *   npm run check -- https://token.actions.githubusercontent.com
  */
 import {

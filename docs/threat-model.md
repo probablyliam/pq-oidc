@@ -1,6 +1,86 @@
 # Threat model
 
-This document covers the pq-oidc provider, the two demo apps (relying parties), and the tokens that pass between them. It uses STRIDE. Every mitigation points to the code that implements it and, where possible, to the test that proves it.
+Two systems, in two parts. **Part 1** is the scanner: a service that opens connections to addresses strangers type in. **Part 2** is the identity provider the project started as, with its two demo apps. Both use STRIDE, and every mitigation points to the code that implements it and, where possible, to the test that proves it.
+
+# Part 1: the scanner
+
+## What we protect
+
+| Asset | Why it matters |
+|---|---|
+| Everything on the network the scanner can reach | The scanner connects where it is told. The threat is being pointed at something other than a public website: a cloud metadata service, a database, another pod. |
+| Third parties' servers | A free scanner can be used to hammer a site that never asked for it. |
+| The worker's token | Whoever holds it can claim jobs and post results for them. |
+| Scan results | They contain only what the scanned server shows to everyone, but a result should not be listable or linked to a person. |
+
+## System and trust boundaries
+
+```mermaid
+flowchart LR
+  subgraph Internet["Untrusted"]
+    V[Visitor's browser]
+    T[Scan targets]
+  end
+  subgraph Cluster["Our deployment"]
+    A[API<br/>jobs, results, limits<br/>no egress]
+    W[Worker<br/>runs scans<br/>egress to the internet only]
+    D[(SQLite on a volume)]
+  end
+  V -- "1. POST /api/v1/scans (same-origin, JSON)" --> A
+  W -- "2. claim job (bearer token, internal port)" --> A
+  W -- "3. TLS handshakes, HTTPS GET, metadata" --> T
+  W -- "4. result" --> A
+  V -- "5. GET /api/v1/scans/:id" --> A
+  A --- D
+```
+
+Trust is crossed at the visitor (every address is attacker-controlled), at every byte the target sends (TLS records, HTML, redirects, metadata, key sets: all parsed by the worker), and at the worker's internal port (authenticated with the token, reachable only from the worker's network in Kubernetes).
+
+## Threats and mitigations
+
+### Spoofing and elevation of privilege: being pointed at the wrong thing
+
+| # | Threat | Mitigation | Evidence |
+|---|---|---|---|
+| X1 | **SSRF.** A visitor types an internal address, or one of its many spellings: `127.1`, decimal or octal IPs, `localhost` variants, an IPv4-mapped IPv6 address, NAT64 or 6to4 forms, a public name that resolves to a private address, or one that resolves differently the second time. | `https` only, ports 443 and 8443, no credentials. Every name is resolved once, every returned address is classified against the private, loopback, link-local, multicast and cloud-metadata ranges (with embedded IPv4 extracted from IPv6 forms), and the socket is pinned to the checked address with a lookup guard, so DNS is never consulted again ([ADR 0007](adr/0007-ssrf-defence.md), `packages/scan-core/src/net`). | `address.test.ts`, `policy.test.ts`, `resolve.test.ts` (every range, every spelling, a rebinding resolver) |
+| X2 | A target redirects the scanner to an internal address, another port, plain http, or a `file:` URL. | Redirects are followed by hand; each location is a new target through the same checks. A refused one is reported, never fetched. | `scan.test.ts` *a hostile target cannot steer the scanner* (nine cases) |
+| X3 | Metadata names a `jwks_uri` on an internal address. | The key set URL goes through the same policy and pinning. | `scan.test.ts` *a jwks_uri pointing at an internal address is never fetched* |
+| X4 | A page links its "Sign in" to an internal or plain-http address. | Links found on a page are candidates only; each is parsed through the policy, and only https links are collected. | `scan.test.ts` *refuses links the policy forbids* |
+| X5 | A bug in the application's address checks. | In Kubernetes, a NetworkPolicy on the worker denies egress to private ranges and to every pod except the API's internal port; the API has no egress at all ([`deploy/helm`](../deploy/helm/pq-oidc/templates/scanner.yaml)). Needs a CNI that enforces policies; CI checks the manifests render as intended. | CI step *the rendered chart keeps the worker off private ranges* |
+| X6 | Someone other than the worker claims jobs or posts results. | The internal port needs the worker token, compared in constant time; it is a separate listener on a separate port, not published by Compose and not reachable through the API's Service from outside. | `service.test.ts` *worker protocol* |
+
+### Tampering
+
+| # | Threat | Mitigation | Evidence |
+|---|---|---|---|
+| X7 | A target sends malformed TLS, oversized records, a never-ending body, or a redirect loop. | Length-checked parsing of every TLS message; size caps on bodies (256 kB for pages, 512 kB for key sets); timeouts per connection and a deadline for the whole scan; a redirect cap. | `observe.test.ts`, `scan.test.ts` *size cap*, *slow*, *loop* |
+| X8 | A compromised worker reports false results. | Accepted: a worker can only lie about jobs it holds. It holds no data and no other credential. | ADR 0008 |
+
+### Information disclosure
+
+| # | Threat | Mitigation | Evidence |
+|---|---|---|---|
+| X9 | Results are listed, or linked to a person. | A result is read by its random UUID only; nothing lists them; they are deleted after an hour. The visitor is stored as an HMAC of the address under a key made at start-up and never written down. No address or token appears in the logs. | `service.test.ts` *the database keeps only a hashed client*, *logs carry no token or address*, *deletes results after an hour* |
+| X10 | A pasted token reaches the server. | The token checker runs in the browser; only an issuer's address is ever sent, and only when the visitor asks ([ADR 0010](adr/0010-token-analysis-in-browser.md)). | |
+| X11 | A cookie value from a scanned site is kept in a result. | Only cookie names and flags are summarised. | `scan.test.ts` *reads HSTS and cookie flags* |
+
+### Denial of service
+
+| # | Threat | Mitigation | Evidence |
+|---|---|---|---|
+| X12 | One visitor floods the scanner, or many visitors are pointed at one site. | Per visitor: 20 scans per 10 minutes, 3 in progress. Per scanned service (name and port): 3 per minute, whoever asks. A repeat within 5 minutes is answered with the earlier result. A queue ceiling. Cross-site requests are refused, so a page elsewhere cannot spend a visitor's allowance. | `service.test.ts` *limits* (five tests), *cross-site* |
+| X13 | A worker dies mid-scan. | Jobs are leased; an expired lease is retried once, then marked lost. | `service.test.ts` *leases* |
+
+## Residual risks
+
+- The per-visitor limit is only as good as the client address. Behind a proxy, set `TRUST_PROXY=true`; visitors behind one NAT share an allowance.
+- A result link is a bearer secret for an hour. It contains only what the scanned server shows to everyone.
+- The NetworkPolicy is a manifest; it protects nothing on a cluster whose CNI does not enforce policies (kind's default does not).
+- The scanner speaks TLS over TCP only: HTTP/3 is not observed. Behaviour through an HTTP proxy is untested; IPv6 targets are tested with literals, not a live server.
+
+# Part 2: the identity provider
+
+This part covers the pq-oidc provider, the two demo apps (relying parties), and the tokens that pass between them.
 
 ## What we protect
 

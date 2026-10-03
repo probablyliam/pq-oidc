@@ -42,11 +42,11 @@ Measured with `jose` on Node.js (native ML-DSA), averaged over 200 runs on a lap
 | Sign a JWT | 0.08 ms | 0.55 ms |
 | Verify a JWT | 0.10 ms | 0.14 ms |
 
-Verification, which every app does on every sign-in, is nearly as fast. Signing is slower but still well under a millisecond. Even the pure-JavaScript ML-DSA in the Token Lab signs in a few milliseconds. The cost of the migration is bytes, not CPU.
+Verification, which every app does on every sign-in, is nearly as fast. Signing is slower but still well under a millisecond. Even the pure-JavaScript ML-DSA in the browser (the token checker and the login lab) signs in a few milliseconds. The cost of the migration is bytes, not CPU.
 
 ## 4. Major identity providers aren't ready yet
 
-The Token Lab's provider check and `npm run check` read live metadata. On 2026-10-02, all 20 public issuers checked offered only classical public-key signatures and published no ML-DSA key: Google, Microsoft Entra ID, Apple, GitLab, GitHub Actions, Auth0, Okta, Salesforce, Atlassian, Slack, PayPal, Twitch, LinkedIn, JumpCloud, Zoho, Discord, Facebook, CircleCI, Bitwarden and Red Hat SSO (Keycloak). Some also list HS256, a shared-secret method that quantum computers don't break but that only works when the app holds the provider's secret; the check reports it separately. Snapshots of three of them are kept as test fixtures in `packages/token-kit/src/fixtures/`.
+`npm run check` and the scanner's sign-in layer read live metadata. On 2026-10-02, all 20 public issuers checked offered only classical public-key signatures and published no ML-DSA key: Google, Microsoft Entra ID, Apple, GitLab, GitHub Actions, Auth0, Okta, Salesforce, Atlassian, Slack, PayPal, Twitch, LinkedIn, JumpCloud, Zoho, Discord, Facebook, CircleCI, Bitwarden and Red Hat SSO (Keycloak). Some also list HS256, a shared-secret method that quantum computers don't break but that only works when the app holds the provider's secret; the check reports it separately. Snapshots of three of them are kept as test fixtures in `packages/token-kit/src/fixtures/`.
 
 ## 5. Migration order matters
 

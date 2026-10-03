@@ -21,7 +21,7 @@ export interface Projection {
  * Predicts, byte for byte, how big an existing JWT becomes when the same header
  * and claims are signed with another algorithm. Only the "alg" header value and
  * the signature change, and signature sizes are fixed by the standards, so this
- * is exact (the Token Lab re-signs the token for real to prove it).
+ * is exact (the token checker re-signs the token for real to prove it).
  */
 export function projectToken(token: string, alg: SigningAlg, cookieName = 'id_token'): Projection {
   const { header, encodedPayloadBytes } = measureJwt(token);

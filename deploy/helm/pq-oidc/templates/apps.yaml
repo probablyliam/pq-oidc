@@ -1,3 +1,4 @@
+{{- if .Values.oidc.enabled }}
 {{- range $name, $app := .Values.apps }}
 {{- if $app.enabled }}
 {{- $fullName := printf "%s-%s" $.Release.Name $app.clientId }}
@@ -73,5 +74,6 @@ spec:
     - name: http
       port: {{ $app.port }}
       targetPort: http
+{{- end }}
 {{- end }}
 {{- end }}

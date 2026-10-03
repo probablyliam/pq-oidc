@@ -15,20 +15,20 @@ concurrency:
 
 jobs:
   test:
-    name: Lint, typecheck, test
+    name: Lint, typecheck, test, build
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version-file: .node-version
           cache: npm
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
-      - name: Build the Token Lab
-        run: npm run lab:build
+      - name: Build the web app
+        run: npm run web:build
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
 
@@ -39,7 +39,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version-file: .node-version
           cache: npm
       - run: npm ci
       - uses: actions/setup-python@v7
@@ -57,14 +57,33 @@ jobs:
         env:
           PYTHON: python
 
-  kubernetes:
-    name: Deploy to kind and sign in
+  image:
+    name: Container image
     runs-on: ubuntu-24.04
     needs: test
     steps:
       - uses: actions/checkout@v7
       - name: Build the image
         run: docker build -t pq-oidc:ci .
+      - name: Save it for the cluster job
+        run: docker save pq-oidc:ci | gzip > /tmp/pq-oidc.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: image
+          path: /tmp/pq-oidc.tar.gz
+          retention-days: 1
+
+  kubernetes:
+    name: Deploy to kind, scan, sign in
+    runs-on: ubuntu-24.04
+    needs: image
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v4
+        with:
+          name: image
+          path: /tmp
+      - run: docker load < /tmp/pq-oidc.tar.gz
       - name: Create a kind cluster
         uses: helm/kind-action@v1
       - name: Load the image into kind
@@ -72,24 +91,54 @@ jobs:
       - uses: azure/setup-helm@v5
       - name: Lint the chart
         run: helm lint deploy/helm/pq-oidc
-      - name: Install the chart
+      - name: The rendered chart keeps the worker off private ranges and gives the API no egress
+        run: |
+          helm template pq-oidc deploy/helm/pq-oidc > /tmp/rendered.yaml
+          grep -q 'kind: NetworkPolicy' /tmp/rendered.yaml
+          for cidr in 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 169.254.0.0/16 127.0.0.0/8; do grep -q -- "- $cidr" /tmp/rendered.yaml; done
+          grep -q 'egress: \[\]' /tmp/rendered.yaml
+          echo "NetworkPolicy manifests render as intended. (kind's default CNI does not enforce them; Calico or Cilium does.)"
+      - name: Install the chart (scanner and identity provider)
         run: |
           helm install pq-oidc deploy/helm/pq-oidc \
-            --set image.repository=pq-oidc --set image.tag=ci \
-            --wait --timeout 3m
+            --set image.repository=pq-oidc --set image.tag=ci --set oidc.enabled=true \
+            --wait --timeout 4m
           kubectl get pods -o wide
       - name: Port-forward the services
         run: |
+          kubectl port-forward svc/pq-oidc-api 8080:8080 >/tmp/pf-api.log 2>&1 &
           kubectl port-forward svc/pq-oidc-provider 3000:3000 >/tmp/pf-provider.log 2>&1 &
           kubectl port-forward svc/pq-oidc-legacy-app 3001:3001 >/tmp/pf-legacy.log 2>&1 &
           kubectl port-forward svc/pq-oidc-pq-app 3002:3002 >/tmp/pf-pq.log 2>&1 &
-          for i in $(seq 1 30); do curl -sf http://localhost:3000/healthz && break; sleep 1; done
+          for i in $(seq 1 30); do curl -sf http://localhost:8080/readyz && curl -sf http://localhost:3000/healthz && break; sleep 1; done
+      - name: Scan a public address through the cluster and read the verdict
+        run: |
+          curl -sf http://localhost:8080/api/v1/meta
+          id=$(curl -sf -X POST http://localhost:8080/api/v1/scans -H 'content-type: application/json' -H 'origin: http://localhost:8080' \
+                 -d '{"target":"https://example.com/"}' | node -pe 'JSON.parse(require("fs").readFileSync(0)).scan.id')
+          for i in $(seq 1 90); do
+            scan=$(curl -sf "http://localhost:8080/api/v1/scans/$id")
+            status=$(echo "$scan" | node -pe 'JSON.parse(require("fs").readFileSync(0)).scan.status')
+            [ "$status" = succeeded ] && break
+            [ "$status" = failed ] && echo "$scan" && exit 1
+            sleep 1
+          done
+          echo "$scan" | node -e '
+            const { scan } = JSON.parse(require("fs").readFileSync(0));
+            if (scan.status !== "succeeded") throw new Error("scan did not finish: " + scan.status);
+            const kex = scan.report.layers.find((l) => l.id === "key-establishment");
+            console.log("example.com:", kex.headline, "| reachable:", scan.report.reachable, "| page:", scan.report.page && scan.report.page.kind);
+            if (!scan.report.reachable) throw new Error("the worker could not reach the target");'
+      - name: The API refuses a private address before anything is queued
+        run: |
+          out=$(curl -s -X POST http://localhost:8080/api/v1/scans -H 'content-type: application/json' -H 'origin: http://localhost:8080' -d '{"target":"https://10.0.0.1/"}')
+          echo "$out" | grep -q '"address-not-allowed"'
       - uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version-file: .node-version
           cache: npm
       - run: npm ci
-      - name: Sign in to both apps through the cluster
+      - name: Sign in to both demo apps through the cluster
         run: npm run smoke
       - name: Migrate Legacy App too early and expect it to refuse the token
         run: |
@@ -104,6 +153,7 @@ jobs:
         if: failure()
         run: |
           kubectl get all
+          kubectl describe pods || true
+          kubectl logs deploy/pq-oidc-api --tail=100 || true
+          kubectl logs deploy/pq-oidc-worker --tail=100 || true
           kubectl logs deploy/pq-oidc-provider --tail=100 || true
-          kubectl logs deploy/pq-oidc-legacy-app --tail=100 || true
-          kubectl logs deploy/pq-oidc-pq-app --tail=100 || true

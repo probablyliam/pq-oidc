@@ -1,212 +1,111 @@
-# pq-oidc: is your login quantum-ready?
+# pq-oidc: is this login quantum-safe?
 
 [![CI](https://github.com/probablyliam/pq-oidc/actions/workflows/ci.yml/badge.svg)](https://github.com/probablyliam/pq-oidc/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/probablyliam/pq-oidc/actions/workflows/codeql.yml/badge.svg)](https://github.com/probablyliam/pq-oidc/actions/workflows/codeql.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-A free tool that checks whether a quantum computer could forge sign-ins from any login service (Google, Okta, Entra ID, Keycloak…), and a working login service that makes the fix by moving apps to quantum-proof signatures one at a time.
+Paste a site. The scanner finds its login, opens real TLS connections to it with its own TLS client, reads what the server sends and publishes, and answers three questions in plain words, with the evidence underneath for anyone who wants to check it.
 
-### ▶ [Run a check: probablyliam.github.io/pq-oidc](https://probablyliam.github.io/pq-oidc/)
+<p align="center"><img src="docs/media/scan-result.png" width="800" alt="The result for accounts.google.com: Partly quantum-safe. Recording the connection: no, in an up-to-date browser (X25519MLKEM768 with classical fallback). Pretending to be the site: not today (ECDSA P-256). Faking a sign-in: not today (RSA 2048-bit)."></p>
 
-<p align="center"><img src="docs/media/tool-report.png" width="760" alt="The check for accounts.google.com: not quantum-ready, with the two RSA 2048-bit keys it signs logins with listed as breakable by a quantum computer."></p>
+| Question | What decides it | What a scan can see |
+|---|---|---|
+| If someone records this connection today, can they read it later? | the TLS key exchange | which groups the server negotiates and accepts, including hybrid ML-KEM |
+| Can someone pretend to be this site? | the certificate's signature | the chain the server sends, and the signature it makes in the handshake |
+| Can someone fake a sign-in? | the token signature | the keys an OpenID Connect provider publishes; for a login that publishes nothing, "cannot tell from outside" |
 
-## What it checks, and what it doesn't
+Every statement in the technical details is marked **observed** (read off the connection or a published document), **inferred** (a conclusion, with the reasoning) or **could not determine**. There is no score: the verdict is a stated function of those three layers ([ADR 0012](docs/adr/0012-finding-kinds-no-score.md)).
 
-When you sign in with Google or a work account, a login service gives the app a short signed message, a **token**, saying who you are. The app trusts it because of the **signature**. Today's signatures (RSA, elliptic curves) can be broken by a large enough quantum computer, which could then sign in as anyone.
+## Run it
 
-This tool reads the keys a login service publishes and tells you whether its signatures are the breakable kind.
-
-It checks the login signature only. It doesn't test the encrypted connection to a site, and it doesn't test your apps, only the login service they rely on.
-
-## The page, top to bottom
-
-<table>
-<tr>
-<td width="50%"><img src="docs/media/login-walkthrough.png" alt="Three fixed panels: Browser, Network and Server. The server is signing a login token with its private key and the token is crossing the encrypted channel; a nine-step player sits underneath."></td>
-<td width="50%"><img src="docs/media/attack.png" alt="The same panels with an attacker underneath: she holds the recovered shared secret and the server's private key, and the server has accepted her forged token."></td>
-</tr>
-<tr>
-<td><b>What actually happens when you log in?</b> Press Log in and watch nine steps play: key agreement, the server proving who it is, encryption, the password check and the signed token. Pause, step, replay, or switch between classical, hybrid and post-quantum.</td>
-<td><b>Now try to break it.</b> Give the attacker a classical or a quantum computer. The table fills in as you try each combination: a hybrid connection stops her reading the recorded login but not forging one.</td>
-</tr>
-<tr>
-<td width="50%"><img src="docs/media/catch-bytes.png" alt="One square per byte: the token with the quantum-proof signature is about 4,800 bytes and doesn't fit in a cookie, followed by three reasons the switch is slow."></td>
-<td width="50%"><img src="docs/media/migrate.png" alt="Six parts of a company's login path after upgrading everything at once: four of its ten cryptographic dependencies are broken, each with the reason."></td>
-</tr>
-<tr>
-<td><b>Why hasn’t everyone switched?</b> The quantum-proof signature is about fifty times bigger, and every app has to change first.</td>
-<td><b>Migrate a real system.</b> Six parts, ten places that use cryptography, and nothing can change until you have looked at it. Upgrade everything at once and four things break; two are never yours to fix.</td>
-</tr>
-</table>
-
-**What is real on the page.** The key agreement (ECDH P-256, ML-KEM-768), encryption (HKDF, AES-256-GCM), signing and verification (ECDSA, ML-DSA-65) all run in your browser, and the values shown are from that run. The handshake is a simplified sketch of TLS 1.3, not an implementation of it. The quantum attack is conceptual: no machine can run it today, so the page hands the attacker the private values such a machine would compute, and everything she then does with them (decrypting the recording, signing a token, the server checking it) is real. Each step says which of the three it is.
-
-## Check your own login service
-
-The check reads the public keys a login service publishes (every OpenID Connect provider publishes them) and reports whether they could be broken by a quantum computer.
-
-- **In the browser:** type the address into the [check](https://probablyliam.github.io/pq-oidc/), for example `https://your-tenant.auth0.com`. Your browser fetches the keys directly; nothing passes through this project. Two demo services show what "partly" and "fully" switched look like.
-- **From a terminal** (for services that block browsers, such as Okta and Slack, and for ones only reachable inside your network):
-
-```bash
-npm run check -- https://your-company.okta.com
-```
-
-On 2026-10-02 it reported **not ready** for all 20 public login services I tried, including Google, Microsoft, Apple, Okta, Auth0, Salesforce, Atlassian, Slack, PayPal, GitLab and Red Hat’s Keycloak.
-
-**What it can and can’t tell you.** It reads what the service publishes: the algorithms it offers and the keys it signs with. It can’t see services that don’t speak OpenID Connect, and it doesn’t test your apps, only the login service they rely on.
-
-## How do you know it works?
-
-```bash
-npm run prove
-```
-
-That one command starts the real login service, performs real sign-ins, and checks every claim with code that shares nothing with the code under test:
-
-```
-1. Real sign-ins against the provider
-   legacy-app received a 498-byte ID token, pq-app a 4824-byte ID token
-2. The provider's published keys, read with plain fetch (no project code)
-   EC/ES256, AKP/ML-DSA-65
-3. Independent verification in Python
-   ✓ Python accepts the ES256 token
-   ✓ Python accepts the ML-DSA-65 token (3,309-byte signature per FIPS 204)
-4. A legacy configuration refuses the post-quantum token
-   ✓ REJECTED alg-not-allowed
-   ✓ REJECTED bad-signature (corrupted token)
-5. Readiness verdicts next to the raw key types
-   ✓ this provider (EC + AKP keys): partial
-   ✓ Google (RSA/RS256, RSA/RS256): not-ready
-All claims held.
-```
-
-Beyond that:
-
-- **Two independent verifiers.** The TypeScript verifier and a separate [Python verifier](interop/python) (built on `pyca/cryptography`) must agree on every honest token and reject six kinds of forgery with identical codes (`npm run interop`).
-- **A real browser.** Chrome silently dropped the 4,895-byte cookie holding the new token; the end-to-end tests reproduce that behaviour.
-- **A real cluster.** CI deploys the service to Kubernetes, signs in through both apps, then switches an unprepared app too early and expects its sign-in to fail.
-- **82 automated tests**, including the classic token attacks and protocol abuse (see [Security](#security)).
-
-## Has this been done before?
-
-Partly, and it’s worth being exact about it.
-
-- **The size problem is known.** The [OpenID Foundation described it](https://openid.net/post-quantum-openid-connect/) in September 2026, as did others. This project measures it; it didn’t discover it.
-- **Post-quantum token libraries exist** in several languages, and some identity servers have started adding ML-DSA.
-- **What I couldn’t find elsewhere:** a tool that checks whether an arbitrary login service is quantum-ready, an exact byte-for-byte projection for your own tokens, and a runnable login service that demonstrates the per-app switch along with its failure modes.
-
-## Run the login service
-
-Needs Node.js 24.7 or newer (for native ML-DSA). Dependencies install into the project folder only.
+The scanner opens its own connections, which a web page cannot do, so it runs as a small service on your machine. Needs [Node.js 25](https://nodejs.org); everything installs into the project folder.
 
 ```bash
 git clone https://github.com/probablyliam/pq-oidc.git
 cd pq-oidc
 npm install
-npm start
+npm start          # http://localhost:8080
 ```
 
-| | Address | Signature it receives |
-|---|---|---|
-| Legacy App | http://localhost:3001 | old (ES256) |
-| PQ-Ready App | http://localhost:3002 | new (ML-DSA-65) |
-| Login service | http://localhost:3000 | |
+`npm start` runs the API, a worker, and seven local test servers with known configurations (classical, hybrid, post-quantum, TLS 1.2, RSA key transport, an expired certificate) so there is something to scan that is yours. Type `netflix.com` or `github.com`: the scanner follows the site's own "Sign in" link, or tries the usual addresses, and assesses where a password would go ([ADR 0015](docs/adr/0015-find-the-sign-in.md)).
 
-Sign in as `alice` or `bob`, password `quantum-safe` (fictional demo users).
+The site at [probablyliam.github.io/pq-oidc](https://probablyliam.github.io/pq-oidc/) is the same web app without a scan service behind it: the token checker and the login lab work there, scanning does not.
 
-<p align="center"><img src="docs/media/pq-app-signed-in.png" width="440" alt="PQ-Ready App after sign-in: a 4,879-byte token with the new signature; the browser silently dropped the 4,895-byte cookie."></p>
+**Docker:** `docker compose up --build`. **Kubernetes:** [`deploy/helm/pq-oidc`](deploy/helm/pq-oidc) runs the API and the worker as separate pods, with a NetworkPolicy that keeps the worker off private ranges and gives the API no egress at all. CI deploys it to a kind cluster and scans through it.
+
+## The login lab
+
+Set what a site uses for each of its three jobs (each option tagged classical or PQC), log in with a password you make up, and watch the three processes reveal with real values: the key exchange, the certificate signature, the signed token. Then be the attacker. Give her an ordinary computer and every attempt fails; give her a quantum computer and the parts that are still classical fall, one at a time, with her working shown (the public half she recorded, the private half she recovered, the secret she re-derived next to the real one, the decryption or signature check that settled it).
+
+<p align="center"><img src="docs/media/login-lab.png" width="800" alt="The login lab: hybrid key exchange, classical certificate and token. The attacker with a quantum computer is blocked on the recording (the ML-KEM half has no known attack) but takes over the site's identity and forges a sign-in token."></p>
+
+Every value is computed in the browser as you log in: X25519 and ML-KEM-768, the TLS 1.3 key schedule (the same functions the scanner uses to decrypt real handshakes), AES-256-GCM records, ECDSA P-256 and ML-DSA-65 signatures. Only the quantum computer is simulated, by handing her the private key it would compute; everything she then does with it is real, and either works or does not. The handshake is a simplified sketch of TLS 1.3, not an implementation of it.
+
+## The token checker
+
+Paste a JWT. It is read in your browser and never sent anywhere. The verdict says whether a quantum computer could forge tokens like it, the signature can be checked against the issuer's published keys, and the classic attacks (`alg: none`, algorithm confusion, edited claims, embedded keys) are recognised. Examples cover a typical token, a post-quantum one (ML-DSA-65), an encrypted one (RSA-OAEP), and the tampered kinds.
+
+<p align="center"><img src="docs/media/token-check.png" width="800" alt="The token checker on an ML-DSA-65 example: Quantum-safe signature, with the three facts Encoded, Signed and Encrypted."></p>
+
+## What the scanner actually does
+
+- **Its own TLS client** ([`packages/scan-core/src/tls`](packages/scan-core/src/tls)), because Node's TLS API does not report hybrid groups ([ADR 0006](docs/adr/0006-tls-handshake-observer.md)). It builds the ClientHello, parses ServerHello and HelloRetryRequest, runs the TLS 1.3 key schedule (checked against the RFC 8448 trace), decrypts the server's handshake flight, and verifies CertificateVerify and Finished. So "the server uses X25519MLKEM768" means the scanner and the server derived the same secret with it. Groups: X25519, P-256, P-384, X25519MLKEM768, SecP256r1MLKEM768, SecP384r1MLKEM1024, MLKEM768, MLKEM1024; TLS 1.2 ECDHE and RSA key transport are recognised too. Support for each group is established by HelloRetryRequest, one handshake per group.
+- **Finds the login** from a bare site, and says how it did: the site's own link, a usual address, or where the site redirects.
+- **Reads what the service publishes**: OpenID Connect metadata and the key set, so the sign-in question is answered from the identity provider's actual keys, not guessed. That is the one check a generic TLS scanner does not make, and the reason the tool leads with logins.
+- **Also notices** problems that have nothing to do with quantum computers: expired or untrusted certificates, no HSTS, cookies without `Secure`, plain HTTP that does not redirect.
+
+Verified on 2026-10-02 against local OpenSSL 3.5 servers in every group above, and with one scan each of accounts.google.com, login.microsoftonline.com, github.com, netflix.com, youtube.com and www.cloudflare.com.
+
+### Safety
+
+The scanner connects to addresses strangers type in, so the address boundary is the most carefully built part ([ADR 0007](docs/adr/0007-ssrf-defence.md), [`packages/scan-core/src/net`](packages/scan-core/src/net)): `https` only, ports 443 and 8443, no credentials in the URL, every name resolved once and every address checked against the private, loopback, link-local and metadata ranges (including IPv4-mapped, NAT64 and 6to4 forms of them) before the socket is pinned to that address; redirects, discovered links and `jwks_uri` all go through the same checks; size caps and deadlines on everything. The tests include the classic bypasses (decimal and octal IPs, `localhost` variants, DNS rebinding, redirects to the cloud metadata service).
+
+There are no accounts ([ADR 0014](docs/adr/0014-no-accounts.md)): limits per visitor (a keyed hash of the address), per scanned service, and on the queue stand in for them; cross-site requests are refused; a result is kept for an hour behind a random ID, then deleted. The worker, the only part that connects out, holds no data; the API, which holds the results, connects nowhere ([ADR 0008](docs/adr/0008-api-worker-sqlite.md)). In Kubernetes a NetworkPolicy enforces that split in the network as well.
+
+The full threat model, with each mitigation linked to the test that proves it: [docs/threat-model.md](docs/threat-model.md).
+
+## The identity provider
+
+The project started as an OpenID Connect provider that signs ID tokens with ML-DSA-65 and migrates apps to it one at a time. It is still here, and the scanner can scan it.
 
 ```bash
-# Switch Legacy App to the new signature before it's ready, and watch sign-in fail with a clear reason
-LEGACY_ID_TOKEN_ALG=ML-DSA-65 npm start
-
-# What happens to one of your own tokens
-npm run check -- eyJhbGciOi...
+npm run oidc       # provider on :3000, a legacy app on :3001 (ES256), a migrated app on :3002 (ML-DSA-65)
+npm run prove      # real sign-ins, keys read with plain fetch, tokens verified by an independent Python verifier
+npm run interop    # Python and Node agree on RFC 9964, both directions
 ```
 
-**Docker:** `docker compose up --build`. **Kubernetes:** a Helm chart is in [`deploy/helm/pq-oidc`](deploy/helm/pq-oidc).
+What it showed ([docs/findings.md](docs/findings.md)): the token grows 8.8× (a 3,309-byte signature, fixed by FIPS 204), no longer fits in a cookie, and on 2026-10-02 none of 20 public providers checked had published a post-quantum key. The migration order that avoids locking users out is demonstrated end to end, in the tests and in CI.
 
----
+## Layout
 
-# For engineers
-
-## Measurements
-
-Measured on the running system. Method and details: [docs/findings.md](docs/findings.md).
-
-| | ES256 | ML-DSA-65 | |
-|---|---:|---:|---|
-| Signature | 64 B | 3,309 B | fixed by FIPS 204 |
-| ID token for a typical user | 553 B | 4,879 B | 8.8× |
-| Public key in the JWKS | 204 B | 2,707 B | 13× |
-| Sign / verify (Node.js, native) | 0.08 / 0.10 ms | 0.55 / 0.14 ms | speed isn’t the problem |
-
-## Architecture
-
-```mermaid
-sequenceDiagram
-  autonumber
-  participant B as Browser
-  participant A as App (relying party)
-  participant P as pq-oidc provider
-  B->>A: GET /login
-  A->>B: redirect to /auth (PKCE S256, state, nonce)
-  B->>P: sign in (alice / password)
-  P->>B: redirect to /callback?code=…
-  B->>A: GET /callback?code=…
-  A->>P: POST /token (code + client secret + PKCE verifier)
-  P-->>A: ID token signed with this client's algorithm (ES256 or ML-DSA-65)
-  A->>P: GET /jwks (EC key + AKP key, cached)
-  A->>A: verify signature against allowlist, iss, aud, nonce, exp
-  A->>B: session cookie (a random ID, not the token)
+```
+packages/scan-core   the scanner: address policy, TLS observer, certificates, HTTP, OIDC discovery, assessment, plain-words summary
+packages/token-kit   JOSE: analysis, verification, readiness, exact size projection (shared by the browser and the CLI)
+services/api         scan jobs and results (SQLite), limits, the web app's static files; no outbound connections
+services/worker      claims jobs, runs scans; the only component that connects to targets
+apps/web             React: scan results, the token checker, the login lab
+packages/provider    the ML-DSA-65 OpenID Connect provider; packages/rp its two demo apps
+interop/python       an independent RFC 9964 verifier
+deploy/helm          the chart; Dockerfile and docker-compose.yml at the root
+docs/adr             fifteen decision records; docs/PLAN.md the plan and what is verified
 ```
 
-- **Provider** ([`packages/provider`](packages/provider)): [`oidc-provider`](https://github.com/panva/node-oidc-provider) (OpenID Certified), configured as an OAuth 2.1-style server: authorization code flow only, PKCE S256 required, exact redirect URIs, single-use codes. It publishes an ES256 key and an ML-DSA-65 key (RFC 9964 `"kty": "AKP"`). Each client's `id_token_signed_response_alg` decides which one signs its tokens; that setting is the migration switch.
-- **Apps** ([`packages/rp`](packages/rp)): `openid-client` runs the protocol. The ID token signature is then verified explicitly with an algorithm allowlist, which is what makes an unprepared app refuse ML-DSA and what stops `alg: none` and algorithm confusion.
-- **Shared toolkit** ([`packages/token-kit`](packages/token-kit)): measurement, exact size projection, verification, and the readiness analysis used by the CLI and the site.
-- **Python verifier** ([`interop/python`](interop/python)): about 150 lines, because no Python JWT library supports RFC 9964 yet.
-- **Site** ([`apps/lab`](apps/lab)): static React. ML-DSA runs in the browser through `@noble/post-quantum`; tests prove its tokens interoperate with Node's native ML-DSA both ways. The login lab is a list of events ([`lab/events.ts`](apps/lab/src/lab/events.ts)) built from one real run ([`lab/crypto.ts`](apps/lab/src/lab/crypto.ts)); the migration exercise is a pure model ([`sim/system.ts`](apps/lab/src/sim/system.ts)). Both are tested.
-
-No build step for the server code: Node.js 24 runs the TypeScript sources directly.
-
-## Security
-
-The [threat model](docs/threat-model.md) covers the provider, apps and tokens with STRIDE, linking each mitigation to the test that proves it. Tests include:
-
-- **Token forgery:** `alg: none`, algorithm confusion (HS256 signed with the public key), attacker keys embedded in the header, edited claims, expired tokens, wrong audience, nonce replay.
-- **Protocol abuse:** missing PKCE, `plain` PKCE, implicit flow, unregistered redirect URIs, unknown clients, authorization code replay, stolen codes without the verifier, one app redeeming another's code, wrong client secret.
-- **Web:** CSP without `unsafe-inline`, `frame-ancestors 'none'`, HTML escaping, login CSRF across browser sessions, no private key material in the JWKS.
-- **Containers:** non-root, read-only filesystem, all capabilities dropped, seccomp `RuntimeDefault`.
-
-CI also runs CodeQL, `npm audit`, and Dependabot.
-
-**Not production-ready by design:** state and keys live in memory (one replica), there's no rate limiting on the login form, and demo users have a published password. See [residual risks](docs/threat-model.md#residual-risks-and-deliberate-non-goals).
-
-## Design decisions
-
-1. [Build on node-oidc-provider instead of writing an OIDC server](docs/adr/0001-use-node-oidc-provider.md)
-2. [Use ML-DSA-65 (and why not SLH-DSA, FN-DSA or composite signatures yet)](docs/adr/0002-ml-dsa-65.md)
-3. [Migrate one app at a time with per-client signing algorithms](docs/adr/0003-per-client-algorithm.md)
-4. [Keep tokens server-side; cookies hold only a session ID](docs/adr/0004-server-side-sessions.md)
+No build step for the server code: Node.js runs the TypeScript sources directly.
 
 ## Development
 
 ```bash
-npm test            # 82 tests
+npm test                 # 475 tests: address bypasses, the key schedule against RFC 8448, whole scans of the lab servers,
+                         # the service's limits and leases, token attacks, the lab's cryptography
 npm run lint && npm run typecheck
-npm run prove       # the evidence above (needs the Python venv)
-npm run interop     # Python <-> Node, both directions
-npm run lab:dev     # the site, locally
-
-# one-time Python setup (3.10+), inside the project folder
-python -m venv interop/python/.venv
-interop/python/.venv/bin/pip install -r interop/python/requirements.txt   # Windows: .venv\Scripts\pip
+npm run dev              # the web app with hot reload, the API and worker beside it
+npm run scan -- <url>    # a scan from the terminal, as JSON with --json
+npm run check -- <url>   # the identity provider's keys alone, no TLS probing
 ```
 
 ## Standards
 
-[RFC 9964: ML-DSA for JOSE and COSE](https://www.rfc-editor.org/info/rfc9964/) · [FIPS 204: ML-DSA](https://csrc.nist.gov/pubs/fips/204/final) · [OpenID Connect Core 1.0](https://openid.net/specs/openid-connect-core-1_0.html) · [OAuth 2.1 (draft)](https://datatracker.ietf.org/doc/draft-ietf-oauth-v2-1/) · [RFC 7636: PKCE](https://www.rfc-editor.org/rfc/rfc7636) · [RFC 6265: Cookies](https://www.rfc-editor.org/rfc/rfc6265)
+[FIPS 203: ML-KEM](https://csrc.nist.gov/pubs/fips/203/final) · [FIPS 204: ML-DSA](https://csrc.nist.gov/pubs/fips/204/final) · [RFC 8446: TLS 1.3](https://www.rfc-editor.org/rfc/rfc8446) · [draft-ietf-tls-ecdhe-mlkem](https://datatracker.ietf.org/doc/draft-ietf-tls-ecdhe-mlkem/) · [RFC 9964: ML-DSA for JOSE](https://www.rfc-editor.org/info/rfc9964/) · [OpenID Connect Discovery](https://openid.net/specs/openid-connect-discovery-1_0.html) · [OAuth 2.1 (draft)](https://datatracker.ietf.org/doc/draft-ietf-oauth-v2-1/)
 
 ## License
 

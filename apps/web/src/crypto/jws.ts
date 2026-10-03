@@ -1,5 +1,5 @@
 /**
- * In-browser JWS signing and verification for the Token Lab.
+ * In-browser JWS signing and verification for the token checker and the login lab.
  *
  * Browsers don't offer ML-DSA through Web Crypto yet, so ML-DSA uses
  * @noble/post-quantum (audited, pure TypeScript). ES256 and RS256 use the

@@ -1,3 +1,4 @@
+{{- if .Values.oidc.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -82,3 +83,4 @@ spec:
     - name: http
       port: {{ .Values.provider.port }}
       targetPort: http
+{{- end }}

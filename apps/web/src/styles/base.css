@@ -474,7 +474,8 @@ button.pick:hover:not(:disabled) {
   border-color: var(--ink);
   background: var(--paper);
 }
-button.pick[aria-pressed='true'] {
+button.pick[aria-pressed='true'],
+button.pick[aria-pressed='true']:hover:not(:disabled) {
   border-color: var(--ink);
   background: var(--ink);
   color: var(--paper);
@@ -550,4 +551,17 @@ button.pick[aria-pressed='true'] {
     scroll-behavior: auto !important;
     transition: none !important;
   }
+}
+
+/* The note shown where there is no scan service behind the page. */
+.static-note p + p {
+  margin-top: 10px;
+}
+.static-note code {
+  display: block;
+  margin: 6px 0;
+  padding: 8px 10px;
+  background: var(--sheet);
+  border-radius: 3px;
+  overflow-wrap: anywhere;
 }

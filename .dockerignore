@@ -2,8 +2,8 @@
 **/dist
 .git
 .github
-apps/lab/src
-apps/lab/public
+.shots
+data
 docs
 deploy
 tests

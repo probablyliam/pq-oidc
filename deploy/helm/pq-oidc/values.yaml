@@ -4,6 +4,39 @@ image:
   tag: local
   pullPolicy: IfNotPresent
 
+# ---- The scanner: the web app and API, and the worker that connects to scan targets.
+scanner:
+  enabled: true
+  # The URL visitors use. Cross-site requests are refused by comparing against it.
+  # The default suits `kubectl port-forward`; set it to your ingress URL otherwise.
+  publicUrl: http://localhost:8080
+  # Ports a scan may connect to; also the only ports the worker's NetworkPolicy lets it reach.
+  allowedPorts: [443, 8443]
+  retentionHours: 1
+  api:
+    # Set to true behind an ingress, so the client address comes from X-Forwarded-For.
+    trustProxy: false
+    storage: 1Gi
+    storageClassName: ""
+    resources:
+      requests: { cpu: 50m, memory: 128Mi }
+      limits: { memory: 256Mi }
+  worker:
+    replicas: 1
+    concurrency: 2
+    resources:
+      requests: { cpu: 100m, memory: 128Mi }
+      limits: { memory: 384Mi }
+  networkPolicy:
+    # The worker may reach the internet on allowedPorts (plus 80 for the plain-HTTP check), DNS, and the
+    # API's internal port; not private ranges or other pods. The API opens no connections at all.
+    # Needs a CNI that enforces NetworkPolicy (Calico, Cilium, ...); kind's default one does not.
+    enabled: true
+
+# ---- The ML-DSA identity provider and its two demo apps (the migration demonstration).
+oidc:
+  enabled: false
+
 # The URL browsers use to reach the provider. It becomes the "iss" claim in every token.
 # The default suits `kubectl port-forward`; set it to your ingress URL otherwise.
 issuer: http://localhost:3000
