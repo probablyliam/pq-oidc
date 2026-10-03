@@ -54,7 +54,7 @@ export interface Login {
   username: string;
   password: string;
 }
-export const DEFAULT_LOGIN: Login = { username: 'alice', password: 'hunter2' };
+export const DEFAULT_LOGIN: Login = { username: 'alice', password: 'password123' };
 /** As much as the lab can show. */
 export const LOGIN_LIMITS = { username: 12, password: 16 };
 
