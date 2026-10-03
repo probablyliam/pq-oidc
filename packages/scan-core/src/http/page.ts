@@ -34,6 +34,8 @@ export function findUsernameField(html: string): string | undefined {
   return undefined;
 }
 
+const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'", '#x27': "'" };
+
 /** The usual places a sign-in lives, tried in this order when a page does not link to one. */
 export const SIGN_IN_PATHS = ['/login', '/signin', '/sign-in', '/account/login', '/auth/login', '/users/sign_in'];
 
@@ -48,7 +50,8 @@ export function findSignInLinks(html: string, base: URL, limit = 3): string[] {
   // A link's text can sit inside nested spans with long class names (GitHub's "Sign in" runs to ~500 characters), so the window is generous.
   for (const [, attrs = '', inner = ''] of html.matchAll(/<a\b([^>]*)>([\s\S]{0,2000}?)<\/a>/gi)) {
     const href = /\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(attrs);
-    const raw = (href?.[1] ?? href?.[2] ?? href?.[3] ?? '').trim();
+    // An href in HTML carries entities: the & between query parameters is written &amp;.
+    const raw = (href?.[1] ?? href?.[2] ?? href?.[3] ?? '').trim().replace(/&(amp|lt|gt|quot|#39|#x27);/g, (_, e: string) => ENTITIES[e] ?? _);
     if (!raw || /^(?:javascript|mailto|tel):|^#/i.test(raw)) continue;
     let url: URL;
     try {

@@ -26,6 +26,10 @@ describe('links to a sign-in on a page that is not one', () => {
     expect(findSignInLinks(html, base)).toEqual(['https://www.example.com/login']);
   });
 
+  it('decodes the entities an href is written with, as Google writes its Sign in link', () => {
+    expect(findSignInLinks('<a href="https://accounts.example.com/ServiceLogin?hl=en&amp;passive=true">Sign in</a>', base)).toEqual(['https://accounts.example.com/ServiceLogin?hl=en&passive=true']);
+  });
+
   it('finds nothing on a page with no such link', () => {
     expect(findSignInLinks('<a href="/watch">Watch</a><p>Log in to your feelings</p>', base)).toEqual([]);
   });
