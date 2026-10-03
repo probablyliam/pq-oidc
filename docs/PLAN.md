@@ -23,7 +23,7 @@ Decisions with reasoning live in [`docs/adr/`](adr/).
 
 Everything the owner asked for is in. What remains, in the order it is worth doing:
 
-1. **Watch the first CI run on `main`.** The image build, the kind deployment, the scan through the cluster and the Pages deploy have never run before this push; fix what they find.
+1. ~~Watch the first CI run on `main`.~~ Done 2026-10-02: two Dockerfile faults fixed, then image, kind deployment, in-cluster scan, demo sign-ins and the Pages deploy all green (run 37090732802).
 2. **Independent security review** of the address boundary (`packages/scan-core/src/net`), the TLS parser against hostile input (`packages/scan-core/src/tls`), and the API's limits. Done by reading, not by delegating.
 3. **A browser test in the repository** (`tests/browser/`, playwright-core, `msedge` locally and `chrome` in CI): scan a lab server and read the verdict; the token page; the lab's reveal and attack sequence, which were verified by hand with the scripts in the untracked `.shots/`.
 4. **Accessibility pass**: focus order, contrast, labels for the lab's diagrams, reduced motion (the code paths exist; they were not tried with a screen reader).

@@ -25,7 +25,7 @@ The brief said never push to a remote. The owner lifted that on 2026-10-02 ("upd
 
 ## What is not verified
 
-- **The deployment has not run anywhere yet.** This machine has no Docker, kind or Helm, by the owner's rule against installing tools. The Dockerfile, Compose file and chart were written and proofread; the first CI run on `main` is their first run. Expect to fix something.
+- **The deployment has run only in CI.** This machine has no Docker, kind or Helm, by the owner's rule against installing tools. The first image build on `main` failed twice (a missing base tsconfig in the web stage; a filtered `npm ci` that left `@pq-oidc/scan-core` unlinked), both found by reproducing the Dockerfile's stages outside Docker. Since commit `c9befad` CI builds the image, deploys the chart to kind, scans example.com through the cluster, refuses a private address, signs in to both demo apps and refuses the too-early migration (run 37090732802). No one has yet run `docker compose up` or installed the chart on a real cluster.
 - **NetworkPolicy enforcement.** CI checks the manifests render as intended; kind's default CNI does not enforce them, so the egress restriction is proven only on a cluster with Calico or Cilium.
 - **No independent security review** of the address boundary or the TLS parser took place. Two reviews were started by delegated agents and stopped at the owner's request to save tokens; the plan says to do it by reading.
 - **No accessibility pass** with a screen reader; reduced-motion paths exist and were not tried by a person who needs them.
