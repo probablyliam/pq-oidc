@@ -20,6 +20,7 @@ COPY packages/rp/package.json packages/rp/
 COPY apps/web/package.json apps/web/
 COPY services/api/package.json services/api/
 COPY services/worker/package.json services/worker/
+COPY tsconfig.base.json ./
 RUN npm ci --ignore-scripts
 COPY packages/token-kit packages/token-kit
 COPY packages/scan-core packages/scan-core
