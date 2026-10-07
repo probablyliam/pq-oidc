@@ -75,7 +75,7 @@ jobs:
         run: docker build -t pq-oidc:ci .
       - name: Save it for the cluster job
         run: docker save pq-oidc:ci | gzip > /tmp/pq-oidc.tar.gz
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: image
           path: /tmp/pq-oidc.tar.gz
