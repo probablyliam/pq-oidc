@@ -42,6 +42,12 @@ const hex = (id: number) => `0x${id.toString(16).padStart(4, '0')}`;
 const list = (items: string[]) => (items.length <= 1 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`);
 /** The probe got far enough to show a ServerHello. */
 const answered = (probe: ProbeResult | undefined): boolean => probe !== undefined && probe.version !== undefined && (probe.outcome === 'handshake' || probe.outcome === 'server-hello');
+/**
+ * The server turned the probe down before any ServerHello: a TLS alert, or a connection cut the same way on
+ * two attempts. A timeout, or a connection cut once, was neither an answer nor a refusal: something in between
+ * may have caused it.
+ */
+const refused = (probe: ProbeResult | undefined): boolean => probe !== undefined && (probe.outcome === 'alert' || (probe.outcome === 'closed' && probe.confirmed === true));
 const ifAnswered = (probe: ProbeResult | undefined): ProbeResult | undefined => (answered(probe) ? probe : undefined);
 
 /** How a completed handshake established its keys. */
@@ -56,6 +62,8 @@ function keyExchange(probe: ProbeResult): { label: string; kind: 'hybrid' | 'pq'
   if (suite?.keyExchange === 'DHE') return { label: `finite-field Diffie-Hellman${probe.dhPrimeBits ? ` (${probe.dhPrimeBits}-bit)` : ''}`, kind: 'classical', parts: ['Finite-field DH'] };
   return { label: 'an unidentified key exchange', kind: 'unknown', parts: [] };
 }
+
+const unanswered = (probe: ProbeResult) => (probe.alert ? `alert ${probe.alert}` : `${probe.detail ?? probe.outcome}${probe.confirmed ? ', on two attempts' : ''}`);
 
 const helloEvidence = (probe: ProbeResult) => [
   { label: 'Scanner offered', value: `${list(probe.offered.groups.map(groupName))}; key shares for ${list(probe.offered.keyShares.map(groupName)) || 'none'}` },
@@ -129,7 +137,7 @@ export function assess(seen: Observations): Assessment {
             : kex.kind === 'rsa-transport'
               ? 'The client encrypts the session secret to the certificate’s RSA key. Anyone who later obtains that one private key can decrypt every session recorded before.'
               : !mainAnswered
-                ? 'This is what a client without post-quantum support negotiated. The handshake that offered post-quantum key exchange did not get an answer.'
+                ? 'This is what a client without post-quantum support negotiated. The handshake that offered post-quantum key exchange was not completed.'
                 : tls12
                   ? 'The server chose TLS 1.2 although TLS 1.3 was offered. TLS 1.2 has no post-quantum key exchange.'
                   : 'The scanner offered X25519MLKEM768 first and sent a key share for it. The server chose a classical group instead.',
@@ -137,8 +145,12 @@ export function assess(seen: Observations): Assessment {
       learn: { view: 'login', landmark: 'key-establishment', mode: quantumSafe ? 'hybrid' : 'classical' },
     });
 
+    // The classical handshake leaves out post-quantum groups and ML-DSA signatures together. With a post-quantum
+    // certificate its refusal may be about the signatures, so the handshake that changes the key exchange only decides.
+    const kexOnly = seen.probes.find((p) => p.id === 'classical-kex-client');
+    const kexRefused = main?.leafKey?.quantumSafe ? refused(kexOnly) : refused(classicalClient);
     // A capable client was ignored but a plain one was answered: usually a large-ClientHello problem.
-    const classicalAnswer = ifAnswered(classicalClient);
+    const classicalAnswer = ifAnswered(classicalClient) ?? ifAnswered(kexOnly);
     if (main && !mainAnswered && classicalAnswer && ['timeout', 'closed', 'malformed'].includes(main.outcome)) {
       add({
         id: 'kex.large-hello',
@@ -147,7 +159,7 @@ export function assess(seen: Observations): Assessment {
         tone: 'bad',
         title: 'The server, or something in front of it, drops handshakes that carry a post-quantum key share',
         detail:
-          'A ClientHello with an ML-KEM key share is over 1,200 bytes and no longer fits in one network packet. This server answered the small classical ClientHello but not the large one, which is the pattern of a load balancer or firewall that cannot handle a ClientHello split across packets. Clients that offer post-quantum key exchange may fail to connect.',
+          'A ClientHello that carries an ML-KEM-768 key share is larger than one network packet usually holds (the key share alone is about 1,200 bytes), so it is normally split across two. This server answered the small classical ClientHello but not the large one, which is the pattern of a load balancer or firewall that cannot handle a ClientHello split across packets. Clients that offer post-quantum key exchange may fail to connect.',
         basedOn: ['kex.negotiated'],
         evidence: [
           { label: 'Post-quantum-capable ClientHello', value: main.detail ?? main.outcome },
@@ -158,32 +170,55 @@ export function assess(seen: Observations): Assessment {
 
     const fallback = classicalAnswer ? keyExchange(classicalAnswer) : undefined;
     if (quantumSafe && classicalClient) {
+      const attempts = [
+        { label: 'ClientHello with classical groups and classical signatures', value: unanswered(classicalClient) },
+        ...(kexOnly ? [{ label: 'ClientHello with classical groups and ML-DSA signatures', value: answered(kexOnly) ? `answered with TLS ${versionName(kexOnly.version!)}` : unanswered(kexOnly) }] : []),
+      ];
       add(
         fallback && classicalAnswer
-          ? {
-              id: 'kex.classical-client',
-              layer: 'key-establishment',
-              kind: 'observation',
-              tone: 'neutral',
-              title: `Clients without post-quantum support still connect, using ${fallback.label}`,
-              detail: 'This keeps older browsers, libraries and devices working. Their sessions get classical key exchange.',
-              evidence: helloEvidence(classicalAnswer),
-            }
-          : {
-              id: 'kex.classical-client',
-              layer: 'key-establishment',
-              kind: 'observation',
-              tone: 'neutral',
-              title: 'Clients without post-quantum support are refused',
-              detail: 'A ClientHello offering only classical groups was rejected. Every client that connects uses post-quantum key exchange; clients that cannot are locked out.',
-              evidence: [{ label: 'Classical-only ClientHello', value: classicalClient.alert ? `alert ${classicalClient.alert}` : (classicalClient.detail ?? classicalClient.outcome) }],
-            },
+          ? classicalAnswer === kexOnly
+            ? {
+                id: 'kex.classical-client',
+                layer: 'key-establishment',
+                kind: 'observation',
+                tone: 'neutral',
+                title: `A client that accepts the post-quantum certificate can still connect with classical key exchange (${fallback.label})`,
+                detail: `The handshake that offered only classical groups and classical signature schemes ${refused(classicalClient) ? 'was refused' : 'got no answer'}, but one that kept ML-DSA signatures and offered only classical groups completed.${refused(classicalClient) ? ' So what stopped the first was the certificate, not the key exchange.' : ''} Sessions from such clients get classical key exchange.`,
+                evidence: [...attempts, ...helloEvidence(classicalAnswer)],
+              }
+            : {
+                id: 'kex.classical-client',
+                layer: 'key-establishment',
+                kind: 'observation',
+                tone: 'neutral',
+                title: `Clients without post-quantum support still connect, using ${fallback.label}`,
+                detail: 'This keeps older browsers, libraries and devices working. Their sessions get classical key exchange.',
+                evidence: helloEvidence(classicalAnswer),
+              }
+          : kexRefused
+            ? {
+                id: 'kex.classical-client',
+                layer: 'key-establishment',
+                kind: 'observation',
+                tone: 'neutral',
+                title: 'TLS 1.3 clients without post-quantum key exchange are refused',
+                detail: 'A ClientHello offering only classical groups was rejected. Clients that cannot use post-quantum key exchange are locked out of TLS 1.3 here.',
+                evidence: attempts,
+              }
+            : {
+                id: 'kex.classical-client',
+                layer: 'key-establishment',
+                kind: 'undetermined',
+                tone: 'neutral',
+                title: 'What clients without post-quantum key exchange get could not be determined',
+                detail: 'The handshake that would show it neither completed nor was clearly refused, so whether such clients can connect, and with what key exchange, is not known.',
+                evidence: attempts,
+              },
       );
     }
 
     if (legacy && best.version === 0x0304) {
       const legacyKex = answered(legacy) ? keyExchange(legacy) : undefined;
-      const tls12Refused = legacy.alert ? `alert ${legacy.alert}` : (legacy.detail ?? legacy.outcome);
       add(
         legacyKex
           ? {
@@ -195,18 +230,28 @@ export function assess(seen: Observations): Assessment {
               detail:
                 legacyKex.kind === 'rsa-transport'
                   ? 'A TLS 1.2 client gets RSA key transport, which has no forward secrecy even against today’s attackers.'
-                  : 'A client that only speaks TLS 1.2 gets classical key exchange; post-quantum groups exist only in TLS 1.3. Clients that support 1.3 cannot be forced down to 1.2 by an attacker.',
+                  : 'A client that only speaks TLS 1.2 gets classical key exchange; post-quantum groups exist only in TLS 1.3. TLS 1.3 has downgrade protection, so an attacker on the network cannot make a client that supports 1.3 settle for 1.2.',
               evidence: [{ label: 'ServerHello', value: `TLS ${versionName(legacy.version!)}, ${cipherSuiteName(legacy.cipherSuite!)}` }],
             }
-          : {
-              id: 'kex.tls12',
-              layer: 'key-establishment',
-              kind: 'observation',
-              tone: 'good',
-              title: 'TLS 1.2 is not accepted',
-              detail: 'A TLS 1.2 ClientHello was refused, so every connection uses TLS 1.3.',
-              evidence: [{ label: 'TLS 1.2 ClientHello', value: tls12Refused }],
-            },
+          : refused(legacy)
+            ? {
+                id: 'kex.tls12',
+                layer: 'key-establishment',
+                kind: 'observation',
+                tone: 'good',
+                title: 'TLS 1.2 is not accepted',
+                detail: 'A TLS 1.2 ClientHello was refused, so every connection uses TLS 1.3.',
+                evidence: [{ label: 'TLS 1.2 ClientHello', value: unanswered(legacy) }],
+              }
+            : {
+                id: 'kex.tls12',
+                layer: 'key-establishment',
+                kind: 'undetermined',
+                tone: 'neutral',
+                title: 'Whether TLS 1.2 is accepted could not be determined',
+                detail: 'The TLS 1.2 handshake neither completed nor was clearly refused.',
+                evidence: [{ label: 'TLS 1.2 ClientHello', value: unanswered(legacy) }],
+              },
       );
     }
 
@@ -218,7 +263,7 @@ export function assess(seen: Observations): Assessment {
         layer: 'key-establishment',
         kind: 'observation',
         tone: accepted.length > 0 ? 'good' : 'neutral',
-        title: accepted.length > 0 ? `Post-quantum groups accepted: ${list(accepted.map((g) => g.name))}` : 'No post-quantum key-exchange group is accepted',
+        title: accepted.length > 0 ? `Post-quantum groups accepted: ${list(accepted.map((g) => g.name))}` : unknown.length > 0 ? 'No post-quantum key-exchange group was seen to be accepted' : 'No post-quantum key-exchange group is accepted',
         detail: `The scanner asked about each of ${seen.groupSupport.length} hybrid and ML-KEM groups separately.${unknown.length > 0 ? ` ${unknown.length} gave no usable answer.` : ''} A group it did not ask about cannot be detected.`,
         evidence: seen.groupSupport.map((g) => ({ label: g.name, value: `${g.supported === undefined ? 'unknown' : g.supported ? 'accepted' : 'not accepted'}: ${g.evidence}` })),
       });
@@ -226,7 +271,9 @@ export function assess(seen: Observations): Assessment {
 
     // The conclusion for this layer.
     const basedOn = ['kex.negotiated', 'kex.classical-client', 'kex.tls12'].filter((id) => findings.some((f) => f.id === id));
-    if (quantumSafe && !fallback && !answered(legacy)) {
+    const fallbackSeen = fallback !== undefined || answered(legacy);
+    const noFallback = !fallbackSeen && kexRefused && (legacy === undefined || refused(legacy));
+    if (quantumSafe && noFallback) {
       add({
         id: 'kex.exposure',
         layer: 'key-establishment',
@@ -238,6 +285,19 @@ export function assess(seen: Observations): Assessment {
         learn: { view: 'login', landmark: 'harvest', mode: 'hybrid', attacker: 'quantum' },
       });
       layer('key-establishment', 'TLS key establishment', `${kex.kind === 'hybrid' ? 'Hybrid' : 'Post-quantum'}: ${kex.label}`, 'no-known-attack', 'good');
+    } else if (quantumSafe && !fallbackSeen) {
+      add({
+        id: 'kex.exposure',
+        layer: 'key-establishment',
+        kind: 'inference',
+        tone: 'caution',
+        title: 'Sessions that negotiate ML-KEM are protected; what other clients get is not known',
+        detail:
+          'Sessions that negotiate ML-KEM cannot be decrypted later by a quantum computer. A handshake without post-quantum key exchange neither completed nor was clearly refused, so the scanner could not establish whether such clients are turned away or fall back to classical key exchange.',
+        basedOn,
+        learn: { view: 'login', landmark: 'harvest', mode: 'hybrid', attacker: 'quantum' },
+      });
+      layer('key-establishment', 'TLS key establishment', `${kex.kind === 'hybrid' ? 'Hybrid' : 'Post-quantum'}: ${kex.label}, other clients not determined`, 'depends-on-client', 'caution');
     } else if (quantumSafe) {
       add({
         id: 'kex.exposure',
@@ -271,7 +331,7 @@ export function assess(seen: Observations): Assessment {
         detail:
           kex.kind === 'rsa-transport'
             ? 'The session secret is encrypted to an RSA key. Shor’s algorithm recovers an RSA private key from the public key, so an attacker who stores this traffic can decrypt all of it once a large enough quantum computer exists. A stolen private key does the same today.'
-            : `The session keys come from ${kex.label} alone. Shor’s algorithm recovers the private value behind the public key share sent in the handshake, so an attacker who stores this traffic can decrypt it once a large enough quantum computer exists ("harvest now, decrypt later"). No such computer exists today. This is the most urgent quantum risk because the recording can happen now.`,
+            : `The session keys come from ${kex.label} alone. Shor’s algorithm recovers the private value behind the public key share sent in the handshake, so an attacker who stores this traffic can decrypt it once a large enough quantum computer exists ("harvest now, decrypt later"). No such computer is known to exist. This is the most urgent quantum risk because the recording can happen now.`,
         basedOn,
         learn: { view: 'login', landmark: 'harvest', mode: 'classical', attacker: 'quantum' },
       });
@@ -352,20 +412,39 @@ export function assess(seen: Observations): Assessment {
       });
     }
 
-    const mainProbe = seen.probes.find((p) => p.id === 'pq-capable-client');
-    const other = seen.probes.find((p) => p.id === 'classical-client');
-    if (mainProbe?.leafFingerprint && other?.leafFingerprint && mainProbe.leafFingerprint !== other.leafFingerprint) {
+    // Handshakes can be handed different certificates for two reasons that look alike from outside: the
+    // server chose by what each offered, or the machines behind one address hold different certificates.
+    // Only a post-quantum certificate for the handshake that offered ML-DSA, and a classical one for a
+    // handshake that did not, points at the first.
+    const sigOnly = seen.probes.find((p) => p.id === 'classical-sig-client');
+    const leaves = [
+      { probe: main, offering: 'Handshake offering ML-DSA signatures' },
+      { probe: classicalClient, offering: 'Handshake offering classical signatures only' },
+      { probe: sigOnly, offering: 'Handshake with post-quantum key exchange offering classical signatures only' },
+      { probe: legacy, offering: 'TLS 1.2 handshake' },
+    ].flatMap(({ probe, offering }) => (probe?.leafFingerprint ? [{ offering, fingerprint: probe.leafFingerprint, key: probe.leafKey }] : []));
+    type LeafKey = NonNullable<ProbeResult['leafKey']>;
+    const recognised = (key: LeafKey | undefined): key is LeafKey => key !== undefined && key.family !== 'unknown';
+    const keyName = (key: LeafKey | undefined) => (recognised(key) ? key.algorithm : 'a key type the scanner does not recognise');
+    const differ = new Set(leaves.map((l) => l.fingerprint)).size > 1;
+    const offeredMlDsa = main?.leafKey;
+    /** A classical certificate that a handshake without ML-DSA received. While clients accept one, it can be forged. */
+    const classicalVariant = [classicalClient?.leafKey, sigOnly?.leafKey, legacy?.leafKey].find((key) => recognised(key) && !key.quantumSafe);
+    const choseByOffer = differ && classicalVariant !== undefined && recognised(offeredMlDsa) && offeredMlDsa.quantumSafe;
+    if (differ) {
+      const kinds = [...new Set(leaves.map((l) => keyName(l.key)))];
+      const allRecognised = leaves.every((l) => recognised(l.key));
+      const keysSentence = !allRecognised ? '' : kinds.length === 1 ? `They carry the same kind of key (${kinds[0]}). ` : `Their keys are ${list(kinds)}. `;
       add({
         id: 'auth.variant',
         layer: 'server-authentication',
         kind: 'observation',
         tone: 'neutral',
-        title: 'Clients that do not offer ML-DSA signatures receive a different certificate',
-        detail: 'The server holds more than one certificate and chooses by what the client supports. This report describes the one sent to a post-quantum-capable client.',
-        evidence: [
-          { label: 'Post-quantum-capable client', value: `leaf SHA-256 ${mainProbe.leafFingerprint.slice(0, 16)}…` },
-          { label: 'Classical client', value: `leaf SHA-256 ${other.leafFingerprint.slice(0, 16)}…` },
-        ],
+        title: choseByOffer ? 'The scanner’s handshakes received certificates of different kinds' : 'The scanner’s handshakes received different certificates',
+        detail: choseByOffer
+          ? `The certificate sent to the handshake that offered ML-DSA signature schemes has a different kind of key (${offeredMlDsa.algorithm}) from the one sent to a handshake that offered only classical schemes (${classicalVariant.algorithm}). That is what a server holding both, and choosing by what the client offers, looks like. This report’s certificate details describe the first.`
+          : `${keysSentence}A service run on several machines behind one address can hand out different certificates for the same name, so this alone does not show that the server chooses by what the client offers. This report’s certificate details describe the certificate from the first handshake that received one.`,
+        evidence: leaves.map((l) => ({ label: l.offering, value: `${keyName(l.key)}, leaf SHA-256 ${l.fingerprint.slice(0, 16)}…` })),
       });
     }
 
@@ -383,37 +462,71 @@ export function assess(seen: Observations): Assessment {
     }
 
     // Every signature that vouches for this server: the leaf key's own, and each issuer's on the chain.
+    // An algorithm the scanner does not recognise is neither classical nor post-quantum: nothing is claimed about it.
+    const issued = seen.certificates.filter((c) => !c.selfSigned);
+    const chainSignatures = (wanted: (c: CertificateSummary) => boolean) => [...new Set(issued.filter(wanted).map((c) => c.signature.algorithm))].map((a) => `a chain signature (${a})`);
     const classicalParts = [
-      ...(leaf.key.quantumSafe ? [] : [`the certificate key (${leaf.key.algorithm})`]),
+      ...(leaf.key.quantumSafe || leaf.key.family === 'unknown' ? [] : [`the certificate key (${leaf.key.algorithm})`]),
       ...(proof && !proof.quantumSafe && leaf.key.quantumSafe ? [`the handshake signature (${proof.name})`] : []),
-      ...[...new Set(seen.certificates.filter((c) => !c.signature.quantumSafe && !c.selfSigned).map((c) => c.signature.algorithm))].map((a) => `a chain signature (${a})`),
+      ...chainSignatures((c) => !c.signature.quantumSafe && c.signature.family !== 'unknown'),
     ];
+    const unknownParts = [...(leaf.key.family === 'unknown' ? [`the certificate key (${leaf.key.algorithm})`] : []), ...chainSignatures((c) => c.signature.family === 'unknown')];
     const pqParts = seen.certificates.filter((c) => c.key.quantumSafe || c.signature.quantumSafe).length;
     const basedOn = ['auth.certificate', 'auth.proof'].filter((id) => findings.some((f) => f.id === id && f.kind === 'observation'));
-    if (classicalParts.length === 0) {
-      add({
-        id: 'auth.exposure',
-        layer: 'server-authentication',
-        kind: 'inference',
-        tone: 'good',
-        title: 'No known quantum attack on this server’s identity',
-        detail: `The certificate key and every signature on the chain the server sent are ${leaf.key.family}. No quantum algorithm is known that forges them.${seen.trust.trusted ? '' : ' Public certificate authorities do not issue such certificates yet, which is why this chain is not publicly trusted.'}`,
-        basedOn,
-        learn: { view: 'login', landmark: 'forgery', mode: 'pq', attacker: 'quantum' },
-      });
-      layer('server-authentication', 'TLS server authentication', `Post-quantum: ${leaf.key.algorithm}`, 'no-known-attack', 'good');
-    } else {
+    // In this order: a classical part that was seen decides the matter, whatever else is unrecognised.
+    if (classicalParts.length > 0) {
       add({
         id: 'auth.exposure',
         layer: 'server-authentication',
         kind: 'inference',
         tone: 'caution',
         title: 'A quantum computer could impersonate this server, but only at the time of an attack',
-        detail: `The server’s identity rests on ${list(classicalParts)}. Shor’s algorithm recovers such private keys from the public keys, which would let an attacker present this identity. Unlike key exchange, this cannot be used on recorded traffic: the forgery has to be made, with a working quantum computer, during a live connection while the certificate is still valid.${pqParts > 0 ? ' Part of the chain is already post-quantum, but a chain is as strong as its weakest signature.' : ''} Publicly trusted certificate authorities do not issue post-quantum certificates yet, so a public site cannot change this alone today.`,
+        detail: `The server’s identity rests on ${list(classicalParts)}. Shor’s algorithm recovers such private keys from the public keys, which would let an attacker present this identity. Unlike key exchange, this cannot be used on recorded traffic: the forgery has to be made, with a working quantum computer, during a live connection while the certificate is still valid.${pqParts > 0 ? ' Part of the chain is already post-quantum, but a chain is as strong as its weakest signature.' : ''}${unknownParts.length > 0 ? ` The chain also includes ${list(unknownParts)}, which the scanner does not recognise.` : ''} A public site cannot change this alone: it needs a certificate authority that browsers trust to issue post-quantum certificates, and the exposure lasts while browsers also accept classical ones.`,
         basedOn,
         learn: { view: 'login', landmark: 'forgery', mode: 'classical', attacker: 'quantum' },
       });
       layer('server-authentication', 'TLS server authentication', `Classical: ${leaf.key.algorithm} certificate`, 'forgery-once-quantum', 'caution');
+    } else if (classicalVariant) {
+      add({
+        id: 'auth.exposure',
+        layer: 'server-authentication',
+        kind: 'inference',
+        tone: 'caution',
+        title: 'A quantum computer could still impersonate this server to clients that accept its classical certificate',
+        detail: `The chain this report describes ${unknownParts.length === 0 ? 'is post-quantum throughout' : 'has no classical part the scanner recognises'}, but a handshake that did not offer ML-DSA signatures received a certificate with a classical key (${classicalVariant.algorithm}). While clients accept a classical certificate for this name, an attacker who can forge one can present this identity to them. That takes a working quantum computer during a live connection; it cannot be used on recorded traffic.`,
+        basedOn: [...basedOn, ...(differ ? ['auth.variant'] : [])],
+        learn: { view: 'login', landmark: 'forgery', mode: 'classical', attacker: 'quantum' },
+      });
+      layer(
+        'server-authentication',
+        'TLS server authentication',
+        leaf.key.quantumSafe ? `Migrating: ${leaf.key.algorithm} and ${classicalVariant.algorithm}` : `Classical: ${classicalVariant.algorithm} certificate, for some clients`,
+        'forgery-once-quantum',
+        'caution',
+      );
+    } else if (unknownParts.length > 0) {
+      add({
+        id: 'auth.exposure',
+        layer: 'server-authentication',
+        kind: 'undetermined',
+        tone: 'neutral',
+        title: 'The server’s identity uses an algorithm the scanner does not recognise',
+        detail: `The server’s identity rests in part on ${list(unknownParts)}. Without knowing what ${unknownParts.length === 1 ? 'that is' : 'these are'}, nothing can be said about how it stands against a quantum computer.`,
+      });
+      layer('server-authentication', 'TLS server authentication', leaf.key.family === 'unknown' ? 'Unrecognised certificate key' : `${leaf.key.algorithm} certificate, unrecognised chain signature`, 'undetermined', 'neutral');
+    } else {
+      const families = [...new Set(seen.certificates.flatMap((c) => [c.key, c.signature]).filter((part) => part.quantumSafe).map((part) => part.family))];
+      add({
+        id: 'auth.exposure',
+        layer: 'server-authentication',
+        kind: 'inference',
+        tone: 'good',
+        title: 'No known quantum attack on the certificate chain this server sent',
+        detail: `The certificate key and every signature on the chain the server sent are post-quantum (${list(families)}), and no quantum algorithm is known that forges them. That protects clients that accept only such certificates for this name: a client that also accepts a classical certificate could be shown a forged one, and what clients accept is not visible to a scan.`,
+        basedOn,
+        learn: { view: 'login', landmark: 'forgery', mode: 'pq', attacker: 'quantum' },
+      });
+      layer('server-authentication', 'TLS server authentication', `Post-quantum: ${leaf.key.algorithm}`, 'no-known-attack', 'good');
     }
   }
 
@@ -593,6 +706,24 @@ export function assess(seen: Observations): Assessment {
       learn: { view: 'login', landmark: 'success', mode: 'classical' },
     });
 
+    /** Without keys to read, the algorithms the service lists are all there is to go on. True when every one is a classical signature. */
+    const classicalByMetadata = (): boolean => {
+      const signed = algs.filter((a) => a.toLowerCase() !== 'none');
+      if (signed.length === 0 || !signed.every((a) => CLASSICAL_JWS.test(a))) return false;
+      add({
+        id: 'token.exposure',
+        layer: 'token-signing',
+        kind: 'inference',
+        tone: 'caution',
+        title: 'A quantum computer could forge this service’s tokens once it exists',
+        detail: `The service’s metadata says it signs tokens with ${list(signed)}, which Shor’s algorithm breaks. No signing keys could be read, so this rests on the metadata alone.`,
+        basedOn: ['token.metadata'],
+        learn: { view: 'login', landmark: 'forgery', mode: 'classical', attacker: 'quantum' },
+      });
+      layer('token-signing', 'Application token signing', `Classical: ${list(signed)}`, 'forgery-once-quantum', 'caution');
+      return true;
+    };
+
     if (!oidc.keys) {
       add({
         id: 'token.keys',
@@ -603,11 +734,16 @@ export function assess(seen: Observations): Assessment {
         detail: oidc.jwksError ?? 'The key set was not available.',
         evidence: oidc.jwksUri ? [{ label: 'jwks_uri', value: oidc.jwksUri }] : undefined,
       });
+      if (classicalByMetadata()) return;
       return layer('token-signing', 'Application token signing', algs.join(', ') || 'Metadata without keys', 'undetermined', 'neutral');
     }
 
-    const kinds = [...new Set(oidc.keys.map((k) => k.strength))];
+    const kindsOf = (keys: typeof oidc.keys) => [...new Set(keys.map((k) => k.strength))];
+    const kinds = kindsOf(oidc.keys);
     const safe = oidc.keys.filter((k) => k.quantumSafe);
+    // RSA, elliptic-curve and Edwards-curve keys are the ones Shor’s algorithm is known to break. Anything else that is not post-quantum is unrecognised.
+    const classical = oidc.keys.filter((k) => !k.quantumSafe && ['RSA', 'EC', 'OKP'].includes(k.kty));
+    const unrecognised = oidc.keys.filter((k) => !k.quantumSafe && !['RSA', 'EC', 'OKP'].includes(k.kty));
     add({
       id: 'token.keys',
       layer: 'token-signing',
@@ -620,7 +756,18 @@ export function assess(seen: Observations): Assessment {
 
     const basedOn = ['token.metadata', 'token.keys'];
     if (oidc.keys.length === 0) {
-      layer('token-signing', 'Application token signing', 'No signing keys published', 'undetermined', 'neutral');
+      if (!classicalByMetadata()) layer('token-signing', 'Application token signing', 'No signing keys published', 'undetermined', 'neutral');
+    } else if (classical.length === 0 && unrecognised.length > 0) {
+      const which = kindsOf(unrecognised);
+      add({
+        id: 'token.exposure',
+        layer: 'token-signing',
+        kind: 'undetermined',
+        tone: 'neutral',
+        title: 'The signing keys include a type the scanner does not recognise',
+        detail: `The key set has ${list(which)}. Without knowing what ${which.length === 1 ? 'that is' : 'these are'}, nothing can be said about how tokens signed with ${which.length === 1 ? 'it' : 'them'} stand against a quantum computer.`,
+      });
+      layer('token-signing', 'Application token signing', 'Signing keys not recognised', 'undetermined', 'neutral');
     } else if (safe.length === oidc.keys.length) {
       add({
         id: 'token.exposure',
@@ -628,7 +775,7 @@ export function assess(seen: Observations): Assessment {
         kind: 'inference',
         tone: 'good',
         title: 'No known quantum attack forges this service’s tokens',
-        detail: 'Every published signing key is ML-DSA (FIPS 204).',
+        detail: `Every published signing key is post-quantum (${list(kinds)}). Apps check token signatures against these keys, so a signature made with any other public-key algorithm is refused by an app that verifies correctly.`,
         basedOn,
         learn: { view: 'login', landmark: 'forgery', mode: 'pq', attacker: 'quantum' },
       });
@@ -641,11 +788,11 @@ export function assess(seen: Observations): Assessment {
         kind: 'inference',
         tone: 'caution',
         title: mixed ? 'Tokens signed with the classical key could be forged once a quantum computer exists' : 'A quantum computer could forge this service’s tokens once it exists',
-        detail: `${mixed ? 'The service publishes a post-quantum key next to a classical one, which is what a migration in progress looks like. Apps still receiving classically signed tokens remain exposed. ' : ''}Shor’s algorithm recovers an RSA or elliptic-curve private key from the published public key; with it an attacker can sign a token for any user. Tokens are short-lived, so there is nothing to record and attack later: the risk begins when such a computer exists.`,
+        detail: `${mixed ? 'The service publishes a post-quantum key next to a classical one, which is what a migration in progress looks like. Apps still receiving classically signed tokens remain exposed. ' : ''}Shor’s algorithm recovers an RSA or elliptic-curve private key from the published public key; with it an attacker can sign a token for any user. A forged signature cannot be applied to the past, so there is nothing to record and attack later: the risk begins when such a computer exists.${unrecognised.length > 0 ? ` The key set also has ${list(kindsOf(unrecognised))}, which the scanner does not recognise.` : ''}`,
         basedOn,
         learn: { view: 'login', landmark: 'forgery', mode: 'classical', attacker: 'quantum' },
       });
-      layer('token-signing', 'Application token signing', mixed ? `Migrating: ${list(kinds)}` : `Classical: ${list(kinds)}`, 'forgery-once-quantum', 'caution');
+      layer('token-signing', 'Application token signing', mixed ? `Migrating: ${list(kindsOf([...safe, ...classical]))}` : `Classical: ${list(kindsOf(classical))}`, 'forgery-once-quantum', 'caution');
     }
   }
 
@@ -680,6 +827,9 @@ export function assess(seen: Observations): Assessment {
 
   return { layers, findings };
 }
+
+/** JOSE signature algorithms built on RSA or elliptic curves, which Shor’s algorithm breaks: the names token-kit’s jose.ts classifies that way. */
+const CLASSICAL_JWS = /^(?:RS|PS|ES)(?:256|384|512)$|^ES256K$|^EdDSA$|^Ed(?:25519|448)$/;
 
 const LAYER_NAMES: [LayerSummary['id'], string][] = [
   ['key-establishment', 'TLS key establishment'],

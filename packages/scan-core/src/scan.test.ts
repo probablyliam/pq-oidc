@@ -51,7 +51,7 @@ describe('key establishment', () => {
 
   it('hybrid-only server: every session that can exist is protected', () => {
     expect(layer('hybrid-only', 'key-establishment')).toMatchObject({ exposure: 'no-known-attack', tone: 'good' });
-    expect(finding('hybrid-only', 'kex.classical-client')?.title).toBe('Clients without post-quantum support are refused');
+    expect(finding('hybrid-only', 'kex.classical-client')?.title).toBe('TLS 1.3 clients without post-quantum key exchange are refused');
     expect(finding('hybrid-only', 'kex.tls12')?.title).toBe('TLS 1.2 is not accepted');
     expect(report('hybrid-only').tls.groupSupport.filter((g) => g.supported).map((g) => g.name)).toEqual(['X25519MLKEM768', 'SecP256r1MLKEM768']);
   });

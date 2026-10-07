@@ -1,8 +1,11 @@
+import https from 'node:https';
+import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DEFAULT_POLICY } from './net/policy.ts';
 import type { ScanReport } from './report.ts';
 import { runScan } from './scan.ts';
 import { plainSummary } from './summary.ts';
+import { issueCertificate } from './testing/certs.ts';
 import { LAB_PROFILES, startLabServer } from './testing/lab.ts';
 import type { LabServer } from './testing/lab.ts';
 
@@ -47,6 +50,59 @@ describe('the verdict', () => {
     }
   });
 
+  it('a post-quantum certificate does not hide classical key exchange: a client that keeps ML-DSA and drops ML-KEM still connects', async () => {
+    // The classical handshake is refused here for its signatures alone. Only one that changes the key exchange and nothing else shows the fallback.
+    const server = await startLabServer({ id: 'pq-certificate', title: '', port: 0, tls: { groups: 'X25519MLKEM768:X25519', minVersion: 'TLSv1.3' }, certificate: { key: { type: 'ml-dsa-65' } }, site: {} });
+    try {
+      const report = await runScan(server.origin, { policy: { ...DEFAULT_POLICY, labOrigins: [server.origin] }, lookup: () => Promise.resolve([{ address: '127.0.0.1', family: 4 }]) });
+      const probe = (id: string) => report.tls.probes.find((p) => p.id === id);
+      expect(probe('classical-client')).toMatchObject({ outcome: 'alert' });
+      expect(probe('classical-kex-client')).toMatchObject({ outcome: 'handshake', group: 0x001d, finishedValid: true });
+      expect(report.layers.find((l) => l.id === 'key-establishment')).toMatchObject({ exposure: 'depends-on-client', headline: 'Hybrid: X25519MLKEM768, with classical fallback' });
+      expect(plainSummary(report)).toMatchObject({ verdict: 'partly', headline: 'Partly quantum-safe' });
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('a server that requires post-quantum key exchange but still holds a classical certificate is migrating, not finished', async () => {
+    // What a current browser is: hybrid key exchange, classical signatures. It is handed the classical certificate, which can be forged.
+    const names = ['localhost', '127.0.0.1'];
+    const postQuantum = issueCertificate({ subject: 'dual.lab.localhost', key: { type: 'ml-dsa-65' }, names });
+    const classical = issueCertificate({ subject: 'dual.lab.localhost', key: { type: 'ec', curve: 'P-256' }, names });
+    const server = https.createServer({ key: [postQuantum.keyPem, classical.keyPem], cert: [postQuantum.certPem, classical.certPem], ecdhCurve: 'X25519MLKEM768', minVersion: 'TLSv1.3' }, (_request, response) => {
+      response.writeHead(200, { 'content-type': 'text/html' }).end('<form><input name="password" type="password"></form>');
+    });
+    server.on('tlsClientError', () => {});
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const origin = `https://localhost:${(server.address() as AddressInfo).port}`;
+    try {
+      const report = await runScan(origin, { policy: { ...DEFAULT_POLICY, labOrigins: [origin] }, lookup: () => Promise.resolve([{ address: '127.0.0.1', family: 4 }]) });
+      const probe = (id: string) => report.tls.probes.find((p) => p.id === id);
+      expect(probe('classical-client')).toMatchObject({ outcome: 'alert' });
+      expect(probe('classical-kex-client')).toMatchObject({ outcome: 'alert' });
+      expect(probe('classical-sig-client')).toMatchObject({ outcome: 'handshake', group: 0x11ec, leafKey: { algorithm: 'ECDSA P-256', quantumSafe: false } });
+      expect(report.layers.find((l) => l.id === 'key-establishment')).toMatchObject({ exposure: 'no-known-attack' });
+      expect(report.layers.find((l) => l.id === 'server-authentication')).toMatchObject({ headline: 'Migrating: ML-DSA-65 and ECDSA P-256', exposure: 'forgery-once-quantum' });
+      expect(plainSummary(report)).toMatchObject({ verdict: 'partly', headline: 'Partly quantum-safe' });
+    } finally {
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  it('the extra handshakes are made only when they can tell something', () => {
+    // A classical certificate: nothing to disentangle. A post-quantum one with no classical certificate behind it: asked, and refused, since the server has nothing to sign with.
+    expect(reports.get('hybrid-only')!.tls.probes.map((p) => p.id)).not.toContain('classical-sig-client');
+    expect(reports.get('pq')!.tls.probes.find((p) => p.id === 'classical-sig-client')).toMatchObject({ outcome: 'alert' });
+    expect(summary('pq').verdict).toBe('safe');
+  });
+
+  it('the key-exchange-only handshake is made only when it can tell something: not for a classical certificate, and it confirms a real refusal', () => {
+    expect(reports.get('hybrid-only')!.tls.probes.map((p) => p.id)).not.toContain('classical-kex-client');
+    expect(reports.get('pq')!.tls.probes.find((p) => p.id === 'classical-kex-client')).toMatchObject({ outcome: 'alert' });
+  });
+
   it('says so when nothing could be checked', async () => {
     const gone = await startLabServer(LAB_PROFILES[0]!);
     await gone.close();
@@ -65,7 +121,17 @@ describe('the three answers', () => {
   it('impersonation: "not today" for a classical certificate, and it says nothing recorded is affected', () => {
     expect(answer('hybrid', 'impersonation')).toMatchObject({ status: 'later', short: 'Not today', technical: 'ECDSA P-256' });
     expect(answer('hybrid', 'impersonation').answer).toMatch(/Nothing recorded today is affected/);
-    expect(answer('pq', 'impersonation')).toMatchObject({ status: 'safe', short: 'No', technical: 'ML-DSA-65' });
+    expect(answer('pq', 'impersonation')).toMatchObject({ status: 'safe', short: 'Not by faking this certificate', technical: 'ML-DSA-65' });
+  });
+
+  it('impersonation: says the fix is not in a public site’s own hands, without claiming what browsers accept this year', () => {
+    expect(answer('hybrid', 'impersonation').answer).toMatch(/cannot change this alone: certificate authorities must issue quantum-safe certificates, and browsers must stop accepting the older kind/);
+    for (const id of reports.keys()) expect(answer(id, 'impersonation').answer).not.toMatch(/browsers do not accept/);
+  });
+
+  it('the verdict’s one-line reason carries the same condition as the recording answer', () => {
+    expect(summary('hybrid').explanation).toMatch(/when your browser or app supports the newer key exchange/);
+    expect(summary('hybrid-only').explanation).toMatch(/^What you send is protected from future quantum computers\. /);
   });
 
   it('sign-in: read from published keys, and "cannot tell" when nothing is published', () => {

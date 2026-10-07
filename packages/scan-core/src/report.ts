@@ -9,7 +9,7 @@ import type { KeySummary } from '@pq-oidc/token-kit/readiness';
 import type { KexClass } from './tls/registry.ts';
 
 /** Bump when findings would change for the same observations. Stored with every report. */
-export const ENGINE_VERSION = '1.1.0';
+export const ENGINE_VERSION = '1.2.0';
 
 /** How a finding is known (ADR 0012). */
 export type FindingKind =
@@ -77,7 +77,7 @@ export interface LayerSummary {
   tone: Tone;
 }
 
-export type ProbeId = 'pq-capable-client' | 'classical-client' | 'tls12-client' | `group-${number}`;
+export type ProbeId = 'pq-capable-client' | 'classical-client' | 'classical-kex-client' | 'classical-sig-client' | 'tls12-client' | `group-${number}`;
 
 /** One ClientHello and what came back. */
 export interface ProbeResult {
@@ -100,6 +100,10 @@ export interface ProbeResult {
   dhPrimeBits?: number;
   /** SHA-256 fingerprint of the leaf certificate this probe received. */
   leafFingerprint?: string;
+  /** The key that leaf certificate carries, so two probes' certificates can be told apart by kind. */
+  leafKey?: { algorithm: string; family: SignatureFamilyName; quantumSafe: boolean };
+  /** The connection was cut with no TLS answer, and a second, identical attempt was cut the same way. */
+  confirmed?: boolean;
   /** True when the first answer was a HelloRetryRequest and the probe was repeated with the requested share. */
   retried?: boolean;
   durationMs: number;
@@ -235,6 +239,7 @@ export const NOT_OBSERVABLE: readonly string[] = [
   'Connections behind the TLS terminator: service-to-service TLS, databases, message queues.',
   'How private keys are stored and who can reach them (HSM, KMS, files on disk).',
   'Which key-exchange groups your actual clients support: old browsers, mobile apps, API clients.',
+  'Which certificates your clients accept. A client that accepts classical certificates could be shown a forged one once a quantum computer exists, whatever certificate the server itself presents.',
   'Token signing, when the service publishes no OpenID Connect metadata.',
   'Third parties the application calls from its servers.',
   'HTTP/3 (QUIC). The scanner speaks TLS over TCP only.',

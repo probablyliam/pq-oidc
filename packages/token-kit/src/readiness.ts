@@ -136,7 +136,7 @@ export function analyzeProvider(discovery: Json, jwks: Json, jwksBytes: number):
           id: 'pq-keys',
           status: 'pass',
           label: 'Publishes post-quantum keys',
-          detail: `${pqKeys.length} of ${signingKeys.length} signing keys are ML-DSA (RFC 9964 "AKP" keys).`,
+          detail: `${pqKeys.length} of ${signingKeys.length} signing keys are post-quantum (${[...new Set(pqKeys.map((k) => k.strength))].join(', ')}).`,
         }
       : {
           id: 'pq-keys',
@@ -152,12 +152,13 @@ export function analyzeProvider(discovery: Json, jwks: Json, jwksBytes: number):
     const pkce = discovery.code_challenge_methods_supported;
     checks.push(
       Array.isArray(pkce) && pkce.includes('S256')
-        ? { id: 'pkce', status: 'pass', label: 'Advertises PKCE (S256)', detail: 'Required by OAuth 2.1 for every client.' }
+        ? { id: 'pkce', status: 'pass', label: 'Advertises PKCE (S256)', detail: 'Authorization servers must support PKCE (RFC 9700, section 2.1.1).' }
         : {
             id: 'pkce',
             status: 'warn',
             label: 'PKCE (S256) not advertised',
-            detail: 'code_challenge_methods_supported is missing or lacks S256. OAuth 2.1 requires PKCE.',
+            detail:
+              'code_challenge_methods_supported is missing or lacks S256, so this document does not show that PKCE is supported. Authorization servers must support it and give clients a way to detect that; publishing this field is the recommended way (RFC 9700, section 2.1.1).',
           },
     );
 
@@ -172,7 +173,7 @@ export function analyzeProvider(discovery: Json, jwks: Json, jwksBytes: number):
             id: 'implicit',
             status: 'warn',
             label: 'Still offers the implicit flow',
-            detail: `response_types_supported includes ${implicit.map((t) => `"${t}"`).join(', ')}, which OAuth 2.1 removes.`,
+            detail: `response_types_supported includes ${implicit.map((t) => `"${t}"`).join(', ')}, which RFC 9700 (section 2.1.2) says clients should not use.`,
           },
     );
   } else {

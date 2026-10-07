@@ -29,7 +29,7 @@ npm install
 npm start          # http://localhost:8080
 ```
 
-`npm start` runs the API, a worker, and seven local test servers with known configurations (classical, hybrid, post-quantum, TLS 1.2, RSA key transport, an expired certificate) so there is something to scan that is yours. Type a bare site such as `github.com`: the scanner follows the site's own "Sign in" link, or tries the usual addresses, and assesses where a password would go ([ADR 0015](docs/adr/0015-find-the-sign-in.md)).
+`npm start` runs the API, a worker, and seven local test servers with known configurations (classical, hybrid, post-quantum, TLS 1.2, RSA key transport, an expired certificate) so there is something to scan that is yours. Type a bare site such as `github.com`: the scanner follows the site's own "Sign in" link, or tries the usual addresses, and assesses the address that serves the sign-in ([ADR 0015](docs/adr/0015-find-the-sign-in.md)).
 
 **Docker:** `docker compose up --build`. **Kubernetes:** [`deploy/helm/pq-oidc`](deploy/helm/pq-oidc) runs the API and a worker as separate pods, with a NetworkPolicy that keeps the worker off private ranges and gives the API no egress at all; CI deploys it to a kind cluster and scans through it. **Vercel:** import the repository; `vercel.json` builds the web app and deploys the function in [`api/`](api), which is bundled from [`services/vercel`](services/vercel).
 
@@ -96,7 +96,7 @@ No build step for the server code: Node.js runs the TypeScript sources directly.
 ## Development
 
 ```bash
-npm test                 # 489 tests: address bypasses, the key schedule against RFC 8448, whole scans of the lab servers,
+npm test                 # address bypasses, the key schedule against RFC 8448, whole scans of the lab servers,
                          # the Vercel function and the service's limits and leases, token attacks, the lab's cryptography
 npm run vercel:bundle    # regenerate api/v1/scan.js from services/vercel (CI checks it is current)
 npm run lint && npm run typecheck
@@ -107,7 +107,7 @@ npm run check -- <url>   # the identity provider's keys alone, no TLS probing
 
 ## Standards
 
-[FIPS 203: ML-KEM](https://csrc.nist.gov/pubs/fips/203/final) · [FIPS 204: ML-DSA](https://csrc.nist.gov/pubs/fips/204/final) · [RFC 8446: TLS 1.3](https://www.rfc-editor.org/rfc/rfc8446) · [draft-ietf-tls-ecdhe-mlkem](https://datatracker.ietf.org/doc/draft-ietf-tls-ecdhe-mlkem/) · [RFC 9964: ML-DSA for JOSE](https://www.rfc-editor.org/info/rfc9964/) · [OpenID Connect Discovery](https://openid.net/specs/openid-connect-discovery-1_0.html) · [OAuth 2.1 (draft)](https://datatracker.ietf.org/doc/draft-ietf-oauth-v2-1/)
+[FIPS 203: ML-KEM](https://csrc.nist.gov/pubs/fips/203/final) · [FIPS 204: ML-DSA](https://csrc.nist.gov/pubs/fips/204/final) · [RFC 8446: TLS 1.3](https://www.rfc-editor.org/rfc/rfc8446) · [RFC 10024: hybrid ML-KEM key agreement for TLS 1.3](https://www.rfc-editor.org/info/rfc10024/) · [RFC 9964: ML-DSA for JOSE](https://www.rfc-editor.org/info/rfc9964/) · [OpenID Connect Discovery](https://openid.net/specs/openid-connect-discovery-1_0.html) · [OAuth 2.1 (draft)](https://datatracker.ietf.org/doc/draft-ietf-oauth-v2-1/)
 
 ## License
 

@@ -1,8 +1,9 @@
 /**
  * Names and properties for the TLS code points the scanner offers and
  * recognises. Sources: the IANA TLS parameters registry, RFC 8446,
- * draft-ietf-tls-ecdhe-mlkem (hybrid groups), draft-ietf-tls-mlkem (pure
- * ML-KEM groups) and draft-ietf-tls-mldsa (ML-DSA signature schemes).
+ * RFC 10024 (hybrid groups), draft-ietf-tls-mlkem (pure ML-KEM groups) and
+ * draft-ietf-tls-mldsa (ML-DSA signature schemes). The registry is the
+ * authority for the numbers; the documents say what they mean.
  *
  * No Node APIs: the web app uses these tables to name what a report contains.
  */

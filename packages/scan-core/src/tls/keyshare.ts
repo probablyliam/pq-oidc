@@ -3,7 +3,7 @@
  * using Node's own crypto (OpenSSL 3.5: X25519, P-256, P-384, ML-KEM).
  *
  * Hybrid groups concatenate the two shares, and the two shared secrets, in an
- * order the drafts fix per group (draft-ietf-tls-ecdhe-mlkem §3):
+ * order fixed per group (RFC 10024 §4):
  *
  *   X25519MLKEM768      share: ML-KEM key ‖ X25519      secret: ML-KEM ‖ X25519
  *   SecP256r1MLKEM768   share: P-256 point ‖ ML-KEM key secret: ECDH ‖ ML-KEM

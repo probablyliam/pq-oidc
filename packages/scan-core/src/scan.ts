@@ -4,8 +4,8 @@
  *   parse and check the address  →  resolve once, pin an address
  *   →  HTTPS GET with hand-followed redirects; if that page is not a
  *      sign-in, look for one: the site's own "Sign in" link, then the usual
- *      paths. The sign-in's origin is what the rest of the scan is about,
- *      since that is where a password would go.
+ *      paths. The origin that serves the sign-in is what the rest of the
+ *      scan is about. (Where its form posts to is not followed.)
  *   →  TLS handshakes (probes.ts)  →  certificate summary  →  plain-HTTP check
  *   →  OpenID Connect metadata and keys
  *   →  findings (assess.ts)

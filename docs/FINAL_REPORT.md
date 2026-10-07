@@ -19,7 +19,7 @@ The brief said never push to a remote. The owner lifted that on 2026-10-02 ("upd
 
 ## What is verified, and how
 
-- **475 automated tests** (`npm test`): the address classifier against every blocked range and spelling, including IPv4-mapped, NAT64 and 6to4; the TLS 1.3 key schedule against the RFC 8448 trace; complete handshakes against OpenSSL 3.5 servers in every supported group, with Finished verified; whole scans of seven lab configurations with known right answers; hostile redirects, oversized bodies, slow servers, loops; the sign-in search; the service's limits, leases, retention and cross-site refusal; token attacks; the lab's cryptography (a typed password is read back only on a classical exchange; a forgery is accepted only against a classical signature).
+- **The automated tests** (`npm test`; 475 when this was written): the address classifier against every blocked range and spelling, including IPv4-mapped, NAT64 and 6to4; the TLS 1.3 key schedule against the RFC 8448 trace; complete handshakes against OpenSSL 3.5 servers in every supported group, with Finished verified; whole scans of seven lab configurations with known right answers; hostile redirects, oversized bodies, slow servers, loops; the sign-in search; the service's limits, leases, retention and cross-site refusal; token attacks; the lab's cryptography (a typed password is read back only on a classical exchange; a forgery is accepted only against a classical signature).
 - **Real sites, one scan each**: accounts.google.com, login.microsoftonline.com, github.com, netflix.com, youtube.com, www.cloudflare.com. Google and Microsoft are recognised as sign-in services with published keys; GitHub as a sign-in page; netflix.com and youtube.com have their login found from the bare domain.
 - **In a real browser** (headless Edge, scripts in the untracked `.shots/`): every page at desktop, tablet and phone widths with no overflow; the home panel's slide; the lab's reveal and attack sequence at timed moments; symmetry of the lab's diagrams measured in SVG units; frame timing.
 
@@ -30,7 +30,7 @@ The brief said never push to a remote. The owner lifted that on 2026-10-02 ("upd
 - **No independent security review** of the address boundary or the TLS parser took place. Two reviews were started by delegated agents and stopped at the owner's request to save tokens; the plan says to do it by reading.
 - **No accessibility pass** with a screen reader; reduced-motion paths exist and were not tried by a person who needs them.
 - **Firefox and Safari** were not used; everything was driven in Edge (Chromium).
-- **The live site** moved from GitHub Pages (static, no scanning) to Vercel on the owner's account on 2026-10-02 (ADR 0016): the scanner runs inside a Vercel Function, streaming its progress, with no database. The function and its limits are unit-tested against the lab servers and the bundle is checked in CI; the first deployment on Vercel itself happens when the owner imports the repository, so it is not yet verified there.
+- **The live site** moved from GitHub Pages (static, no scanning) to Vercel on the owner's account on 2026-10-02 (ADR 0016): the scanner runs inside a Vercel Function, streaming its progress, with no database. The function and its limits are unit-tested against the lab servers and the bundle is checked in CI; the first deployment on Vercel itself had not happened when this was written. It was deployed on 2026-10-03; see `docs/PLAN.md` for the current state.
 
 ## Known gaps worth closing next
 
