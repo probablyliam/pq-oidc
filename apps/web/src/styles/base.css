@@ -538,6 +538,10 @@ button.pick[aria-pressed='true']:hover:not(:disabled) {
   .scan-row {
     flex-direction: column;
   }
+  /* The label goes above its buttons: beside them, the longest button pushes the page wider than the screen. */
+  .picks > div {
+    grid-template-columns: 1fr;
+  }
   .ask {
     padding: 20px 16px 18px;
   }
