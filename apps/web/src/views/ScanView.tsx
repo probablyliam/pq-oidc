@@ -6,8 +6,17 @@ import type { Meta, Scan } from '../api.ts';
 import { Report } from '../components/Report.tsx';
 import type { Route } from '../router.ts';
 
-/** Two sign-in services, which publish their signing keys, and one ordinary login, which does not: both kinds of answer. */
-const SITES = ['accounts.google.com', 'login.microsoftonline.com', 'github.com'];
+/** Sign-in services publish the keys they sign with, so a scan of one answers for the tokens too. */
+const SERVICES: Record<string, string> = {
+  Google: 'accounts.google.com',
+  Microsoft: 'login.microsoftonline.com',
+  Apple: 'account.apple.com',
+  Facebook: 'www.facebook.com',
+  Salesforce: 'login.salesforce.com',
+  Slack: 'slack.com',
+  Discord: 'discord.com',
+  OpenAI: 'auth.openai.com',
+};
 /** Local test servers are known by their port (see `npm run lab`). */
 const TEST_SERVERS: Record<string, string> = {
   '9441': 'Classical',
@@ -73,11 +82,11 @@ function ScanForm({ meta, initial, busy, onScan }: { meta: Meta | null; initial:
       )}
       <dl className="picks">
         <div>
-          <dt>Try a sign-in service, or a site</dt>
+          <dt>Try a sign-in service</dt>
           <dd>
-            {SITES.map((target) => (
-              <button key={target} type="button" className="pick" disabled={busy} onClick={() => pick(target)}>
-                {target}
+            {Object.entries(SERVICES).map(([name, target]) => (
+              <button key={target} type="button" className="pick" title={target} disabled={busy} onClick={() => pick(target)}>
+                {name}
               </button>
             ))}
           </dd>

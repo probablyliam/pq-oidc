@@ -54,7 +54,7 @@ Paste a JWT. It is read in your browser and never sent anywhere. The verdict say
 - **Reads what the service publishes**: OpenID Connect metadata and the key set, so the sign-in question is answered from the identity provider's actual keys, not guessed. That is the one check a generic TLS scanner does not make, and the reason the tool leads with logins.
 - **Also notices** problems that have nothing to do with quantum computers: expired or untrusted certificates, no HSTS, cookies without `Secure`, plain HTTP that does not redirect.
 
-Verified on 2026-10-02 against local OpenSSL 3.5 servers in every group above, and with one scan each of accounts.google.com, login.microsoftonline.com, github.com, netflix.com, youtube.com and www.cloudflare.com.
+Verified on 2026-10-02 against local OpenSSL 3.5 servers in every group above, and with one scan each of accounts.google.com, login.microsoftonline.com, github.com, netflix.com, youtube.com and www.cloudflare.com. On 2026-10-12, one scan each from the hosted site read the published signing keys of account.apple.com, www.facebook.com, login.salesforce.com, slack.com, discord.com and auth.openai.com.
 
 ### Safety
 
