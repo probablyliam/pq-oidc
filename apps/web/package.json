@@ -24,7 +24,7 @@
     "@noble/post-quantum": "0.7.1",
     "@pq-oidc/scan-core": "0.1.0",
     "@pq-oidc/token-kit": "0.1.0",
-    "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
   }
 }
