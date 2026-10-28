@@ -13,7 +13,7 @@
   "dependencies": {
     "@pq-oidc/token-kit": "0.1.0",
     "jose": "6.2.12",
-    "oidc-provider": "9.12.2"
+    "oidc-provider": "9.13.0"
   },
   "devDependencies": {
     "@types/oidc-provider": "9.12.1"
