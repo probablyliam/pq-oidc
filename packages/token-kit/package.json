@@ -18,7 +18,7 @@
     "./jose": "./src/jose.ts"
   },
   "dependencies": {
-    "jose": "6.2.12",
+    "jose": "6.2.13",
     "@noble/post-quantum": "0.7.1"
   }
 }
